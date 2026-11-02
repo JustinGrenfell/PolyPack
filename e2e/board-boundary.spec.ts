@@ -89,7 +89,15 @@ test("3D on 4D is chosen from the menus and drawn as cells, as a net that folds,
 
   // the picker offers the catalogue's values only
   await expect(page.locator("#space-fields label")).toHaveText(["Polytope", "Piece", "Pieces (P)"]);
-  await expect(page.locator("#space-f-polytope option")).toHaveText(["Tesseract"]);
+  // 3D on 4D holds the six 4-polytopes; the d-cubes of d >= 5 are dimensions of their own (4D on 5D and up)
+  await expect(page.locator("#space-f-polytope option")).toHaveText([
+    "Tesseract",
+    "5-cell",
+    "16-cell",
+    "24-cell",
+    "120-cell",
+    "600-cell",
+  ]);
   await expect(page.locator("#space-f-piece option")).toHaveText(["Balls", "Cubes"]);
   await expect(page.locator("#space-f-P option")).toHaveText((await listedP(page, "ball")).map(String));
 
