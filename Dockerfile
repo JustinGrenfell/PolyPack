@@ -18,6 +18,9 @@ COPY packages/polyhedra/package.json packages/polyhedra/
 COPY packages/boundary/package.json packages/boundary/
 COPY packages/balls/package.json packages/balls/
 COPY packages/view3d/package.json packages/view3d/
+COPY packages/methods/package.json packages/methods/
+COPY packages/ndim/package.json packages/ndim/
+COPY packages/ndspace/package.json packages/ndspace/
 RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.base.json ./
@@ -33,6 +36,9 @@ COPY data/boundary/records.json data/boundary/records.json
 COPY data/polyhedra/records.json data/polyhedra/records.json
 # polyhedra configurations, one file per problem, read on demand (records.json is their index)
 COPY data/polyhedra/configs data/polyhedra/configs
+# the nD packings (4 to 10 dimensions): records.json is the index, one file per problem family in configs, read on demand
+COPY data/ndim/records.json data/ndim/records.json
+COPY data/ndim/configs data/ndim/configs
 RUN npm run build
 
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATABASE_PATH=/data/polypack.sqlite

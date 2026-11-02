@@ -512,7 +512,9 @@ function fallback(
     nB,
     d,
     tol === undefined ? {} : { acceptAt: -tol, refuseBelow: -Math.sqrt(d) * tol },
-    corral,
+    // the LP's cuts are points of B - A; the corral holds points of A - B, so they are negated (with the sign of A - B the
+    // cuts exclude valid directions, and a separated pair at a gap of 1e-7 was reported as overlapping)
+    corral.map((w) => w.map((x) => -x)),
   );
   let lower = have.lower;
   let lowerDir = have.dir;

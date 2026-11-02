@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadPolytope, validateNd, type NdConfig, type NdProblem } from "../src";
+import "./preload";
 
 interface Fixture {
   name: string;

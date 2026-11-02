@@ -4,9 +4,9 @@ import { mulberry32, relax, runMethod } from "@polypack/methods";
 import { cayleyMatrix, loadPolytope, poseOfMatrix } from "@polypack/ndim";
 import { ND_DIMENSIONS, ND_P_RANGE, ndShapes } from "../src/catalogue";
 import { ndKernel } from "../src/kernel";
-import { robustPose } from "../src/pose";
 import { ndCheck, ndProblemOf } from "../src/validate";
 import { gridP, gridPacking } from "./helpers";
+import "./preload";
 
 beforeAll(async () => {
   await loadPolytope("8:421");
@@ -210,20 +210,19 @@ describe("the nD kernel", () => {
     }
   });
 
-  it("converts a rotation to a pose that reproduces it, also at a half turn where the core's solve is singular", () => {
+  it("converts a rotation to a pose that reproduces it, also at a half turn", () => {
     // a signed permutation of determinant 1 with eigenvalue -1: (x0, x1, x2, x3) -> (x1, x2, -x0, -x3)
     const R = Float64Array.from([0, 1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0, 0, 0, -1]);
     for (const noise of [0, 1e-17, 1e-16]) {
       const N = Float64Array.from(R, (v, i) => v + (i % 3 === 0 ? noise : -noise));
-      const pose = robustPose([1, 2, 3, 4], N, 4)!;
-      expect(pose).not.toBeNull();
+      const pose = poseOfMatrix([1, 2, 3, 4], N, 4);
       const back = cayleyMatrix(pose.slice(4, 10), 4, pose[10]);
       for (let i = 0; i < 16; i++) expect(Math.abs(back[i] - R[i])).toBeLessThan(1e-12);
     }
     // a random rotation: the same matrix as the core's conversion
     const params = [0.3, -0.2, 0.5, 0.1, 0.4, -0.6];
     const M = cayleyMatrix(params, 4, 0);
-    const pose = robustPose([0, 0, 0, 0], M, 4)!;
+    const pose = poseOfMatrix([0, 0, 0, 0], M, 4);
     const back = cayleyMatrix(pose.slice(4, 10), 4, pose[10]);
     for (let i = 0; i < 16; i++) expect(Math.abs(back[i] - M[i])).toBeLessThan(1e-12);
     expect(poseOfMatrix([0, 0, 0, 0], M, 4).length).toBe(pose.length);

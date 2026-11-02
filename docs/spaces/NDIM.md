@@ -98,10 +98,16 @@ cube, orthoplex and demicube are written down (their triangulations are too larg
 others come from Qhull and are then solved exactly. The proof of all 34 entries takes about half a minute in pure Python (4_21 about 15 s of it: 19,440 facets × 240
 vertices; 6 s with numpy).
 
-The floats of the TypeScript package (`packages/ndim/src/data/*.ts`) are generated from the exact data at 170 bits and
-rounded to binary64; `test_ndim.py` checks that the committed files hold exactly those values.
+The floats of the TypeScript package come in two kinds, both from the exact data at 170 bits rounded to binary64
+(`gen_catalogue.py --ts-only` rewrites them). The tables of the 24-, 120- and 600-cell, 2_21, 1_22 and 3_21 are modules in
+`packages/ndim/src/data/d4.ts`, `d6.ts`, `d7.ts`, imported dynamically by `loadPolytope`, so a bundle carries them only as
+lazy chunks. The simplex, cube, orthoplex and demicube of every dimension and 4_21 are not shipped as tables: `src/generate.ts`
+computes them from formulas when first used (4_21 as the two orbits of facet normals under the reflections of E8, about 0.3 s),
+which keeps the single-file volunteer client at 2.7 MB instead of 8 MB. Their exact tables are the test fixtures
+`packages/ndim/test/fixtures/exact-families.ts` and `exact-421.ts`, and `generate.test.ts` checks that the formulas agree with
+them to 1e-13 (as sets: the order of the facets is not the generator's).
 
-**Cost of the large ones** [CALC]. 4_21 has 240 vertices and 19,440 facets: its data is 2 MB of TypeScript and is loaded
+**Cost of the large ones** [CALC]. 4_21 has 240 vertices and 19,440 facets: it is computed from a formula
 on demand (`await loadPolytope("8:421")`; `getPolytope` throws until then; `problemErrors` says so). Checking one piece
 against it costs nV × 19,440 inequalities: the float validator takes milliseconds, the exact certifier about 35 s for one
 4_21 piece in a 4_21 container (4.67 million inequalities, 7.6 µs each). The 120-cell (600 vertices) and the 600-cell
@@ -426,10 +432,13 @@ the diameter-1 ones from the start. Work bounds:
   and EPA [CALC]) and after 8 s of processor time (`NDIM_CHECK_MS`; the check then says so and the entry is refused);
 - the core's own limits apply (P by dimension, vertex and wall work, `limits.ts`), its pair and wall prefilters, and its three refused
   pairs at most per check;
-- checks of more than 2e7 multiply-adds (`ndCheckOps`: pieces' vertices times the container's facets times d, and 40 nV d per pair)
+- checks of more than 2e7 multiply-adds (`ndCheckOps`: pieces' vertices times the container's facets times d, 40 nV d per pair, and
+  for polytope pieces in 6D and above 3e6 d for each of the (at most `NDIM_MAX_REASONS`) overlapping pairs, the cost of EPA and the
+  LP: a piled-up 7D to 10D problem takes 0.2 to 0.4 s with one pair at 60 to 105 ms [CALC], so all of those are heavy)
   are heavy (`ndIsHeavy`): one at a time server-wide, at most 8 waiting, else 503, as for polyhedra at P = 500; the budget charged to
-  the address is estimated at 5 + 3e-6 ops ms (at most 8 s) and corrected by the work measured. The 4_21 polytope is loaded on demand
-  (2 MB; `loadNdProblem`) before the first check that uses it.
+  the address is estimated at 5 + 3e-6 ops ms (at most 8 s) and corrected by the work measured. The 4_21 polytope and the
+  tables of the 24-, 120- and 600-cell, 2_21, 1_22 and 3_21 are loaded on demand (`loadNdProblem`) before the first check that
+  uses them; a failure to load is a clean reason of the check, not an exception.
 
 [CALC] Measured on Apple Silicon (Node 26): the largest valid cases, 20 4_21 polytopes in a 4_21 container (761 M multiply-adds),
 20 hypercubes in a 10D orthoplex, 40 120-cells in a 600-cell, took 25 to 90 ms with the wall prefilter, and
@@ -488,15 +497,18 @@ THIRD_PARTY_NOTICES.md), the same way as 3D in 3D (`docs/spaces/POLYHEDRA.md` §
   R = Q_C R_up Q_P^T, with the pose of R from `robust_pose` (as above, every candidate rebuilt and compared at 1e-12), s = s_full.
 - **Certification.** Every converted record is certified again by `python/ndim/certify.py` (exact rational rotations, interval
   enclosures, strict separation by explicit rational hyperplanes, containment by exact facets) at clearance 0, and only the ones
-  that pass are kept. The certifier's smallest proved gaps are stored with each record (`certification`). Upstream's clearance of
+  that pass are kept (none failed in the last import). The certifier's smallest proved gaps are stored with each record (`certification`). Upstream's clearance of
   1e-7 survives the conversion to about 1e-15; some pairs show a proved gap a hair under 1e-7 (down to 9.9e-8), which is the
   certifier's rigorous lower bound on a conservatively rounded rational plane.
-- **Result** [CALC]: 1,886 of 1,890 records certified (4D 1,403 of 1,404, 5D 278 of 279, 6D 205 of 207), 10 MB in `data/ndim`
-  (`records.json` 2.4 MB, `configs/<d>-<piece>-<container>.jsonl` one line per P, as for polyhedra). The four dropped, each for one
-  pair the certifier could not separate by a rational plane (its proposals, from the line of centres, the facet normals and GJK,
-  found none of positive margin): 5-cell in 600-cell n = 39, 6-simplex in 6-orthoplex n = 10, 6-cube in 6-orthoplex n = 8, 5-cube in
-  5-orthoplex n = 5 (hypercube pieces in an orthoplex are touching-face contacts at 1e-7). Their upstream files stay at the
-  upstream; they are not claimed.
+- **Result** [CALC]: all 1,890 records certified (4D 1,404, 5D 279, 6D 207), 10 MB in `data/ndim`
+  (`records.json` 2.4 MB, `configs/<d>-<piece>-<container>.jsonl` one line per P, as for polyhedra). Four records
+  (5-cell in 600-cell n = 39, 6-simplex in 6-orthoplex n = 10, 6-cube in 6-orthoplex n = 8, 5-cube in 5-orthoplex n = 5; the
+  last three are touching-face contacts at 1e-7) were first left out, because one pair each had no separating plane among the
+  certifier's proposals (the line of centres, the facet normals and GJK). Two further proposals fixed that: the max-margin
+  direction of a linear program (`lp_direction`, scipy's HiGHS at a feasibility tolerance of 1e-9, used when scipy is
+  installed) and the record's own separating planes (`planes`, mapped to PolyPack's frame by Q_C, passed as `hints`). Every
+  proposal still goes through the exact rational test (`exact_plane`), so a bad one can only fail. The linear program alone
+  certifies all four; without scipy the certifier still runs, and these four are the records it cannot certify by itself.
 - **Fields of a record**: `id`, `d`, `piece`, `container`, `P`, `status` (`best_known` for all), `score_cert` (= the configuration's
   s = upstream's s_full), `display`, `config_at`, `bound` (taken from the domain), `found_by`, `credit`, `method`, `sources`
   (`wiki`, whose title, authors, URL, commit, licence, credit and method are given once in the file's `sources` table), `source`,
@@ -505,7 +517,7 @@ THIRD_PARTY_NOTICES.md), the same way as 3D in 3D (`docs/spaces/POLYHEDRA.md` §
 - **Changes in the core made for this phase**: `python/ndim/certify.py` proposes, for pieces with more than 64 facets (the 120- and
   600-cell, 4_21), the two facets of each piece that face the other as separating directions (the closest points of GJK are too
   inaccurate for a face-to-face contact 1e-7 apart); `packages/ndim` gains the `./info` entry (the catalogue's facts without the
-  coordinates, for pages). `floatgeom.MAX_CAYLEY` is 64 where the TypeScript and the docs say 32. The server's sliced check is the
+  coordinates, for pages). `floatgeom.MAX_CAYLEY` was 64 where the TypeScript and the docs say 32; it is 32 now. The server's sliced check is the
   core's generator `ndCheck` (§4, with the limits of `limits.ts` taken from the problem's registry, never the request).
 
 Tests: `python/ndim/test_ndim.py` (`ImportedRecords`: a sample of nine records of every dimension certified again exactly, a

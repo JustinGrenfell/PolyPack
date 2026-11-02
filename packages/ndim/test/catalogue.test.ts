@@ -15,6 +15,7 @@ import {
   polytopesOfDimension,
   type Polytope,
 } from "../src";
+import "./preload";
 
 // counts from the literature (Coxeter; the uniform polytope tables), restated here independently of the generator
 const fact = (n: number): number => (n <= 1 ? 1 : n * fact(n - 1));
@@ -57,9 +58,9 @@ describe("catalogue listing", () => {
     expect(POLYTOPE_CODES).not.toContain("4:demi"); // the 4-demicube is the 16-cell
     for (const c of ["6:221", "6:122", "7:321", "8:421"]) expect(POLYTOPE_CODES).toContain(c);
   });
-  it("loads 8:421 on demand only", async () => {
-    expect(LAZY_CODES).toEqual(["8:421"]);
-    expect(isLoaded("8:421")).toBe(true); // by beforeAll
+  it("keeps the tables and 8:421 on demand only", async () => {
+    expect(LAZY_CODES).toEqual(["4:120cell", "4:24cell", "4:600cell", "6:122", "6:221", "7:321", "8:421"]);
+    expect(isLoaded("8:421")).toBe(true); // by the preload
     expect(() => getPolytope("9:nothing")).toThrow(/unknown/);
     expect(polytopeInfo("8:421").nF).toBe(19440);
   });

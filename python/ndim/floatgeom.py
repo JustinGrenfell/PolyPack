@@ -84,41 +84,59 @@ def cayley_matrix(params, d, flip=0):
 
 
 def cayley_of_matrix(R):
-    """(params, flip) with cayley_matrix(params, d, flip) = R up to rounding, choosing the flip that keeps the
-    parameters smallest. Raises ValueError for a matrix that is not orthonormal to 1e-9 or has determinant < 0."""
+    """(params, flip) with cayley_matrix(params, d, flip) = R to 1e-12, choosing the flip that keeps the parameters
+    smallest. Every candidate (D R - I)(D R + I)^-1 is rebuilt and kept only if it reproduces R (a nearly singular
+    D R + I would otherwise return the parameters of another rotation). All even flips are tried for d <= 7; above, a
+    greedy flip and its pair swaps first and, when none verifies, all even flips. Raises ValueError for a matrix that is
+    not orthonormal to 1e-9, has determinant < 0, or has no verified form within MAX_CAYLEY."""
     d = len(R)
     if any(len(r) != d for r in R) or not all(math.isfinite(x) for r in R for x in r):
         raise ValueError('the rotation must be a finite d x d matrix')
     G = matmul(transpose(R), R)
-    if max(abs(G[i][j] - (i == j)) for i in range(d) for j in range(d)) > 1e-9:
+    dev = max(abs(G[i][j] - (i == j)) for i in range(d) for j in range(d))
+    if dev > 1e-9:
         raise ValueError('the matrix is not orthonormal (R^T R differs from I by more than 1e-9)')
     if det(R) < 0:
         raise ValueError('the matrix is a reflection (determinant -1): poses are rotations only')
-    best = None
+    tol = 1e-12 + 10 * dev
+    even = [m for m in range(1 << d) if bin(m).count('1') % 2 == 0]
     if d <= 7:
-        masks = [m for m in range(1 << d) if bin(m).count('1') % 2 == 0]
+        heuristic = even
     else:
         base = sum(1 << i for i in range(d) if R[i][i] < 0)
         if bin(base).count('1') % 2:
             i = min(range(d), key=lambda i: abs(R[i][i]))
             base ^= 1 << i
-        masks = [base] + [base ^ (1 << i) ^ (1 << j) for i in range(d) for j in range(i + 1, d)]
-    for m in masks:
-        D = flip_diag(m, d)
-        C = [[D[i] * R[i][j] for j in range(d)] for i in range(d)]
-        num = [[C[i][j] - (i == j) for j in range(d)] for i in range(d)]
-        den = [[C[i][j] + (i == j) for j in range(d)] for i in range(d)]
-        # S = num den^-1  ->  S den = num  ->  den^T S^T = num^T
-        St = solve(transpose(den), transpose(num))
-        if St is None:
-            continue
-        S = transpose(St)
-        params = [0.5 * (S[i][j] - S[j][i]) for i in range(d) for j in range(i + 1, d)]
-        size = max((abs(p) for p in params), default=0.0)
-        if best is None or size < best[0]:
-            best = (size, params, m)
-    if best is None or best[0] > MAX_CAYLEY:
-        raise ValueError('the rotation has no Cayley form within the parameter bound')
+        heuristic = [base] + [base ^ (1 << i) ^ (1 << j) for i in range(d) for j in range(i + 1, d)]
+
+    def attempt(masks):
+        best = None
+        for m in masks:
+            D = flip_diag(m, d)
+            C = [[D[i] * R[i][j] for j in range(d)] for i in range(d)]
+            num = [[C[i][j] - (i == j) for j in range(d)] for i in range(d)]
+            den = [[C[i][j] + (i == j) for j in range(d)] for i in range(d)]
+            # S = num den^-1  ->  S den = num  ->  den^T S^T = num^T
+            St = solve(transpose(den), transpose(num))
+            if St is None:
+                continue
+            S = transpose(St)
+            params = [0.5 * (S[i][j] - S[j][i]) for i in range(d) for j in range(i + 1, d)]
+            size = max((abs(p) for p in params), default=0.0)
+            if not size <= MAX_CAYLEY or (best is not None and size >= best[0]):
+                continue
+            try:
+                back = cayley_matrix(params, d, m)
+            except (ValueError, ZeroDivisionError, TypeError):
+                continue
+            if max(abs(back[i][j] - R[i][j]) for i in range(d) for j in range(d)) < tol:
+                best = (size, params, m)
+        return best
+    best = attempt(heuristic)
+    if best is None and heuristic is not even:
+        best = attempt(even)
+    if best is None:
+        raise ValueError('the rotation has no verified Cayley form within the parameter bound')
     return best[1], best[2]
 
 

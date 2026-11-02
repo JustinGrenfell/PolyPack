@@ -548,8 +548,6 @@ export async function validateSpaceSubmissionAsync(
   const prep = prepare(space, id, rawConfig, opts);
   const first = performance.now() - t0;
   if (!("run" in prep)) return { ...prep, workMs: first, slices: 1, longestSliceMs: first };
-  // 8D 4_21 is kept on demand (2 MB of coordinates): loaded here once, a no-op afterwards
-  if (prep.id.space === "ndim") await loadNdProblem(ndId(prep.id));
   let workMs = first;
   let slices = 1;
   let longestSliceMs = first;
@@ -580,6 +578,8 @@ export async function validateSpaceSubmissionAsync(
     }
     if (["curved", "sphere", "torus", "ndim"].includes(prep.id.space)) {
       try {
+        // some polytopes of the ndim space are loaded on demand (once; a no-op afterwards): a failure to load is a clean reason
+        if (prep.id.space === "ndim") await loadNdProblem(ndId(prep.id));
         // Include preflights and geometry in the same timed slices as the synchronous check.
         const v = await runStepsAsync(
           (function* () {

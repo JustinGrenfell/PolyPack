@@ -7,6 +7,7 @@ import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import { ALL_SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
 import { describe, expect, it } from "vitest";
+import { LAZY_CODES, loadPolytope } from "@polypack/ndim";
 import {
   BOUNDARY_POLYTOPES,
   SPACE_MAX_COORD,
@@ -89,6 +90,9 @@ async function* recordsOf(space: SpaceName): AsyncGenerator<[SpaceProblemEntry, 
 const check = (space: SpaceName, id: string, config: unknown) =>
   validateSpaceSubmission(space, id, config, { bound: problem(space, id).bound?.value ?? null, maxP: cat(space).maxP });
 
+// the synchronous validator reads the polytopes of the nD space that are loaded on demand
+await Promise.all(LAZY_CODES.map((c) => loadPolytope(c)));
+
 describe("problem ids", () => {
   it("parse into their fields and are written back the same, for every catalogue problem", () => {
     let n = 0;
@@ -105,7 +109,7 @@ describe("problem ids", () => {
     }
     // the balls space has a domain and no records
     // curved: 282 (the 52 records of radius-1 disks are archived in data/curved/archive)
-    expect(n).toBe(2038 + 282 + 166 + 544 + 32 + 14850 + 1886);
+    expect(n).toBe(2038 + 282 + 166 + 544 + 32 + 14850 + 1890);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -167,7 +171,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 282, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0, ndim: 1886 });
+    expect(counts).toEqual({ surface: 2038, curved: 282, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0, ndim: 1890 });
     expect(cat("balls").domain!.info.problems).toBe(36927);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
@@ -753,8 +757,8 @@ describe("space metadata", () => {
   it("names a viewer and the notes on GitHub for every space", () => {
     for (const s of SPACE_NAMES) {
       const i = SPACE_INFO[s];
-      // the balls space has no standalone viewer: the board draws its problems
-      expect(i.viewer).toBe(s === "balls" || s === "ndim" ? `/#space=${s}` : `/spaces/${s}.html`);
+      // the balls space has no standalone viewer: the board draws its problems; ndim has none yet
+      expect(i.viewer).toBe(s === "ndim" ? "" : s === "balls" ? `/#space=${s}` : `/spaces/${s}.html`);
       expect(i.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/[A-Z_]+\.md$/);
       expect(i.conventions.configuration).toBeTruthy();
       expect(i.conventions.validity).toMatch(/1e-9/);

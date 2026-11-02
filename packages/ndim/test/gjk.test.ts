@@ -3,9 +3,18 @@
  * which decides the same quantity exactly for convex polyhedra.
  */
 import { describe, expect, it } from "vitest";
-import { closestPoints, gapAlong, getPolytope, penetrationDepth, signedSeparation } from "../src";
+import {
+  cayleyMatrix,
+  closestPoints,
+  gapAlong,
+  getPolytope,
+  penetrationDepth,
+  placeVertices,
+  signedSeparation,
+} from "../src";
 import { getSolid } from "../../polyhedra/src/solids";
 import { place, separation } from "../../polyhedra/src/geom";
+import "./preload";
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -204,4 +213,38 @@ describe("EPA in 4 to 8 dimensions: the depth and direction are a facet of the M
       expect(deep).toBeGreaterThan(3);
     });
   }
+});
+
+describe("the max-margin fallback on a face-to-face pair at a gap of 1e-7", () => {
+  // two 5-cubes of the research record 5-cube in 5-orthoplex, P = 5 (pieces 1 and 2), 1.19e-7 apart: GJK's direction is
+  // too inaccurate to certify the gap, so the LP decides. Its cuts were once taken with the wrong sign (the corral holds
+  // points of A - B), which proved an upper bound below 0 and refused the pair as overlapping.
+  const poses = [
+    [
+      2.107715784516225e-8, -0.04748815218258647, -0.8087979379117219, -0.10513611711348148, -4.00000985018039e-23,
+      -0.9428224866508116, 0.8659893858480814, 0.5482241765249682, -0.22469393433755158, -0.5505259215012188,
+      -0.782826426030681, -0.16426126202583197, 0.2246939343375516, -0.548224176524968, 0.8659893858480815, 9,
+    ],
+    [
+      2.107715784516225e-8, -0.8057473020152128, 0.26882119901318957, 0.11923477053424836, -4.00000985018039e-23, -1.0,
+      0.4142135623731065, -0.3181045658352559, -0.4142135623731066, 0.41421356237310647, -0.3181045658352559,
+      0.4142135623731065, 0.13176322542176422, -0.17157287525378706, 0.13176322542176425, 24,
+    ],
+  ];
+  it("certifies the separation instead of reporting an overlap", () => {
+    const d = 5;
+    const P = getPolytope("5:cube");
+    const V = poses.map((pose) => {
+      return placeVertices(
+        P.V,
+        P.nV,
+        d,
+        Float64Array.from(pose.slice(0, d)),
+        cayleyMatrix(pose.slice(d, 15), d, pose[15]),
+      );
+    });
+    const r = signedSeparation(V[0], P.nV, V[1], P.nV, d, { tol: 0 });
+    expect(r.lower).toBeGreaterThan(1e-7);
+    expect(r.upper).toBeGreaterThan(1e-7);
+  });
 });

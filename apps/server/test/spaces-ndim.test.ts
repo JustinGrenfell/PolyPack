@@ -63,7 +63,7 @@ describe("the nD in nD space on the server", () => {
   it("is listed with its domain, its records and its conventions", async () => {
     const r = (await get("/api/spaces")).body as SpacesResponse;
     const s = r.spaces.find((x) => x.space === "ndim")!;
-    expect(s).toMatchObject({ problem_id: "ndim/<d>/<piece>/<container>/<P>", problems: 6131, records: 1886 });
+    expect(s).toMatchObject({ problem_id: "ndim/<d>/<piece>/<container>/<P>", problems: 6131, records: 1890 });
     expect(s.domain!.fields.map((f) => f.key)).toEqual(["d", "piece", "container", "P"]);
     expect(s.conventions.pose).toMatch(/Cayley|\(I - S\)/);
   });
@@ -83,7 +83,7 @@ describe("the nD in nD space on the server", () => {
     expect((await get("/api/spaces/ndim/problems/ndim/4/demi/cube/5")).status).toBe(400);
     expect((await get("/api/spaces/ndim/problems/ndim/4/cube/cube/05")).status).toBe(400);
     const listing = (await get("/api/spaces/ndim/records")).body as SpaceRecordsResponse;
-    expect(listing.problems).toHaveLength(1886);
+    expect(listing.problems).toHaveLength(1890);
   });
 
   it("keeps the first valid entry of a problem without a record, in every dimension, and checks it strictly", async () => {

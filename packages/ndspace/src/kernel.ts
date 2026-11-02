@@ -34,6 +34,7 @@ import {
   gapAlong,
   getPolytope,
   isLoaded,
+  poseOfMatrix,
   readPose,
   signedSeparation,
 } from "@polypack/ndim";
@@ -41,7 +42,6 @@ import { ND_BALL, formatNdId, ndInRange, ndCode, ndShapes, type NdProblemId } fr
 import { ndBoundEntry, ndBallVolume } from "./bounds";
 import { contactPoints } from "./contact";
 import { inverse, mul, orthonormalise } from "./linalg";
-import { robustPose } from "./pose";
 import { latticePoints, type LatticeName } from "./lattice";
 import { NDIM_MAX_REASONS, ndCheck, ndProblemOf, parseNdConfig, type NdConfigShape } from "./validate";
 
@@ -167,12 +167,21 @@ export function ndKernel(problem: NdProblemId): SpaceKernel {
     if (ballPiece) return t;
     const R = rotationOf(s, i);
     if (!R) return null;
-    return robustPose(t, R, d);
+    try {
+      return poseOfMatrix(t, R, d);
+    } catch {
+      return null;
+    }
   };
 
   const toConfig = (s: KernelState): NdConfigShape => {
     const pieces: number[][] = [];
-    for (let i = 0; i < P; i++) pieces.push(poseOf(s, i) ?? Array.from(s.x.subarray(dim * i, dim * i + d)));
+    for (let i = 0; i < P; i++) {
+      const pose = poseOf(s, i);
+      // never a malformed pose: a rotation without a verified Cayley form is refused (not expected for valid input)
+      if (!pose) throw new RangeError(`piece ${i}: the rotation has no verified Cayley pose`);
+      pieces.push(pose);
+    }
     return { s: s.size, pieces };
   };
 

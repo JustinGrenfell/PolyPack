@@ -5,7 +5,7 @@ Run: python3 python/ndim/test_ndim.py            (the fast set, about 40 s)
      NDIM_SLOW=1 python3 python/ndim/test_ndim.py   (adds the largest packings and the rebuild of the fixtures, about 90 s)
 
 Covers: the exact proof of every catalogue entry (counts, unit edges, complete facet lists) and that tampered data is
-caught; that the generated TypeScript data holds the same floats; exactly orthogonal rational Cayley rotations; pose
+caught; that the generated TypeScript data (tables and test fixtures) holds the same floats; exactly orthogonal rational Cayley rotations; pose
 conversion with its refusals (reflections, non-orthonormal matrices); malformed input; every fixture of
 packages/ndim/test/fixtures/packings.json certified (or refused) as expected, with clearance 0 and 1e-7; and
 adversarial configurations (pieces overlapping, touching and separated by 1e-9, a piece out by 1e-9, coincident pieces)."""
@@ -123,12 +123,15 @@ class Catalogue(unittest.TestCase):
     def test_float_data_of_the_typescript_package_is_current(self):
         pat = re.compile(r'code:\s*"([^"]+)",\s*V:\s*\[([^\]]*)\],\s*N:\s*\[([^\]]*)\],\s*b:\s*\[([^\]]*)\]')
         seen = {}
-        for fn in sorted(os.listdir(TS_DATA)):
-            if fn.startswith('d'):
-                with open(os.path.join(TS_DATA, fn)) as fh:
-                    text = fh.read()
-                for code, V, N, b in pat.findall(text):
-                    seen[code] = [[float(x) for x in s.replace('\n', ' ').split(',') if x.strip()] for s in (V, N, b)]
+        # the tables the package ships (data/d*.ts) and the exact tables of the entries it computes (test fixtures)
+        files = [os.path.join(TS_DATA, fn) for fn in sorted(os.listdir(TS_DATA)) if fn.startswith('d')]
+        fixtures = os.path.join(ROOT, 'packages', 'ndim', 'test', 'fixtures')
+        files += [os.path.join(fixtures, 'exact-families.ts'), os.path.join(fixtures, 'exact-421.ts')]
+        for path in files:
+            with open(path) as fh:
+                text = fh.read()
+            for code, V, N, b in pat.findall(text):
+                seen[code] = [[float(x) for x in s.replace('\n', ' ').split(',') if x.strip()] for s in (V, N, b)]
         self.assertEqual(set(seen), set(CAT.LITERATURE))
         for code, (V, N, b) in seen.items():
             P = CAT.get(code)
@@ -195,6 +198,37 @@ class Rotations(unittest.TestCase):
         half = [r[:] for r in I]
         half[0][0] = half[1][1] = -1.0
         self.assertEqual(G.cayley_of_matrix(half)[1], 0b11)
+
+    def test_pose_of_matrix_verifies_half_turns_and_signed_permutations(self):
+        rng = random.Random(7)
+
+        def check(R, d, label):
+            pose = G.pose_of_matrix([0.0] * d, R)
+            R2 = G.matrix_of_pose(pose, d)
+            err = max(abs(R[i][j] - R2[i][j]) for i in range(d) for j in range(d))
+            self.assertLess(err, 1e-12, label)
+        for d in range(4, 11):
+            for it in range(15):
+                u = [rng.gauss(0, 1) for _ in range(d)]
+                nu = math.sqrt(sum(x * x for x in u))
+                u = [x / nu for x in u]
+                v = [rng.gauss(0, 1) for _ in range(d)]
+                dp = sum(a * b for a, b in zip(u, v))
+                v = [b - dp * a for a, b in zip(u, v)]
+                nv = math.sqrt(sum(x * x for x in v))
+                v = [x / nv for x in v]
+                R = [[(i == j) - 2 * (u[i] * u[j] + v[i] * v[j]) for j in range(d)] for i in range(d)]
+                check(R, d, 'half turn d=%d' % d)
+        d = 9
+        for it in range(40):
+            perm = list(range(d))
+            rng.shuffle(perm)
+            R = [[0.0] * d for _ in range(d)]
+            for i in range(d):
+                R[i][perm[i]] = rng.choice((-1.0, 1.0))
+            if G.det(R) < 0:
+                R[0] = [-x for x in R[0]]
+            check(R, d, 'signed permutation')
 
 
 PROB = {'d': 4, 'piece': '4:cube', 'container': '4:cube'}
@@ -385,6 +419,19 @@ class ImportedRecords(unittest.TestCase):
             self.assertEqual(self.config(r)['s'], r['score_cert'])
             self.assertEqual(len(self.config(r)['pieces']), P)
 
+    def test_records_that_need_the_lp_direction(self):
+        """Four records have a pair that the cheap proposals do not separate (the pairs at a gap of 1e-7 face to face): the
+        max-margin direction of the linear program does (certify.lp_direction, needs scipy; the build also used the record's own planes)."""
+        try:
+            import scipy  # noqa: F401
+        except ImportError:
+            self.skipTest('scipy is not installed')
+        for rid in ('ndim/4/simplex/600cell/39', 'ndim/6/simplex/ortho/10', 'ndim/6/cube/ortho/8', 'ndim/5/cube/ortho/5'):
+            r = self.recs[rid]
+            problem = {'d': r['d'], 'piece': f"{r['d']}:{r['piece']}", 'container': f"{r['d']}:{r['container']}"}
+            res = C.certify_config(problem, self.config(r), clearance=0.0)
+            self.assertTrue(res['ok'], (rid, res['failures']))
+
     def test_a_tampered_record_is_refused(self):
         r = self.recs['ndim/4/cube/cube/16']
         problem = {'d': 4, 'piece': '4:cube', 'container': '4:cube'}
@@ -398,9 +445,9 @@ class ImportedRecords(unittest.TestCase):
             by_d[r['d']] = by_d.get(r['d'], 0) + 1
             self.assertEqual(r['status'], 'best_known')
             self.assertIn('Zarzuelo', r['credit'])
-        # 36 pairs x 39, 9 x 31 and 9 x 23, less the four the certifier could not prove (docs/spaces/NDIM.md section 11)
-        self.assertEqual(sum(by_d.values()), 1886)
-        self.assertEqual(by_d, {4: 1403, 5: 278, 6: 205})
+        # 36 pairs x 39, 9 x 31 and 9 x 23: every upstream record certifies (docs/spaces/NDIM.md section 11)
+        self.assertEqual(sum(by_d.values()), 1890)
+        self.assertEqual(by_d, {4: 1404, 5: 279, 6: 207})
 
 
 if __name__ == '__main__':

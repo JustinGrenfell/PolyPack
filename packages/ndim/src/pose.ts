@@ -54,26 +54,33 @@ const parity = (m: number): number => {
   return c & 1;
 };
 
+/** A candidate's rebuild must match the matrix to this (largest absolute entry difference). */
+const VERIFY_TOL = 1e-12;
+
 /**
  * The Cayley parameters and flip of a rotation matrix (row-major d x d), choosing the flip that keeps the parameters
- * smallest (all even flips for d <= 7, a greedy start and its pair swaps above). Throws a RangeError, with the reason, for
- * a matrix that is not finite, not orthonormal (R^T R differs from I by more than 1e-9), a reflection (determinant < 0)
- * or without a Cayley form within MAX_CAYLEY.
+ * smallest. Every candidate (D R - I)(D R + I)^-1 is rebuilt with cayleyMatrix and kept only if it reproduces R to 1e-12:
+ * a nearly singular D R + I would otherwise return the parameters of another rotation. All even flips are tried for
+ * d <= 7; above, a greedy flip and its pair swaps first, and, when none of those verifies, all even flips (2^(d-1), 512
+ * at d = 10). Throws a RangeError, with the reason, for a matrix that is not finite, not orthonormal (R^T R differs from
+ * I by more than 1e-9), a reflection (determinant < 0) or without a verified Cayley form within MAX_CAYLEY.
  */
 export function cayleyOfMatrix(R: ArrayLike<number>, d: number): { params: number[]; flip: number } {
   if (R.length !== d * d || !Array.from(R).every(Number.isFinite))
     throw new RangeError("the rotation must be a finite d x d matrix");
   const M = Float64Array.from(R);
   const G = matmul(transpose(M, d), M, d);
+  let dev = 0;
   for (let i = 0; i < d; i++)
-    for (let j = 0; j < d; j++)
-      if (Math.abs(G[i * d + j] - (i === j ? 1 : 0)) > 1e-9)
-        throw new RangeError("the matrix is not orthonormal (R^T R differs from I by more than 1e-9)");
+    for (let j = 0; j < d; j++) dev = Math.max(dev, Math.abs(G[i * d + j] - (i === j ? 1 : 0)));
+  if (dev > 1e-9) throw new RangeError("the matrix is not orthonormal (R^T R differs from I by more than 1e-9)");
   if (det(M, d) < 0) throw new RangeError("the matrix is a reflection (determinant -1): poses are rotations only");
-  let masks: number[] = [];
-  if (d <= 7) {
-    for (let m = 0; m < 1 << d; m++) if (!parity(m)) masks.push(m);
-  } else {
+  // a matrix that is itself off orthogonal by dev is reproduced only that well (a wrong candidate is off by order 1)
+  const tol = VERIFY_TOL + 10 * dev;
+  const evenFlips: number[] = [];
+  for (let m = 0; m < 1 << d; m++) if (!parity(m)) evenFlips.push(m);
+  let heuristic = evenFlips;
+  if (d > 7) {
     let base = 0;
     for (let i = 0; i < d; i++) if (M[i * d + i] < 0) base |= 1 << i;
     if (parity(base)) {
@@ -81,35 +88,47 @@ export function cayleyOfMatrix(R: ArrayLike<number>, d: number): { params: numbe
       for (let i = 1; i < d; i++) if (Math.abs(M[i * d + i]) < Math.abs(M[imin * d + imin])) imin = i;
       base ^= 1 << imin;
     }
-    masks = [base];
-    for (let i = 0; i < d; i++) for (let j = i + 1; j < d; j++) masks.push(base ^ (1 << i) ^ (1 << j));
+    heuristic = [base];
+    for (let i = 0; i < d; i++) for (let j = i + 1; j < d; j++) heuristic.push(base ^ (1 << i) ^ (1 << j));
   }
-  let best: { size: number; params: number[]; flip: number } | null = null;
-  for (const m of masks) {
-    const C = new Float64Array(d * d);
-    for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) C[i * d + j] = ((m >> i) & 1 ? -1 : 1) * M[i * d + j];
-    const num = Float64Array.from(C);
-    const den = Float64Array.from(C);
-    for (let i = 0; i < d; i++) {
-      num[i * d + i] -= 1;
-      den[i * d + i] += 1;
-    }
-    // S = num den^-1, i.e. den^T S^T = num^T
-    const St = solve(transpose(den, d), transpose(num, d), d, d);
-    if (!St) continue;
-    const S = transpose(St, d);
-    const params: number[] = [];
-    let size = 0;
-    for (let i = 0; i < d; i++)
-      for (let j = i + 1; j < d; j++) {
-        const v = 0.5 * (S[i * d + j] - S[j * d + i]);
-        params.push(v);
-        size = Math.max(size, Math.abs(v));
+  const tryMasks = (masks: number[]) => {
+    let best: { size: number; params: number[]; flip: number } | null = null;
+    for (const m of masks) {
+      const C = new Float64Array(d * d);
+      for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) C[i * d + j] = ((m >> i) & 1 ? -1 : 1) * M[i * d + j];
+      const num = Float64Array.from(C);
+      const den = Float64Array.from(C);
+      for (let i = 0; i < d; i++) {
+        num[i * d + i] -= 1;
+        den[i * d + i] += 1;
       }
-    if (!best || size < best.size) best = { size, params, flip: m };
-  }
-  if (!best || !(best.size <= MAX_CAYLEY))
-    throw new RangeError("the rotation has no Cayley form within the parameter bound");
+      // S = num den^-1, i.e. den^T S^T = num^T
+      const St = solve(transpose(den, d), transpose(num, d), d, d);
+      if (!St) continue;
+      const S = transpose(St, d);
+      const params: number[] = [];
+      let size = 0;
+      for (let i = 0; i < d; i++)
+        for (let j = i + 1; j < d; j++) {
+          const v = 0.5 * (S[i * d + j] - S[j * d + i]);
+          params.push(v);
+          size = Math.max(size, Math.abs(v));
+        }
+      if (!(size <= MAX_CAYLEY) || (best && size >= best.size)) continue;
+      let back: Float64Array;
+      try {
+        back = cayleyMatrix(params, d, m);
+      } catch {
+        continue;
+      }
+      let err = 0;
+      for (let k = 0; k < d * d; k++) err = Math.max(err, Math.abs(back[k] - M[k]));
+      if (err < tol) best = { size, params, flip: m };
+    }
+    return best;
+  };
+  const best = tryMasks(heuristic) ?? (heuristic === evenFlips ? null : tryMasks(evenFlips));
+  if (!best) throw new RangeError("the rotation has no verified Cayley form within the parameter bound");
   return { params: best.params, flip: best.flip };
 }
 

@@ -308,7 +308,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       start: "ballinball",
     },
   ],
-  // ndim/<d>/<piece>/<container>/<P>: the nD spaces are listed by the generic table until the nD plan's phase E gives them a board
+  // ndim/<d>/<piece>/<container>/<P>: the nD spaces are listed by the generic table; the board does not show them yet
   ndim: [
     {
       key: "d",

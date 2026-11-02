@@ -5,7 +5,7 @@
  */
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadPolytope } from "@polypack/ndim";
+import { LAZY_CODES, loadPolytope } from "@polypack/ndim";
 import { ND_P_RANGE } from "@polypack/ndspace/catalogue";
 import { parseSpaceId, validateSpaceSubmission } from "../src";
 import { loadSpacesIndex, readEntryConfigSync } from "../src/load";
@@ -13,11 +13,14 @@ import { loadSpacesIndex, readEntryConfigSync } from "../src/load";
 const root = resolve(__dirname, "../../..");
 const cat = loadSpacesIndex(root).ndim!;
 
+// the synchronous validator reads the polytopes that are loaded on demand
+await Promise.all(LAZY_CODES.map((c) => loadPolytope(c)));
+
 describe("the imported nD records", () => {
   it("are the regular polytopes of 4D to 6D, within upstream's ranges, none left out", async () => {
     await loadPolytope("8:421");
     expect(cat.skipped).toEqual([]);
-    expect(cat.problems).toHaveLength(1886);
+    expect(cat.problems).toHaveLength(1890);
     const by = new Map<number, Set<string>>();
     for (const p of cat.problems) {
       const d = p.fields.d as number;
@@ -58,7 +61,7 @@ describe("the imported nD records", () => {
       expect(v.score, p.id).toBe(p.certified!.score);
       n++;
     }
-    expect(n).toBe(1886);
+    expect(n).toBe(1890);
     expect(typeof parseSpaceId("ndim", "ndim/4/cube/cube/16")).not.toBe("string");
   });
 });

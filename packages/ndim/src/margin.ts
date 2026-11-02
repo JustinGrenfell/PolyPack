@@ -222,7 +222,7 @@ export function maxMarginSeparation(
   let verdict: MarginResult["verdict"] = "open";
   const finish = (): MarginResult => {
     let up = Infinity;
-    if (conclusive) up = upper >= 0 ? upper : upper / sqrtD;
+    if (conclusive) up = upper >= 0 ? upper : upper / sqrtD; // (Infinity stays Infinity)
     return { lower, dir: bestDir, upper: up, conclusive, verdict, rounds };
   };
   const n = d; // d - 1 free coordinates and t'
@@ -272,6 +272,7 @@ export function maxMarginSeparation(
         }
         if (lower >= acceptAt) {
           verdict = "separated";
+          upper = Infinity; // stopped early: the other branches were not bounded
           return finish();
         }
         if (t < refuseBelow || t - g <= 1e-11 * (1 + Math.abs(t))) {
