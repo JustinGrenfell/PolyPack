@@ -347,7 +347,11 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
   };
 
   // ------------------------------------------------------------ compress
-  const compress = (st0: State, s0: number, sh: Shape, grow: boolean): { st: State; s: number } | null => {
+  /**
+   * `early`, when given, is called once with the first feasible state (the models of rotated pieces offer it drawn in to touching, so that a
+   * first valid packing does not wait for the whole compression: a solid's first result needs thousands of evaluations).
+   */
+  const compress = (st0: State, s0: number, sh: Shape, grow: boolean, early?: (st: State, s: number) => void): { st: State; s: number } | null => {
     let s = s0;
     let r = relax(st0, s, sh.rounds, sh.maxIter);
     for (let k = 0; grow && k < 8 && !(r.E < model.target); k++) {
@@ -356,6 +360,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
       s = s2;
     }
     if (!(r.E < model.target)) return null;
+    early?.(r.st, s);
     let best = { st: r.st, s };
     let delta = sh.delta0;
     while (delta > sh.stop) {
@@ -371,7 +376,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
   };
 
   // ------------------------------------------------------------ finalize
-  const finalize = (st: State, s: number): { config: BoundaryConfig; score: number } | null =>
+  const finalize = (st: State, s: number, shrink = false): { config: BoundaryConfig; score: number } | null =>
     finalizeState(
       model,
       st,
@@ -381,7 +386,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
         stats.validations++;
         return validateBoundary(problem, config, { tol: 0 }).ok;
       },
-      { onViolation: () => tick() },
+      { onViolation: () => tick(), shrink },
     );
 
   // ------------------------------------------------------------ the run
@@ -400,6 +405,16 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
     opts.onImprove?.({ config: cloneConfig(f.config), score: f.score });
     if (atFloor()) throw new Stop("bound");
   };
+  /** The early offer of rotated pieces (compress): the first feasible state, drawn in to touching. */
+  const earlyOffer = (source: BoundarySearchEvent["source"]) =>
+    model.rotates
+      ? (st: State, s: number) => {
+          const was = stage;
+          stage = "final";
+          offer(finalize(st, s, true), source, "coarse", st, s);
+          stage = was;
+        }
+      : undefined;
   const window = 2 * plan.coarse.stop;
   const consider = (r: { st: State; s: number } | null, source: BoundarySearchEvent["source"]) => {
     if (!r) return;
@@ -430,7 +445,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
       }
       if (st && Number.isFinite(start.s) && start.s > 0) {
         starts++;
-        consider(compress(st, start.s, plan.coarse, true), "warm");
+        consider(compress(st, start.s, plan.coarse, true, earlyOffer("warm")), "warm");
       }
     }
     for (let n = 0; ; n++) {
@@ -452,7 +467,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
         source = "random";
       }
       starts++;
-      consider(compress(st, s, plan.coarse, true), source);
+      consider(compress(st, s, plan.coarse, true, earlyOffer(source)), source);
     }
   } catch (e) {
     if (!(e instanceof Stop)) throw e;

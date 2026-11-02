@@ -235,8 +235,8 @@ test("3D on 4D has its card with Records, Board, Viewer and Notes, and its recor
   const card = section.locator('li[data-space="boundary"]');
   await expect(card).not.toHaveClass(/soon/);
   await expect(card.getByRole("heading", { name: "Polytope boundaries" })).toBeVisible();
-  // 3D on 4D holds 152 of the space's problems (the d-cubes are the dimensions 4D on 5D to 9D on 10D); 32 have a record
-  await expect(card).toContainText("152");
+  // 3D on 4D holds 816 of the space's problems (the d-cubes are the dimensions 4D on 5D to 9D on 10D); 32 have a record
+  await expect(card).toContainText("816");
   expect(data.problems.length).toBe(32);
   await expect(card.locator(".space-links a")).toHaveText([
     "Records: Polytope boundaries",

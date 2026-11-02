@@ -1,7 +1,7 @@
 /** The board's picker for the boundary domain: the pieces and the P range depend on the polytope. */
 import { boundaryDomain } from "@polypack/boundary";
 import { describe, expect, it } from "vitest";
-import { BOUNDARY_ROUND, boundaryRound, defaultBudget, freshSize, roundSize } from "../src/space/model";
+import { BOUNDARY_ROUND, boundaryFresh, boundaryRound, defaultBudget, freshSize, roundSize } from "../src/space/model";
 import { pickFromDomain } from "../src/space/model";
 
 const pick = (wish: Record<string, string>) => pickFromDomain("boundary", boundaryDomain.info, wish);
@@ -104,7 +104,11 @@ describe("the rounds of 3D on 4D", () => {
     // 4 ms a piece on the 120-cell: P = 8 is 32 ms an evaluation, 60 of them 2 s, so the least, 200
     expect(boundaryRound("120cell", 8, "dodecahedron")).toBe(200);
     expect(roundSize(solid("24cell", "octahedron", 8))).toBe(boundaryRound("24cell", 8, "octahedron"));
-    expect(defaultBudget(solid("tesseract", "tetrahedron", 3))).toEqual({ time_s: 60, evals: 10 * boundaryRound("tesseract", 3, "tetrahedron") });
+    // the first round holds the search's first offer (2,000 + 1,000 P evaluations); the default budget a first round and ten more
+    expect(boundaryFresh("tesseract", 3, "tetrahedron")).toBe(5000);
+    expect(freshSize(solid("tesseract", "tetrahedron", 3))).toBe(5000);
+    expect(freshSize(problem("5cell", 3))).toBe(boundaryRound("5cell", 3));
+    expect(defaultBudget(solid("tesseract", "tetrahedron", 3))).toEqual({ time_s: 120, evals: 5000 + 10 * boundaryRound("tesseract", 3, "tetrahedron") });
     expect(defaultBudget(solid("tesseract", "cube", 3))).toEqual({ time_s: 30, evals: 3000000 });
   });
 });

@@ -98,7 +98,14 @@ test("3D on 4D is chosen from the menus and drawn as cells, as a net that folds,
     "120-cell",
     "600-cell",
   ]);
-  await expect(page.locator("#space-f-piece option")).toHaveText(["Balls", "Cubes"]);
+  await expect(page.locator("#space-f-piece option")).toHaveText([
+    "Balls",
+    "Cubes",
+    "Tetrahedra",
+    "Octahedra",
+    "Dodecahedra",
+    "Icosahedra",
+  ]);
   await expect(page.locator("#space-f-P option")).toHaveText((await listedP(page, "ball")).map(String));
 
   // the usual values, and what folding gains

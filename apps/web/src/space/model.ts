@@ -633,6 +633,16 @@ export function boundaryRound(polytope: string, P: number, piece = "ball"): numb
   return Math.max(200, Math.min(BOUNDARY_ROUND, 100 * Math.floor(2000 / (ms * P) / 100)));
 }
 
+/**
+ * The evaluations of the first round of a 3D on 4D problem with no start. For the Platonic solids the search offers a first packing as soon as a
+ * random start relaxes (drawn in to touching): [CALC] 2026-11-02, 700 to 800 evaluations for one solid, 5,000 for six on the tesseract; the first round
+ * is 2,000 + 1,000 P, so that it holds that offer and some of the compression after it. Balls and aligned cubes: the round.
+ */
+export function boundaryFresh(polytope: string, P: number, piece = "ball"): number {
+  const solid = piece !== "ball" && !(piece === "cube" && polytope === "tesseract") && polytope in BOUNDARY_SOLID_ENERGY_MS;
+  return solid ? 2000 + 1000 * P : boundaryRound(polytope, P, piece);
+}
+
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
@@ -646,7 +656,7 @@ export function roundSize(p: SearchProblem, method?: string): number {
 /** The evaluations of a round of this problem with no start (a new arrangement). */
 export function freshSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
-  if (p.space === "boundary") return boundaryRound(p.polytope, p.P, p.piece);
+  if (p.space === "boundary") return boundaryFresh(p.polytope, p.P, p.piece);
   if (p.space === "balls") return ballsRound(p.P, p.code).fresh;
   if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
   return p.space === "polyhedra" ? polyhedraRound(p.P, p.code).fresh : FRESH_EVALS[searchKind(p)];
@@ -679,8 +689,9 @@ export function defaultBudget(p: SearchProblem, method?: string): { time_s: numb
   if (p.space === "balls") return { time_s: 60, evals: 10 * ballsRound(p.P, p.code).round };
   if (p.space === "ndim") return { time_s: 60, evals: 30000 };
   // ten rounds; the other containers' rounds are about two seconds each (boundaryRound), the tesseract's the usual 30 s and 3 million
-  if (p.space === "boundary" && (p.polytope !== "tesseract" || isBoundarySolid(p)))
-    return { time_s: 60, evals: 10 * boundaryRound(p.polytope, p.P, p.piece) };
+  if (p.space === "boundary" && isBoundarySolid(p))
+    return { time_s: 120, evals: boundaryFresh(p.polytope, p.P, p.piece) + 10 * boundaryRound(p.polytope, p.P, p.piece) };
+  if (p.space === "boundary" && p.polytope !== "tesseract") return { time_s: 60, evals: 10 * boundaryRound(p.polytope, p.P, p.piece) };
   return {
     nofold: { time_s: 15, evals: 30000 },
     curved: { time_s: 30, evals: 90 },
