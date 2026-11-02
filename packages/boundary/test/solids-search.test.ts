@@ -5,11 +5,15 @@
  */
 import { type KernelState, mulberry32 } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { BoundaryConfig, PolytopeName, PolytopePieceName } from "../src/index";
 import { boundaryKernel, getPolytope, pieceBounds, pieceShape, quaternionToMatrix, searchBoundary, validateBoundary } from "../src/index";
 import { expRot, mul9 } from "../src/search/rot";
 import { SolidModel } from "../src/search/solids";
+
+// Every test here runs synchronously for seconds and the runner only answers vitest between macrotasks: without a turn of the event
+// loop after each test, a run of them longer than 60 s on CI fails with "Timeout calling onTaskUpdate".
+afterEach(() => new Promise<void>((r) => setImmediate(r)));
 
 const CASES: [PolytopeName, PolytopePieceName, number, number][] = [
   ["tesseract", "tetrahedron", 4, 1.0],

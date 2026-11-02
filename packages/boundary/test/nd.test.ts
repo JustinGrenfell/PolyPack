@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { checkKernel } from "@polypack/methods/contract";
 import { mulberry32 } from "@polypack/methods";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   BOUNDARY_HEAVY_MS,
   CONTAINER_MAX_P,
@@ -46,6 +46,10 @@ import {
   walkND,
 } from "../src/index";
 import type { NDName } from "../src/index";
+
+// Every test here runs synchronously for seconds and the runner only answers vitest between macrotasks: without a turn of the event
+// loop after each test, a run of them longer than 60 s on CI fails with "Timeout calling onTaskUpdate".
+afterEach(() => new Promise<void>((r) => setImmediate(r)));
 
 type Cfg = { s: number; pieces: { cell: number; u: number[] }[] };
 const fixtures = (name: string) =>
