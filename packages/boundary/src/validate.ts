@@ -79,10 +79,15 @@ export interface ValidateOptions {
   maxChains?: number;
   /** Stop collecting reasons after this many (default 20). */
   maxReasons?: number;
-  /** Platonic pieces: the most pairs of parts tested before the check is refused (default 400,000). */
+  /** Platonic pieces: the most pairs of parts tested before the check is refused (default MAX_PAIR_TESTS = 20,000). */
   maxPairs?: number;
   /** The d-cubes only (ncube/): the most search steps of one check (default NCUBE_MAX_WORK); maxChains is for the 4-polytopes. */
   maxWork?: number;
+  /**
+   * Tests of the rotated-cube rule only (default false): accept a turned cube on the tesseract, whose cube problem is the axis-aligned one (q absent or
+   * one of the cube's 24 symmetries). The server never sets it.
+   */
+  turnedCubes?: boolean;
 }
 
 /**
@@ -122,7 +127,7 @@ function finiteNumbers(x: unknown, n: number): number[] | null {
  * Checks the problem and the configuration's shape; returns the typed pieces or pushes reasons.
  * `given`: a polytope to use instead of the catalogue's (its name is then not checked).
  */
-function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reasons: string[], maxReasons: number, given?: Polytope): { poly: Polytope; s: number; pieces: BoundaryPiece[] } | null {
+function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reasons: string[], maxReasons: number, given?: Polytope, turnedCubes = false): { poly: Polytope; s: number; pieces: BoundaryPiece[] } | null {
   const push = (r: string) => {
     if (reasons.length < maxReasons) reasons.push(r);
   };
@@ -186,6 +191,10 @@ function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reas
         const n = Math.hypot(qv[0], qv[1], qv[2], qv[3]);
         if (!(Math.abs(n - 1) <= 1e-9)) {
           push(`Piece ${i}: its rotation q must be a unit quaternion; its length is ${fmt(n)}.`);
+          ok = false;
+        } else if (!given && !turnedCubes && problem.polytope === "tesseract" && problem.piece === "cube" && !mapsCubeOntoItself(qv)) {
+          // boundary/tesseract/cube/P is the axis-aligned cube problem (4.3): a rotation is allowed only when it is one of the cube's 24 symmetries
+          push(`Piece ${i}: the cubes of the tesseract are axis-aligned; q must be absent or a rotation that maps the cube onto itself (one of its 24 symmetries), not a turned cube.`);
           ok = false;
         }
       }
@@ -432,8 +441,20 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
   return reasons;
 }
 
+/** True when the unit quaternion turns a cube onto itself: its matrix is a signed permutation matrix to within 1e-9 (the unit-length tolerance). */
+function mapsCubeOntoItself(q: readonly number[]): boolean {
+  return quaternionToMatrix(q).every((x) => Math.min(Math.abs(x), Math.abs(Math.abs(x) - 1)) <= 1e-9);
+}
+
+/**
+ * Tests of pairs of parts one check may run before it is refused. One separating-axis test costs 0.4 us (tetrahedra) to 8.8 us (icosahedra), so 20,000
+ * tests take at most 0.18 s. Real layouts need 0 to 12 (the densest valid packings; the cell tilings need none) and pieces that pass the edge tests have
+ * at most 193 chains, so the cap refuses nothing real; it fails closed with a reason.
+ */
+export const MAX_PAIR_TESTS = 20000;
+
 /** The rule for rotated polytope pieces (the cube included; on the tesseract the cube problems use it for their axis-aligned cubes). */
-function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number, maxPairs = 400000): string[] {
+function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number, maxPairs = MAX_PAIR_TESTS): string[] {
   const shape = pieceShape(piece as PolytopePieceName);
   const one = capital(piece);
   const many = capital(plural(piece));
@@ -547,7 +568,7 @@ function run(problem: BoundaryProblem, config: unknown, opts: ValidateOptions, g
   const mc = opts.maxChains ?? 4096;
   const maxChains = mc >= 1 ? Math.floor(mc) : 1;
   const reasons: string[] = [];
-  const shape = checkShape(problem, config, tol, reasons, maxReasons, given);
+  const shape = checkShape(problem, config, tol, reasons, maxReasons, given, opts.turnedCubes === true);
   if (!shape) return { ok: false, score: null, reasons: reasons.length ? reasons : ["The configuration is malformed."] };
   const { poly, s, pieces } = shape;
   // Volume bound [CALC]: developments are injective on interiors and interiors are disjoint, so

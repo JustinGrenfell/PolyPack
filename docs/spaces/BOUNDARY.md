@@ -675,7 +675,7 @@ exact certifier (a field of degree 4, an exact rotation), the lower bounds, the 
 - **Pose.** `{cell, u, q}` as for the cubes (section 2): q is the unit quaternion (w, x, y, z) that rotates the standard solid about its centre in the anchor's
   local frame; absent means no rotation. The circumradius (0.612, 0.866, 0.707, 1.401, 0.951 for the five) is how far a piece reaches from its centre.
 - **Ids.** `boundary/<container>/<piece>/<P>` with piece `tetrahedron`, `cube`, `octahedron`, `dodecahedron` or `icosahedron`. **The id `cube` on the 5-cell, 16-cell, 24-cell,
-  120-cell and 600-cell is a freely rotated cube; on the tesseract it is the axis-aligned cube of section 4.3, with its records, rules and ids unchanged.**
+  120-cell and 600-cell is a freely rotated cube; on the tesseract it is the axis-aligned cube of section 4.3, with its records, rules and ids unchanged: the server accepts a `q` there only when it is absent or one of the cube's 24 symmetry rotations (the rotation matrix a signed permutation to 1e-9), and refuses a turned cube with that reason. No stored entry was affected (the 16 tesseract cube problems had no site entries and no record or fixture carries a `q`).**
   The tesseract takes the four other solids freely rotated. The d-cubes (4B) take balls and aligned cubes only.
 - **P** = 1 to 24 on the five general containers, 1 to 16 on the tesseract, as for their balls.
 - **Problems.** 664 more than before: the tesseract's four solids (4 x 16 = 64) and five solids on each of the five others (5 x 5 x 24 = 600); 816 on the 4-polytopes in all (152 + 664),
@@ -695,15 +695,17 @@ into c's frame (`partPolyhedron` clips the solid's faces; the piece's face norma
 3. **The volume bound** first: P V_piece <= V_boundary s^3 (1 + 1e-6), then the in-cell edge tests, so that a container far too small for its pieces fails before any chain is enumerated.
 
 *Work caps (fail closed).* At most 1024 chains per piece on the server (4096 for the library), a configuration that reaches it is rejected with "reaches more than N chains of cells; the
-polytope is far too small for its pieces"; at most 400,000 tests of pairs of parts (`maxPairs`), a configuration that needs more is rejected with the reason "more than N tests of pairs of parts; the
+polytope is far too small for its pieces"; at most 20,000 tests of pairs of parts (`maxPairs`, `MAX_PAIR_TESTS`; a test takes 0.4 to 8.8 us, so at most 0.18 s; real layouts need 0 to 12), a configuration that needs more is rejected with the reason "more than N tests of pairs of parts; the
 configuration is too crowded for the server to check". A cap never turns a failure into a pass.
 
 *Measured times* [CALC, 2026-11-02, Apple Silicon, one core, tolerance 1e-9, 1024 chains]: one solid alone at 1.02 to 4 times its smallest edge in 12 random orientations, at most 2.2 ms
 (single outliers of 6 ms on the tesseract and 3.8 ms on the 120-cell); a loose random layout of P = 24 (16 on the tesseract) 1.4 to 25 ms; the cells themselves, every solid touching its
 neighbours, 3.8 ms a piece on the 5-cell, 2.8 on the 16-cell, 2.3 on the 24-cell, 4.4 on the 120-cell (120 dodecahedra, 0.53 s) and 1.2 on the 600-cell (600 tetrahedra, 0.73 s).
-**Heavy rule.** The server prices a solid at `BOUNDARY_SOLID_MS` per piece (the worst of these, rounded up: 4 ms on the tesseract and the 5-cell, 3 on the 16-cell and 24-cell, 5 on the 120-cell,
-2 on the 600-cell; the aligned cubes keep 0.3 and the balls their own), and a check estimated at 50 ms or more waits in the heavy queue: solids from P = 13 on the tesseract and the 5-cell,
-17 on the 16-cell and 24-cell, 10 on the 120-cell, never on the 600-cell (24 x 2 ms).
+**Heavy rule.** The server prices a solid at `BOUNDARY_SOLID_MS` per piece: 4 ms on the tesseract, 6 on the 5-cell, 5 on the 16-cell, 4 on the 24-cell, 11 on the 120-cell and 2 on the 600-cell (the aligned cubes keep
+0.3 and the balls their own), and a check estimated at 50 ms or more waits in the heavy queue: solids from P = 13 on the tesseract, 9 on the 5-cell, 10 on the 16-cell, 13 on the 24-cell, 5 on the 120-cell, never on the
+600-cell (24 x 2 ms). Each figure is 1.5 times the worst warm measurement, rounded up. The worst is the cells tiling the container for the 5-, 16-, 24- and 600-cell (3.8, 2.8, 2.3, 1.2 ms a piece) and, for the 120-cell, a pose that passes the in-cell edge
+tests with 193 chains, copied P times: icosahedra 6.8 ms a piece (162 ms for 24 pieces, 61 ms for 9; [CALC] 2026-11-02, a loaded machine, median of 5), the other solids at most 3 ms; on the 24-cell
+the icosahedra took 1.4 ms and the tetrahedra 1.3 ms a piece, on the tesseract 1.3 ms, on the 600-cell 0.9 ms. An earlier figure of 5 ms on the 120-cell was 30% short of the icosahedra.
 
 ### 4C.3 The exact certifier
 
@@ -733,12 +735,16 @@ unit-edge vertices) span the same 3-space, so the engine's rotation in the exact
 That float matrix becomes a quaternion, rounded to the grid 2^-60, and the exact rational rotation of that rational quaternion (entries rational, exactly orthogonal, determinant 1) is the pose's. A centre that lies on
 a ridge is developed from every closed cell that contains it (the runs' parts are compared together), as for the balls.
 
-*Discrepancy and slack.* [CALC] Over 540 random poses (every solid on every container, s = 0.6, 2 and 5, centres anywhere in their cells, random rotations) and the 12 test packings, the largest distance between a
-vertex of the exact pose and the engine's own float computation of it is **2.74e-15 s** (120-cell cube), 1.2 to 2.3e-15 s on the others; for balls 4A.3 found 2.9e-15 s. Strict validity is decided on the
-pieces **inflated about their centres by the factor 1 + EPS_STRICT, EPS_STRICT = 2^-40 = 9.1e-13**: if the inflated solids are valid (interiors disjoint, no edge through an interior, embedded), the closed solids are
-strictly valid, each at distance at least EPS_STRICT times its inradius from the others and from every edge, which is 1.9e-13 for the tetrahedron (the smallest) against a reading error of 2.74e-15 s: a factor 70 at s = 1 and 7 at
-s = 10. The certifier refuses (with that reason, never accepts) a strict check with s READING_BOUND > EPS_STRICT r_in, READING_BOUND = 1e-14 (3.6 times the measured error): s above 18 for the tetrahedron, 37 for the
-octahedron, 45 for the cube, 68 for the icosahedron, 101 for the dodecahedron. The reach of the chain enumeration is the inflated circumradius.
+*Discrepancy and slack.* [CALC, measured, not proven] The distance between a vertex of the exact pose and the engine's own float computation of it has a constant part and a part proportional to s. The constant part
+is the rotation's rounding times the solid's circumradius, about 1.4e-15 in all (it dominates at small s: up to 9.5e-15 s at s = 0.15). The proportional part reached 2.74e-15 s over 540 random poses at s = 0.6 to 5
+and the 12 test packings, and 4.8e-15 s at s = 101 on the 120-cell and 4.3e-15 s on the 600-cell (3,000 random poses each); the largest ratio to s seen anywhere was 9.5e-15, at s of 7 or less on the 600-cell's dodecahedron.
+For balls 4A.3 found 2.9e-15 s. Strict validity is decided on the pieces **inflated about their centres by the factor 1 + EPS_STRICT, EPS_STRICT = 2^-40 = 9.1e-13**: if the inflated solids are valid
+(interiors disjoint, no edge through an interior, embedded), the closed solids are strictly valid, each at distance at least EPS_STRICT times its inradius (the room) from the others and from every edge, which is
+1.9e-13 for the tetrahedron (the smallest). A strict check is held to two limits: (1) it is refused (with that reason, never accepted) when s READING_BOUND > EPS_STRICT r_in, READING_BOUND = 3e-14, three times the
+largest ratio measured: s above 6.2 for the tetrahedron, 12 for the octahedron, 15 for the cube, 23 for the icosahedron, 34 for the dodecahedron; below the cut the measured reading used at most 0.10 of the room
+(random poses in every cell of every container, s up to the cut); (2) for the configuration in hand, `reading_discrepancy` (the exact pose against the engine's float vertices, mirroring the engine's steps, times s) is
+computed, and the check is refused with a reason when it exceeds READING_SHARE = 1/2 of the room. The claim "strictly valid binds the configuration as the engine reads it" therefore rests on a per-configuration
+measurement with a factor 2 in hand, not on the bound alone. The reach of the chain enumeration is the inflated circumradius.
 
 *Decisions* (exact): the lower bounds first (4C.4; strict: s equal to the bound is invalid); the centre in its closed cell; then for each piece and run the chains within the circumradius (at most 40,000 per piece and run,
 refused with a reason beyond), and in each node (1) every hinge of the node's cell clipped to the closed window against the open interior of the piece (an interval test per face), (2) the part: the piece's vertices
@@ -779,7 +785,7 @@ published proof (section 5), so they stay unrecorded here: these problems have n
 
 - **Engine against certifier** (`fixtures/platonic_crosscheck.json`, `gen-platonic-crosscheck.ts`): for every container and solid (29 pairs), two solids at random cells and turns, a third of them with a centre on a ridge, a
   second family at the centres of two adjacent cells; the engine's validator finds the critical scale k* of the whole configuration (bisection on validity, monotone in the scale), and the configuration is emitted at k* (1 +- d), d = 1e-5
-  everywhere and 1e-9 for the tolerance-0 entries of every fourth pair. 58 entries, 136 configurations: 11 with a centre on a ridge, 29 at adjacent centres; the refused side's reason is an edge through a solid in 44 and
+  everywhere and 1e-9 for the tolerance-0 entries of every fourth pair. 58 entries, 136 configurations: 11 entries (22 configurations) with a centre on a ridge, 29 entries (58 configurations) at adjacent centres; the refused side's reason is an edge through a solid in 44 and
   an overlap in 24. **The exact verdict (plain validity) is the engine's on all 136** (tolerance 0, or 1e-9 for the entries with a centre on a ridge, whose float coordinates can be a rounding unit outside their cell), and the
   strict verdict on the 1e-5 side of every fourth entry agrees too. So the float validator never accepts what the exact certifier refuses, and the reverse, outside a margin of 1e-9 of s.
 - **Frames and field.** Every frame is orthogonal, of equal length m, with kappa^2 m = e0^2; its image in the engine's coordinates is orthonormal and orthogonal to the engine's normal (every cell of the 5-, 16- and 24-cell and the tesseract,
@@ -835,6 +841,7 @@ certifier accepts them strictly **and with twice the inflation**, then stored wi
   that follows needs tens of thousands (40,000 to 90,000 for the test packings), at 0.1 to 4 ms per piece and evaluation. The board sizes its first round accordingly (section 13).
 - The exact certifier is slow on crowded packings (25 s for 24 dodecahedra of the 120-cell; 40,000 chains per piece and run is its cap).
 - The vertex rule (section 3) is argued, not proved, on every container, as before.
+- u is capped at 1e4 (the form check), while s may be as large as 1e4: on the 120-cell, whose cells have circumradius 1.40 s, part of each cell cannot be written for s above about 7,100 (four configurations at s = 9,560 of the review's corpus were refused by both the server and the certifier).
 - A configuration with a centre exactly on an edge is refused as invalid (the edge is inside the piece).
 - Whether the tesseract should also have a rotated-cube problem (its `cube` is the aligned cube) is a question for the project owner; the id `boundary/tesseract/cube/P` is the aligned problem and stays so.
 
@@ -1104,7 +1111,7 @@ refuse most bad input before any chain is enumerated. The server keeps the 32 re
 and a check of 24 balls took 4 to 18 ms (5-cell, 16-cell, 24-cell, 600-cell) and 91 ms (120-cell) on loose layouts; balls on the 120-cell from P = 5
 and on the 24-cell from P = 22 wait in the server's heavy-check queue (4A.6).
 
-[CALC] Platonic solids: a check costs 1.2 to 4.4 ms a piece when every solid touches its neighbours, at most 2.2 ms a piece alone, and a solid reaches at most 813 chains of cells (400 random poses of each pair of container and solid, at 1 to 3 times the one-piece bound: the tetrahedron on the 120-cell where nothing fits; 47 to 566 for the others) and about 80 per piece in the test packings (4C.6), so the cap refuses no real packing; the server prices them at `BOUNDARY_SOLID_MS` per piece (4C.2) and queues those of 50 ms or more. The work caps: 1024 chains per piece, 400,000 tests of pairs of parts.
+[CALC] Platonic solids: a check costs 1.2 to 4.4 ms a piece when every solid touches its neighbours, at most 2.2 ms a piece alone, and a solid reaches at most 813 chains of cells (400 random poses of each pair of container and solid, at 1 to 3 times the one-piece bound: the tetrahedron on the 120-cell where nothing fits; 47 to 566 for the others) and about 80 per piece in the test packings (4C.6), so the cap refuses no real packing; the server prices them at `BOUNDARY_SOLID_MS` per piece (4C.2) and queues those of 50 ms or more. The work caps: 1024 chains per piece, 20,000 tests of pairs of parts.
 
 **Searches.** The board and the volunteer client run the same job, `runSpaceJob` in
 `packages/spaces/src/search`, under the method name "boundary compression search": the boundary

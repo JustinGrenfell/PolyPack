@@ -53,10 +53,13 @@ PIECES = ("tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron")
 # few 1e-15 s of the exact poses, and the fixtures' own scale (1 + k 1e-12) leaves contact gaps of about 1e-12 times the piece's size.
 EPS_STRICT = Fraction(1, 2 ** 40)
 
-# The reading of the engine's floats (centres and rotations) is within 2.74e-15 s of the exact poses over the corpus of BOUNDARY.md 4C.3 (random
-# poses of every solid on every container, s = 0.6 to 5); a strict check asks for room READING_BOUND s <= eps r_in (r_in the solid's inradius), a factor
-# 3.6 over that measurement, and refuses an s too large for it (about 18 for the tetrahedron, the smallest).
-READING_BOUND = 1e-14
+# The reading of the engine's floats (centres and rotations) differs from the exact poses by a constant part (the rotation's rounding times the solid's
+# circumradius, about 1e-15) plus a part proportional to s (about 5e-15 s at most on the 120-cell and 600-cell): measured, not proven (BOUNDARY.md 4C.3).
+# A strict check therefore (1) refuses an s with s READING_BOUND > eps r_in (r_in the solid's inradius; about 6 for the tetrahedron, the smallest), a
+# cut well above the measurements, and (2) measures reading_discrepancy for the configuration in hand and refuses it when that exceeds READING_SHARE of
+# the room eps r_in.
+READING_BOUND = 3e-14
+READING_SHARE = Fraction(1, 2)
 
 MAX_NODES = 40000  # chains per piece and run before the check is refused
 MAX_S = Fraction(10) ** 4
@@ -958,7 +961,7 @@ def check_pieces(polytope, piece, P, config, to_fraction, strict=True, eps=None,
         r_in = float(shape.in2) ** 0.5
         if float(s) * READING_BOUND > float(eps_used) * r_in:
             raise PlatonicError(
-                f"s = {float(s):.6g} is too large for a strict check of {piece} pieces: the engine's floats are read to within about {READING_BOUND:g} s, "
+                f"s = {float(s):.6g} is too large for a strict check of {piece} pieces: the engine's floats may be read only to within about {READING_BOUND:g} s, "
                 f"more than the room {float(eps_used) * r_in:.3g} that the inflation {float(eps_used):.3g} leaves (BOUNDARY.md 4C.3)"
             )
     # cheap first: the two lower bounds decide a tiny s at once. Strict: s equal to the bound is invalid.
@@ -974,6 +977,16 @@ def check_pieces(polytope, piece, P, config, to_fraction, strict=True, eps=None,
         v = Verdict(strict, Fraction(0))
         v.fail(str(e))
         return v
+    if strict and eps_used > 0:
+        # the reading of this configuration: engine floats against the exact poses, in absolute terms, against the room the inflation leaves
+        r_in = float(shape.in2) ** 0.5
+        room = float(eps_used) * r_in
+        disc = reading_discrepancy(polytope, piece, config, to_fraction) * float(s)
+        if disc > float(READING_SHARE) * room:
+            raise PlatonicError(
+                f"the engine's floats read this configuration to within {disc:.3g} of its exact poses, more than {float(READING_SHARE):g} of the room {room:.3g} "
+                f"that the inflation {float(eps_used):.3g} leaves; strict validity cannot be certified (BOUNDARY.md 4C.3)"
+            )
     return check_poses(cont, shape, s, poses, strict=strict, eps=eps, max_nodes=max_nodes, full=full)
 
 

@@ -128,15 +128,15 @@ describe("POST /api/spaces/submit: solids", () => {
 describe("the heavy-check classification of solids", () => {
   it("prices a piece by its container and queues a check of 50 ms or more", () => {
     const heavy = (polytope: string, piece: string, P: number) => boundaryIsHeavy({ polytope: polytope as never, piece: piece as never, P });
-    expect(heavy("120cell", "dodecahedron", 9)).toBe(false);
-    expect(heavy("120cell", "dodecahedron", 10)).toBe(true);
+    expect(heavy("120cell", "dodecahedron", 4)).toBe(false);
+    expect(heavy("120cell", "dodecahedron", 5)).toBe(true);
     expect(heavy("tesseract", "icosahedron", 12)).toBe(false);
     expect(heavy("tesseract", "icosahedron", 13)).toBe(true);
-    expect(heavy("16cell", "cube", 16)).toBe(false);
-    expect(heavy("16cell", "cube", 17)).toBe(true);
+    expect(heavy("16cell", "cube", 9)).toBe(false);
+    expect(heavy("16cell", "cube", 10)).toBe(true);
     expect(heavy("600cell", "tetrahedron", 24)).toBe(false);
     // the aligned cubes and the balls keep their prices
     expect(heavy("tesseract", "cube", 16)).toBe(false);
-    expect(boundaryCheckMs({ polytope: "120cell", piece: "dodecahedron", P: 24 })).toBe(120);
+    expect(boundaryCheckMs({ polytope: "120cell", piece: "dodecahedron", P: 24 })).toBe(264);
   });
 });

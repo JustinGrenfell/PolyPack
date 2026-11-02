@@ -162,14 +162,16 @@ export const BOUNDARY_BALL_MS: Record<PolytopeName, number> = {
  * 2026-11-02): the worst measured, over the five solids, of (a) the cells tiling their container at s = 1 (every piece touches all its
  * neighbours: 5-cell 3.8 ms, 16-cell 2.8, 24-cell 2.3, 120-cell dodecahedra 4.4, 600-cell 1.2 per piece) and (b) one piece alone at 1.02 to
  * 4 times its smallest edge, in 12 random orientations (at most 2.2 ms, with single outliers of 6 ms on the tesseract and 3.8 ms on the
- * 120-cell), rounded up. Loose random layouts of 24 pieces took 1.4 to 25 ms in all.
+ * 120-cell), rounded up. Loose random layouts of 24 pieces took 1.4 to 25 ms in all. Then (c) the worst-case pose that passes the in-cell edge tests
+ * (193 chains), copied P times: icosahedra on the 120-cell 6.8 ms a piece warm (162 ms for 24, 61 for 9), the others on the 120-cell at most 3 ms,
+ * on the 24-cell 1.4. Each figure carries 1.5 times headroom over the worst of (a) to (c), rounded up.
  */
 export const BOUNDARY_SOLID_MS: Record<PolytopeName, number> = {
   tesseract: 4,
-  "5cell": 4,
-  "16cell": 3,
-  "24cell": 3,
-  "120cell": 5,
+  "5cell": 6,
+  "16cell": 5,
+  "24cell": 4,
+  "120cell": 11,
   "600cell": 2,
 };
 

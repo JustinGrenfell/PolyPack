@@ -108,8 +108,10 @@ export function icosphere(detail: number): Float64Array {
 
 const EPS = 1e-12;
 /**
- * The same for a polytope piece: a point within POLY_EPS of a clipping plane counts as on it. The engine's gluings carry rounding of about 1e-10 (a
- * solid's face lying in a cell's facet plane, a piece touching a plane at a vertex, is then off it by that much), and a clip that took it for outside
+ * The same for a polytope piece: a point within POLY_EPS of a clipping plane counts as on it. The engine's gluings carry rounding of no more than about
+ * 1.3e-15 (measured at s = 1: ridge vertices mapped across a gluing, |A A^T - I|, and a round trip), so the rounding is not the reason for the size.
+ * The size is the validator's tolerance: the server accepts a piece up to 1e-9 outside a cell's facet plane, and packings touch to within about 1e-12,
+ * so a solid's face lying in a facet plane, or a piece touching a plane at a vertex, can be off it by that much, and a clip that took it for outside
  * left slivers and no cut face (a drawing that lost a tenth of a piece).
  */
 const POLY_EPS = 1e-9;

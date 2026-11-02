@@ -21,11 +21,14 @@ import {
   pieceParts,
   polyhedronVolume,
   quaternionToMatrix,
-  validateBoundary,
+  validateBoundary as validateBoundaryOf,
 } from "../src/index";
 import { cell16Vertices, cell24Vertices, loadFixtures, randomCellPoint, rng, simplexVertices, trace4d, atSite } from "./helpers";
 
 const T = getPolytope("tesseract");
+// These tests exercise the cube rule on the tesseract with turned cubes; the server's own rule for that problem is axis-aligned (solids.test.ts).
+const validateBoundary: typeof validateBoundaryOf = (problem, config, opts = {}) => validateBoundaryOf(problem, config, { turnedCubes: true, ...opts });
+
 const problem = (piece: PieceName, P: number): BoundaryProblem => ({ polytope: "tesseract", piece, P });
 const shrink = (c: BoundaryConfig, k: number): BoundaryConfig => ({ s: c.s * k, pieces: c.pieces.map((p) => ({ ...p, u: p.u.map((x) => x * k) })) });
 const rotZ = (deg: number): [number, number, number, number] => [Math.cos((deg * Math.PI) / 360), 0, 0, Math.sin((deg * Math.PI) / 360)];

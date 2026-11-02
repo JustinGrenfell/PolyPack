@@ -25,6 +25,7 @@ import os
 import random
 import sys
 import unittest
+import unittest.mock
 from fractions import Fraction as Fr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -104,6 +105,24 @@ class Field(unittest.TestCase):
             if a.sign() != 0:
                 self.assertEqual(a * a.inv(), QM(1))
                 self.assertEqual((b / a) * a, b)
+
+    def test_equal_values_hash_alike(self):
+        # QM equals Fraction, int and general.Q5 values, so sets and dicts must not tell them apart
+        for q in (QM(Fr(1, 2)), QM(3), QM(0), QM(Fr(-7, 3))):
+            for other in (Fr(q.n0, q.d), q.n0 // q.d if q.d == 1 else None):
+                if other is not None:
+                    self.assertEqual(q, other)
+                    self.assertEqual(hash(q), hash(other))
+                    self.assertEqual(len({q, other}), 1)
+        for a, b, d in ((1, 1, 2), (0, 3, 1), (-5, 2, 7), (4, -1, 3)):
+            q5 = G.Q5(Fr(a, d), Fr(b, d))
+            qm = QM.of(q5)
+            self.assertEqual(qm, q5)
+            self.assertEqual(hash(qm), hash(q5))
+            self.assertEqual(len({qm, q5}), 1)
+        # different values stay different
+        self.assertNotEqual(QM(0, 1), QM(0, 0, 1))
+        self.assertEqual(len({QM(0, 1), QM(0, 0, 1), QM(0, 0, 0, 1), QM(1)}), 4)
 
     def test_signs_near_zero(self):
         # sqrt 2 + sqrt 5 against a 50-digit rational near it, on both sides
@@ -300,6 +319,17 @@ class Reading(unittest.TestCase):
             out = C.certify(r["id"], cfg)
             self.assertTrue(out["valid"] and out["strict"])
             self.assertLess(PL.reading_discrepancy(r["polytope"], r["piece"], cfg, C.to_fraction), 5e-15)
+
+    def test_strict_refuses_a_configuration_whose_own_reading_exceeds_half_the_room(self):
+        # the per-configuration check (BOUNDARY.md 4C.3): with the s cut switched off and a very small inflation, the room is below the reading
+        r = [x for x in load("platonic_packings.json")["packings"] if x["id"] == "boundary/5cell/tetrahedron/5"][0]
+        cfg = r["config"]
+        small = Fr(1, 2 ** 50)
+        with unittest.mock.patch.object(PL, "READING_BOUND", 0.0):
+            with self.assertRaisesRegex(PL.PlatonicError, "floats read this configuration"):
+                PL.check_pieces("5cell", "tetrahedron", 5, cfg, C.to_fraction, strict=True, eps=small)
+            # the standard inflation leaves room for the same reading: the fixture stays strictly valid
+            self.assertTrue(PL.check_pieces("5cell", "tetrahedron", 5, cfg, C.to_fraction, strict=True).ok)
 
     def test_random_poses_read_within_the_documented_discrepancy(self):
         rnd = random.Random(11)

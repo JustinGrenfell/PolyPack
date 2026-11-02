@@ -211,6 +211,9 @@ class QM:
         return r if r is NotImplemented else not r
 
     def __hash__(self):
+        # equal values hash alike: a rational as the Fraction, an element of Q(sqrt 5) as general.Q5 does, the rest by the normalised tuple
+        if self.n1 == 0 and self.n3 == 0:
+            return hash((self.n0, self.n2, self.d)) if self.n2 else hash(Fraction(self.n0, self.d))
         return hash((self.n0, self.n1, self.n2, self.n3, self.d))
 
     def __lt__(self, o):

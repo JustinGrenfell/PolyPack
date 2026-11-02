@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { BoundaryConfig, PolytopeName, PolytopePieceName } from "../src/index";
+import { MAX_PAIR_TESTS } from "../src/validate";
 import {
   CONTAINER_MAX_P,
   POLYTOPE_PIECES,
@@ -230,11 +231,40 @@ describe("the validator with solids", () => {
     const pairs = validateBoundary({ polytope: "24cell", piece: "octahedron", P: 2 }, pairCfg, { tol: 1e-9, maxPairs: 0 });
     expect(pairs.ok).toBe(false);
     expect(pairs.reasons[0]).toMatch(/more than 0 tests of pairs of parts/);
+    // the default cap (MAX_PAIR_TESTS tests, about 0.2 s at the slowest measured cost) refuses a crowd of copies in one cell, with its reason
+    expect(MAX_PAIR_TESTS).toBeLessThanOrEqual(20000);
+    const copies = 250; // 250 x 249 / 2 = 31,125 overlapping pairs of bounding boxes
+    const heap: BoundaryConfig = { s: 5, pieces: Array.from({ length: copies }, () => ({ cell: 0, u: [0, 0, 0] })) };
+    const crowd = validateBoundary({ polytope: "24cell", piece: "octahedron", P: copies }, heap, { tol: 1e-9, maxReasons: 1e9 });
+    expect(crowd.ok).toBe(false);
+    expect(crowd.reasons.join(" ")).toMatch(new RegExp(`more than ${MAX_PAIR_TESTS} tests of pairs of parts`));
     // the cap on reasons never turns a failure into a pass
     const crowded: BoundaryConfig = { s: 1 + 1e-5, pieces: Array.from({ length: 16 }, () => cfg.pieces[0]) };
     const r = validateBoundary({ polytope: "16cell", piece: "tetrahedron", P }, crowded, { tol: 1e-9, maxReasons: 1 });
     expect(r.ok).toBe(false);
     expect(r.reasons).toHaveLength(1);
+  });
+
+  it("the tesseract's cube is the axis-aligned problem: q is absent or one of the cube's symmetries, a turned cube is refused", () => {
+    const prob = { polytope: "tesseract", piece: "cube", P: 1 } as const;
+    const at = (q?: number[]): BoundaryConfig => ({ s: 3, pieces: [q ? { cell: 0, u: [0, 0, 0], q: q as [number, number, number, number] } : { cell: 0, u: [0, 0, 0] }] });
+    const h = Math.SQRT1_2;
+    for (const q of [undefined, [1, 0, 0, 0], [-1, 0, 0, 0], [h, h, 0, 0], [0.5, 0.5, 0.5, 0.5], [0, h, h, 0]]) {
+      const v = validateBoundary(prob, at(q), { tol: 1e-9 });
+      expect(v.ok, JSON.stringify(q)).toBe(true);
+    }
+    // 45 degrees about z, and a turn about no axis: cubes in space, but not the aligned problem
+    const a = Math.PI / 8;
+    const turned = [Math.cos(a), 0, 0, Math.sin(a)] as [number, number, number, number];
+    const skew = [0.6, 0.48, 0.64, 0] as [number, number, number, number];
+    for (const q of [turned, skew, [h, h + 1e-6, 0, 0].map((x) => x / Math.hypot(h, h + 1e-6))]) {
+      const v = validateBoundary(prob, at(q), { tol: 1e-9 });
+      expect(v.ok, JSON.stringify(q)).toBe(false);
+      expect(v.reasons[0]).toMatch(/axis-aligned/);
+    }
+    // the other solids on the tesseract, and the cube on the other containers, still take any rotation
+    expect(validateBoundary({ polytope: "tesseract", piece: "octahedron", P: 1 }, at(turned), { tol: 1e-9 }).ok).toBe(true);
+    expect(validateBoundary({ polytope: "24cell", piece: "cube", P: 1 }, at(turned), { tol: 1e-9 }).ok).toBe(true);
   });
 
   it("rejects a malformed solid: a bad quaternion, a rotation on a ball, wrong P, NaN", () => {
@@ -291,11 +321,12 @@ describe("bounds", () => {
   });
 
   it("price a solid at the measured per-piece times, heavy from the stated P", () => {
-    expect(boundaryCheckMs({ polytope: "120cell", piece: "dodecahedron", P: 10 })).toBe(50);
-    expect(boundaryIsHeavy({ polytope: "120cell", piece: "dodecahedron", P: 10 })).toBe(true);
-    expect(boundaryIsHeavy({ polytope: "120cell", piece: "dodecahedron", P: 9 })).toBe(false);
+    expect(boundaryCheckMs({ polytope: "120cell", piece: "dodecahedron", P: 5 })).toBe(55);
+    expect(boundaryIsHeavy({ polytope: "120cell", piece: "dodecahedron", P: 5 })).toBe(true);
+    expect(boundaryIsHeavy({ polytope: "120cell", piece: "dodecahedron", P: 4 })).toBe(false);
     expect(boundaryIsHeavy({ polytope: "600cell", piece: "icosahedron", P: 24 })).toBe(false);
-    expect(boundaryIsHeavy({ polytope: "5cell", piece: "cube", P: 13 })).toBe(true);
+    expect(boundaryIsHeavy({ polytope: "5cell", piece: "cube", P: 9 })).toBe(true);
+    expect(boundaryIsHeavy({ polytope: "5cell", piece: "cube", P: 8 })).toBe(false);
     // the tesseract's aligned cubes keep their price, balls theirs
     expect(boundaryCheckMs({ polytope: "tesseract", piece: "cube", P: 16 })).toBeCloseTo(4.8, 12);
     expect(boundaryCheckMs({ polytope: "24cell", piece: "ball", P: 24 })).toBeCloseTo(55.2, 12);
