@@ -180,28 +180,28 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "boundary",
     title: "Polytope boundaries",
     summary:
-      "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope, starting with the tesseract: its boundary is 8 solid cubes glued face to face, a closed 3D space. A piece may fold across the square faces where two cells meet, but no edge of the polytope may pass through it.",
+      "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope: the tesseract (balls and axis-aligned cubes) and, with balls, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, the regular 4-polytopes. The boundary is a closed 3D space made of solid cells (8 cubes for the tesseract) glued face to face. A piece may fold across the faces where two cells meet, but no edge of the polytope may pass through it.",
     score: "the edge length s of the polytope; smaller is better",
     problem_id: "boundary/<polytope>/<piece>/<P>",
     conventions: {
       polytope:
-        "the tesseract [-s/2, s/2]^4 of edge s; its boundary is 8 cubes (cells), every two of which share a square face unless they are opposite; edges and vertices may not lie inside a piece",
+        "polytope is tesseract, 5cell, 16cell, 24cell, 120cell or 600cell: the regular 4-polytope of edge s centred at its vertex centroid (the tesseract is [-s/2, s/2]^4); its boundary is 8 cubes, 5, 16 or 600 tetrahedra, 24 octahedra or 120 dodecahedra (cells), glued face to face; edges and vertices may not lie inside a piece. Around an edge the cells fill 270 (tesseract), 211.6 (5-cell), 282.1 (16-cell), 328.4 (24-cell), 349.7 (120-cell) or 352.6 (600-cell) degrees, short of a full turn. Balls fit all six; axis-aligned cubes only the tesseract",
       cells:
-        "cell 2 i + (sigma > 0) is the cube x_i = sigma s/2, for i = 0..3 and sigma = -1 or +1: cell 0 is x_0 = -s/2, cell 1 is x_0 = +s/2, ..., cell 7 is x_3 = +s/2",
+        "cell 2 i + (sigma > 0) is the cube x_i = sigma s/2 of the tesseract, for i = 0..3 and sigma = -1 or +1: cell 0 is x_0 = -s/2, cell 1 is x_0 = +s/2, ..., cell 7 is x_3 = +s/2. The other polytopes' cells are their facets in the engine's order: sorted by outward unit normal, first by the axis of its largest component, then by the sign, then lexicographically (the tesseract's order is a case of it)",
       frame:
-        "a point of a cell has local coordinates u = its other three R^4 coordinates in increasing order of index, so the cell is the cube [-s/2, s/2]^3 centred at the origin (in cell 5, x_2 = +s/2, u = (x_0, x_1, x_3))",
+        "a point of a cell has local coordinates u = 3 numbers in the cell's frame, its centre at the origin. The frame is the standard basis of R^4 projected on the cell's hyperplane and orthonormalised in order (Gram-Schmidt, skipping the vector nearly parallel to the normal); on the tesseract u = the cell's other three R^4 coordinates in increasing order of index, so the cell is the cube [-s/2, s/2]^3 (in cell 5, x_2 = +s/2, u = (x_0, x_1, x_3)). The polytopes' vertices are listed in docs/spaces/BOUNDARY.md",
       units:
         `balls have diameter 1 (radius ${BALL_RADIUS}), cubes edge 1 (the cube [-1/2, 1/2]^3 about its centre); lengths scale with s, the pieces do not`,
-      pose: `{cell, u, q?}: cell is the anchor cell, which holds the piece's centre; u = [u0, u1, u2] is the centre in that cell's local coordinates at s and must lie in the closed cell (each component at most ${SPACE_MAX_COORD} in absolute value); q = [w, x, y, z] is a unit quaternion (norm within 1e-9 of 1) that turns a cube in the anchor's frame, absent for an axis-aligned cube; balls have no q`,
-      fold: "a piece is laid out from its centre by straight segments that continue across the square faces into the next cells, unfolded flat; no point of the edges or vertices may lie inside a piece, and a piece may not overlap itself",
+      pose: `{cell, u, q?}: cell is the anchor cell, which holds the piece's centre (0 to 7 on the tesseract, 0 to 4, 15, 23, 119, 599 on the 5-, 16-, 24-, 120- and 600-cell); u = [u0, u1, u2] is the centre in that cell's local coordinates at s and must lie in the closed cell (each component at most ${SPACE_MAX_COORD} in absolute value); q = [w, x, y, z] is a unit quaternion (norm within 1e-9 of 1) that turns a cube in the anchor's frame, absent for an axis-aligned cube; balls have no q`,
+      fold: "a piece is laid out from its centre by straight segments that continue across the faces into the next cells, unfolded flat; no point of the edges or vertices may lie inside a piece, and a piece may not overlap itself",
       configuration: "{s, pieces: [{cell, u, q?}, ...]} with P pieces",
       score: "s, the edge of the polytope; smaller is better",
       validity: VALIDITY,
       scoring: SCORING,
       improvement: IMPROVEMENT,
       nofold:
-        "each problem's listing also gives its nofold value (every piece inside one cell, no folding) and the research record's gain over it, as `extra`",
-      work_limit: `s is at most ${BOUNDARY_MAX_S}; the check gives up with a reason when one piece crosses more than ${BOUNDARY_MAX_CHAINS} chains of cells (real packings need at most about 80); each component of u and q is at most ${SPACE_MAX_COORD} in absolute value`,
+        "the tesseract's problems also give their nofold value (every piece inside one cell, no folding) and the research record's gain over it, as `extra`",
+      work_limit: `s is at most ${BOUNDARY_MAX_S}; the check gives up with a reason when one piece crosses more than ${BOUNDARY_MAX_CHAINS} chains of cells (real packings need at most about 80 on the tesseract and 400 on the 120-cell); each component of u and q is at most ${SPACE_MAX_COORD} in absolute value; checks of balls on the 120-cell from P = 5 and on the 24-cell from P = 22 wait in the heavy queue`,
     },
     viewer: "/spaces/boundary.html",
     docs: spaceDocsUrl("BOUNDARY.md"),

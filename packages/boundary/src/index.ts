@@ -6,6 +6,10 @@ export type { Iso3, V3 } from "./linalg";
 export { convexHull } from "./hull";
 export type { HullFacet, HullRidge } from "./hull";
 export { boundaryVolume, buildPolytope, cellExcess, compareNormals, facetPlane, fromAmbient, getPolytope, isPolytopeName, tesseractVertices, toAmbient } from "./polytope";
+export { BOUNDARY_DOMAIN_MAX_P, BOUNDARY_PROBLEM_COUNT, boundaryDomain } from "./domain";
+export { BOUNDARY_BALL_MS, BOUNDARY_HEAVY_MS, CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds, boundaryCheckMs, boundaryIsHeavy, containerFacts } from "./bounds";
+export type { ContainerFacts } from "./bounds";
+export { RAW_EDGE, rawVertices, unitVertices } from "./containers";
 export { MAX_P, formatBoundaryId, isPieceCount, isPieceName, parseBoundaryId, standardPiece } from "./ids";
 export {
   ChainLimitError,

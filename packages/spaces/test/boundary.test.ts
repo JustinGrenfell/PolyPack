@@ -100,7 +100,7 @@ describe("boundary problem ids", () => {
     expect(typeof parseSpaceId("boundary", 9)).toBe("string");
     // the message names the form and, when the id has four parts, what is wrong
     expect(parseSpaceId("boundary", "boundary/tesseract/ball/09")).toMatch(
-      /the form is boundary\/<polytope>\/<piece>\/<P>, polytope tesseract, piece ball or cube\. .*without leading zeros/,
+      /the form is boundary\/<polytope>\/<piece>\/<P>, polytope tesseract or 5cell or 16cell or 24cell or 120cell or 600cell, piece ball or cube\. .*without leading zeros/,
     );
     expect(parseSpaceId("boundary", "boundary/tesseract/sphere/9")).toMatch(/Unknown piece "sphere"/);
     expect(parseSpaceId("sphere", "boundary/tesseract/ball/9")).toMatch(/starts with "sphere\/"/);
@@ -116,7 +116,9 @@ describe("the boundary catalogue", () => {
   it("loads all 32 records, balls then cubes, P = 1..16 each, none left out", () => {
     expect(cat.skipped).toEqual([]);
     expect(cat.generated).toBe(file.generated);
-    expect(cat.maxP).toBe(16);
+    // the records reach P = 16; the domain (balls on the five other containers) reaches 24
+    expect(Math.max(...cat.problems.map((p) => p.P))).toBe(16);
+    expect(cat.maxP).toBe(24);
     expect(cat.maxP).toBeLessThanOrEqual(SPACE_MAX_P.boundary);
     const ids = cat.problems.map((p) => p.id);
     expect(ids).toEqual([
@@ -334,7 +336,7 @@ describe("boundary configurations under the server's rule", () => {
     const v = validateSpaceSubmission("boundary", "boundary/tesseract/ball/65", { s: 9, pieces: [] });
     expect(v.malformed).toBe(true);
     expect(v.reasons[0]).toBe("P = 65 is above the largest P of the boundary catalogue (64)");
-    expect(check("boundary/tesseract/ball/17", { s: 9, pieces: [] }).reasons[0]).toMatch(/above the largest P .* \(16\)/);
+    expect(check("boundary/24cell/ball/25", { s: 9, pieces: [] }).reasons[0]).toMatch(/above the largest P .* \(24\)/);
     expect(validateSpaceSubmission("boundary", "sphere/4/12", {}).malformed).toBe(true);
   });
 

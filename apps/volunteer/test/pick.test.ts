@@ -125,15 +125,18 @@ describe("the problems of the other kinds", () => {
     }
   });
 
-  it("are, for boundary, its catalogue's 32 problems", () => {
+  it("are, for boundary, its domain's 152 problems: the tesseract's 32 with records and 120 balls on the other containers", () => {
     const index = loadSpacesIndex(join(__dirname, "../../.."));
-    const catalogue = index.boundary!.problems.map((p) => p.id).sort();
+    const records = index.boundary!.problems.map((p) => p.id).sort();
     expect(Math.max(...index.boundary!.problems.map((p) => p.P))).toBe(BOUNDARY_CATALOGUE_MAX_P);
+    const catalogue = SPACE_DOMAINS.boundary!.sample(1000).sort();
+    expect(catalogue).toHaveLength(152);
+    expect(catalogue.filter((id) => records.includes(id))).toEqual(records);
     const k = spaceKind("boundary", null);
     expect(k.size).toBe(catalogue.length);
     const drawn = new Set<string>();
     const random = seeded(3);
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < 6000; i++) {
       const d = k.draw(random);
       if (d) drawn.add(drawnKey(d));
     }

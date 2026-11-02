@@ -12,6 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TESTS = [
     "balls/test_certify.py",
     "boundary/test_boundary.py",
+    "boundary/test_general.py",
     "curved/test_certify.py",
     "curved/test_bounds.py",
     "ndim/test_ndim.py",

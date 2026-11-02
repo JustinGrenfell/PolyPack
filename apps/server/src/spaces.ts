@@ -30,6 +30,7 @@ import {
   storedSpaceConfigAsync,
   validateSpaceSubmissionAsync,
 } from "@polypack/spaces";
+import { boundaryCheckMs, boundaryIsHeavy } from "@polypack/spaces";
 import { ndCheckOps, ndIsHeavy } from "@polypack/ndspace";
 import { Context, Hono } from "hono";
 import { compress } from "hono/compress";
@@ -100,6 +101,14 @@ const ndProblem = (id: { P: number; fields: Record<string, string | number> }) =
   d: id.fields.d as number,
   piece: id.fields.piece as string,
   container: id.fields.container as string,
+  P: id.P,
+});
+
+/** The boundary problem of a parsed id. */
+type BoundaryProblemLike = Parameters<typeof boundaryIsHeavy>[0];
+const boundaryProblem = (id: { P: number; fields: Record<string, string | number> }): BoundaryProblemLike => ({
+  polytope: id.fields.polytope as BoundaryProblemLike["polytope"],
+  piece: id.fields.piece as BoundaryProblemLike["piece"],
   P: id.P,
 });
 
@@ -373,7 +382,9 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       (["polyhedra", "surface", "curved", "sphere", "torus"].includes(space) && parsedId.P >= SPACE_HEAVY_CHECK_P) ||
       (space === "sphere" && Number(parsedId.fields.N) >= 20) ||
       // nD in nD: by the size of the check (vertices of the pieces times facets of the container, pairs), not by P alone
-      (space === "ndim" && ndIsHeavy(ndProblem(parsedId)));
+      (space === "ndim" && ndIsHeavy(ndProblem(parsedId))) ||
+      // 3D on 4D: balls on the 120-cell (600 vertices, 120 cells) from P = 5 and on the 24-cell from P = 22 (boundaryIsHeavy)
+      (space === "boundary" && boundaryIsHeavy(boundaryProblem(parsedId)));
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
     // Reserve work before checking; a many-sided sphere also queues at small P.
@@ -392,7 +403,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
               Math.min(800, Math.max(5 + 0.002 * parsedId.P * parsedId.P, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides))
             : ["curved", "sphere"].includes(space)
               ? Math.min(400, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides)
-              : space === "ndim"
+              : space === "boundary"
+                ? // [CALC] the check's estimated milliseconds (bounds.ts BOUNDARY_BALL_MS), at least the default 5
+                  Math.max(5, boundaryCheckMs(boundaryProblem(parsedId)))
+                : space === "ndim"
                 ? // [CALC] about 3 ns per multiply-add of a check without the validator's facet skipping, the worst case
                   // (docs/spaces/NDIM.md section 10); the charge is corrected by the work measured
                   Math.min(8000, 5 + 3e-6 * ndCheckOps(ndProblem(parsedId)))

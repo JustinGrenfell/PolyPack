@@ -18,8 +18,8 @@
  */
 
 /** Containers. The engine is generic over convex polytopes; the catalogue grows one name at a time. */
-export type PolytopeName = "tesseract";
-export const POLYTOPES: readonly PolytopeName[] = ["tesseract"];
+export type PolytopeName = "tesseract" | "5cell" | "16cell" | "24cell" | "120cell" | "600cell";
+export const POLYTOPES: readonly PolytopeName[] = ["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"];
 
 /** Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. */
 export type PieceName = "ball" | "cube";

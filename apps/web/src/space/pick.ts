@@ -151,12 +151,21 @@ export function pickFromDomain(
 ): { fields: PickField[]; id: string } {
   const wish = withParts(domain, wished);
   const start = withParts(domain, fieldsOfId(space, DEFAULT_PROBLEM[space]));
+  // a field whose values or range depend on an earlier field's value (boundary: the pieces and the P range of each polytope)
+  // offers those of the value chosen; fields are read in order, so the field it depends on is already chosen
+  const picked: Record<string, string> = {};
   const fields: PickField[] = domain.fields.map((f) => {
+    const dep = f.dependent && picked[f.dependent.on] !== undefined ? f.dependent : undefined;
+    const listed = dep?.values?.[picked[dep.on]];
+    const range = dep?.ranges?.[picked[dep.on]];
     const values =
+      listed ??
       f.values ??
-      (f.min !== undefined && f.max !== undefined
-        ? Array.from({ length: f.max - f.min + 1 }, (_, i) => String(f.min! + i))
-        : []);
+      (range
+        ? Array.from({ length: range[1] - range[0] + 1 }, (_, i) => String(range[0] + i))
+        : f.min !== undefined && f.max !== undefined
+          ? Array.from({ length: f.max - f.min + 1 }, (_, i) => String(f.min! + i))
+          : []);
     let value = wish[f.key];
     if (value === undefined || !values.includes(value)) {
       if (f.values === undefined && value !== undefined && Number.isFinite(Number(value)) && values.length) {
@@ -164,6 +173,7 @@ export function pickFromDomain(
         value = values.reduce((a, b) => (Math.abs(Number(b) - want) < Math.abs(Number(a) - want) ? b : a));
       } else value = values.includes(start[f.key]) ? start[f.key] : values[0];
     }
+    picked[f.key] = value;
     return {
       key: f.key,
       label: PICK_LABELS[f.key] ?? f.label,

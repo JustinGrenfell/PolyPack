@@ -570,9 +570,33 @@ export function ballsRound(P: number, code: string): { round: number; fresh: num
   return { round, fresh: round, evalUs };
 }
 
+/**
+ * Milliseconds of one evaluation of the penalty energy and its gradient per ball on the containers beyond the tesseract
+ * (the chain metric, packages/boundary/src/search/balls.ts ChainMetric; the tesseract's lattice words take 0.0005): [CALC]
+ * measured 2026-11-01 on an Apple Silicon laptop, on squeezed random starts of P = 4 and 12, the larger of the two.
+ */
+export const BOUNDARY_BALL_MS: Record<string, number> = {
+  "5cell": 0.12,
+  "16cell": 0.18,
+  "24cell": 0.25,
+  "600cell": 0.15,
+  "120cell": 0.8,
+};
+
+/**
+ * The evaluations of a 3D on 4D round: the tesseract's BOUNDARY_ROUND; on another container about two seconds of the chain
+ * metric (at least 200 evaluations, at most BOUNDARY_ROUND), so that a round there is as long as elsewhere.
+ */
+export function boundaryRound(polytope: string, P: number): number {
+  const ms = BOUNDARY_BALL_MS[polytope];
+  if (ms === undefined) return BOUNDARY_ROUND;
+  return Math.max(200, Math.min(BOUNDARY_ROUND, 100 * Math.floor(2000 / (ms * P) / 100)));
+}
+
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
+  if (p.space === "boundary") return boundaryRound(p.polytope, p.P);
   if (p.space === "polyhedra") return polyhedraRound(p.P, p.code).round;
   if (p.space === "balls") return ballsRound(p.P, p.code).round;
   if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
@@ -582,6 +606,7 @@ export function roundSize(p: SearchProblem, method?: string): number {
 /** The evaluations of a round of this problem with no start (a new arrangement). */
 export function freshSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
+  if (p.space === "boundary") return boundaryRound(p.polytope, p.P);
   if (p.space === "balls") return ballsRound(p.P, p.code).fresh;
   if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
   return p.space === "polyhedra" ? polyhedraRound(p.P, p.code).fresh : FRESH_EVALS[searchKind(p)];
@@ -613,6 +638,9 @@ export function defaultBudget(p: SearchProblem, method?: string): { time_s: numb
   // ten rounds of about 2 to 3 s here, with room for a machine several times slower
   if (p.space === "balls") return { time_s: 60, evals: 10 * ballsRound(p.P, p.code).round };
   if (p.space === "ndim") return { time_s: 60, evals: 30000 };
+  // ten rounds; the other containers' rounds are about two seconds each (boundaryRound), the tesseract's the usual 30 s and 3 million
+  if (p.space === "boundary" && p.polytope !== "tesseract")
+    return { time_s: 60, evals: 10 * boundaryRound(p.polytope, p.P) };
   return {
     nofold: { time_s: 15, evals: 30000 },
     curved: { time_s: 30, evals: 90 },

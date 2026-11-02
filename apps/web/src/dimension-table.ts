@@ -133,7 +133,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Polytope boundaries",
         short: "Boundaries",
         summary:
-          "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope, starting with the tesseract, the 4D cube: its boundary is eight cubes glued face to face.",
+          "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope: the tesseract, the 4D cube, whose boundary is eight cubes glued face to face, with balls and cubes, and with balls the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell.",
         available: true,
       },
     ],

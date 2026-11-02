@@ -137,7 +137,7 @@ It stops once it has made no progress for the longer of two spans. One is half t
 
 ## Optional: other dimensions
 
-The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension. By default the client draws Flat problems, in 2D in 2D: polygons in polygons. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces, Sphere and Torus (2D on 3D: pieces on the surface of a Platonic, Archimedean, Catalan or Johnson solid, a prism or an antiprism, on the whole sphere and on flat tori); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D: equal solids in the smallest copy of a container solid, the problems of polyhedrainpolyhedra.wiki); and Balls (3D in 3D: unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball). The site's Dimensions page, `/dimensions.html`, lists them, and `docs/spaces/*.md` describes each. The API, the client's files and the rest of this section call these kinds spaces: `curved`, `surface`, `sphere`, `torus`, `boundary`, `polyhedra` and `balls`. `all` names all seven. The client searches them only with `--dimensions` (or its earlier name, `--spaces`):
+The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension. By default the client draws Flat problems, in 2D in 2D: polygons in polygons. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces, Sphere and Torus (2D on 3D: pieces on the surface of a Platonic, Archimedean, Catalan or Johnson solid, a prism or an antiprism, on the whole sphere and on flat tori); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract, and balls on the boundary of the other five regular 4-polytopes); Polyhedra (3D in 3D: equal solids in the smallest copy of a container solid, the problems of polyhedrainpolyhedra.wiki); and Balls (3D in 3D: unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball). The site's Dimensions page, `/dimensions.html`, lists them, and `docs/spaces/*.md` describes each. The API, the client's files and the rest of this section call these kinds spaces: `curved`, `surface`, `sphere`, `torus`, `boundary`, `polyhedra` and `balls`. `all` names all seven. The client searches them only with `--dimensions` (or its earlier name, `--spaces`):
 
 ```sh
 node polypack-volunteer.mjs --name "your name" --dimensions all
@@ -146,7 +146,7 @@ node polypack-volunteer.mjs --name "your name" --dimensions boundary --only-dime
 ```
 
 - **Off by default.** Without `--dimensions` or `--spaces` the client never draws or reads their problems, and nothing below happens.
-- **Which problem.** Each draw covers the flat problems (unless `--only-dimensions`) and every problem of the kinds named, with or without a research record, every one as likely as any other. A kind's problems are the product of its id's fields, the domain that `GET /api/spaces` describes (for `boundary`, which has none, its catalogue's polytope, piece and P = 1 to 16); the client has them built in. So a kind comes up in proportion to its number of problems. [CALC] Without `--max-P`:
+- **Which problem.** Each draw covers the flat problems (unless `--only-dimensions`) and every problem of the kinds named, with or without a research record, every one as likely as any other. A kind's problems are the product of its id's fields, the domain that `GET /api/spaces` describes (for `boundary`, 152 problems: the tesseract's balls and cubes, P = 1 to 16, and balls on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24); the client has them built in. So a kind comes up in proportion to its number of problems. [CALC] Without `--max-P`:
 
   | Kind      | Problems   | Share with `all` |
   | --------- | ---------- | ---------------- |
@@ -157,8 +157,8 @@ node polypack-volunteer.mjs --name "your name" --dimensions boundary --only-dime
   | torus     | 148,500    | 0.57 %           |
   | balls     | 36,927     | 0.14 %           |
   | sphere    | 9,900      | 0.04 %           |
-  | boundary  | 32         | 0.0001 %         |
-  | All       | 26,141,063 | 100 %            |
+  | boundary  | 152        | 0.0006 %         |
+  | All       | 26,141,183 | 100 %            |
 
   A problem searched here in the last 7 days is drawn again as for flat problems. `--max-P` cuts each kind's range of P, and a kind left with no problem is dropped.
 - **The start.** It reads the problem, `GET /api/spaces/<space>/problems/<id>`, and starts from the better of its two configurations: the research record's and the site leader's. Closed problems (a proven value, or no packing at all) are skipped.

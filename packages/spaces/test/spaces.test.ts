@@ -334,7 +334,7 @@ describe("the catalogues", () => {
     const logs: string[] = [];
     const loaded = loadSpacesIndex(empty, (m) => logs.push(m));
     // Domain spaces load even without records; balls ships no records file at all
-    expect(Object.keys(loaded).sort()).toEqual(["balls", "curved", "ndim", "polyhedra", "sphere", "surface", "torus"]);
+    expect(Object.keys(loaded).sort()).toEqual(["balls", "boundary", "curved", "ndim", "polyhedra", "sphere", "surface", "torus"]);
     expect(loaded.polyhedra!.problems).toHaveLength(0);
     expect(loaded.polyhedra!.domain!.info.problems).toBe(17263404);
     expect(loaded.balls!.problems).toHaveLength(0);

@@ -29,6 +29,7 @@ import { convexHull } from "./hull";
 import { V3, dot, orthonormalBasis, rejectFrom, sub, toV3, unit, Iso3, isoFromAffine } from "./linalg";
 import type { Affine, Cell, CellFacet, Polytope, PolytopeName } from "./types";
 import { POLYTOPES } from "./types";
+import { unitVertices } from "./containers";
 
 const ORDER_TOL = 1e-9;
 
@@ -286,6 +287,7 @@ export function getPolytope(name: PolytopeName): Polytope {
   let p = CACHE.get(name);
   if (!p) {
     if (name === "tesseract") p = buildPolytope("tesseract", tesseractVertices());
+    else if ((POLYTOPES as readonly string[]).includes(name)) p = buildPolytope(name, unitVertices(name));
     else throw new Error(`unknown polytope ${String(name)}`);
     CACHE.set(name, p);
   }

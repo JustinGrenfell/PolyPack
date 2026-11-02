@@ -37,7 +37,7 @@ export interface BallMetric {
    * with `violation` the largest violation max(1 - clearance, 2 - distance, 2 - loop) over every
    * realised geodesic (-Infinity when nothing is near).
    */
-  evaluate(cells: Int32Array, U: Float64Array, s: number, g: Float64Array | null, violation: boolean): number;
+  evaluate(cells: Int32Array, U: Float64Array, s: number, g: Float64Array | null, violation: boolean, opts?: TermOptions): number;
 }
 
 // ---------------------------------------------------------------- tesseract: lattice words
@@ -287,10 +287,28 @@ export function wordMetric(): WordMetric {
 export class ChainMetric implements BallMetric {
   constructor(readonly poly: Polytope) {}
 
-  evaluate(cells: Int32Array, U: Float64Array, s: number, g: Float64Array | null, violation: boolean): number {
+  /**
+   * As BallMetric.evaluate; `opts` (the kernel's options, model.ts) weights the terms, keeps only one piece's, and gives
+   * dE/ds at fixed U, as WordMetric.evaluate does.
+   *
+   * Focus: the chains are enumerated from the focus piece only and every other centre is looked up in them (a geodesic
+   * from i to j reversed is one from j to i, so the set of lengths is the same); without a focus each pair is taken
+   * from its lower-numbered piece's chains.
+   *
+   * dE/ds. The geometry at edge s is the geometry at s = 1 scaled by s while the centres u stay fixed, so a development's
+   * translation t, the developed vertices and the nearest hinge point p all scale with s: dt/ds = t / s and dp/ds = p / s.
+   * A pair or loop of length d = |M u_j + t - u_i| has dd/ds = (r . t) / (s d), r the vector; a clearance d = |u - p| has
+   * dd/ds = (p - u) . p / (s d). (The nearest point is held at its place on the hinge, as for the gradient in u; the
+   * window's own face moves with s only for a hinge point that lies on it, a case of measure zero.)
+   */
+  evaluate(cells: Int32Array, U: Float64Array, s: number, g: Float64Array | null, violation: boolean, opts?: TermOptions): number {
     const poly = this.poly;
     const T = topo(poly);
     const P = cells.length;
+    const W = opts?.w ?? null;
+    const focus = opts?.focus ?? -1;
+    const ds = opts?.ds ?? null;
+    let dEds = 0;
     const byCell: number[][] = poly.cells.map(() => []);
     for (let i = 0; i < P; i++) byCell[cells[i]].push(i);
     const nE = poly.edges.length;
@@ -299,6 +317,8 @@ export class ChainMetric implements BallMetric {
     let E = 0;
     let worst = -Infinity;
     for (let i = 0; i < P; i++) {
+      if (focus >= 0 && i !== focus) continue;
+      const wi = W ? W[i] : 1;
       const u = clampToCell(poly, cells[i], [U[3 * i], U[3 * i + 1], U[3 * i + 2]], s);
       let nodes;
       try {
@@ -328,9 +348,9 @@ export class ChainMetric implements BallMetric {
             edgeP.set(p, 3 * ge);
           }
         });
-        // centres of the other balls (j > i) and of this one (loops) in the chain's window
+        // centres of the other balls (all of them with a focus, else those after i) and of this one (loops) in the window
         for (const j of byCell[node.cell]) {
-          if (j < i || (j === i && ni === 0)) continue;
+          if ((focus < 0 && j < i) || (j === i && ni === 0)) continue;
           const y = isoApply(node.toAnchor, j === i ? u : [U[3 * j], U[3 * j + 1], U[3 * j + 2]]);
           if (!inWindow(node, u, y)) continue;
           const r: V3 = [y[0] - u[0], y[1] - u[1], y[2] - u[2]];
@@ -341,10 +361,14 @@ export class ChainMetric implements BallMetric {
             continue;
           }
           if (d >= 2) continue;
-          E += (2 - d) * (2 - d);
-          if (!g) continue;
-          const c = (2 * (2 - d)) / Math.max(d, 1e-15);
+          // a pair weighs (w_i + w_j) / 2, a loop w_i
+          const wij = W ? 0.5 * (W[i] + W[j]) : 1;
+          E += wij * (2 - d) * (2 - d);
+          if (!g && !ds) continue;
+          const c = (2 * wij * (2 - d)) / Math.max(d, 1e-15);
           const m = node.toAnchor.m;
+          if (ds) dEds -= (c * (r[0] * node.toAnchor.t[0] + r[1] * node.toAnchor.t[1] + r[2] * node.toAnchor.t[2])) / s;
+          if (!g) continue;
           for (let k = 0; k < 3; k++) {
             g[3 * i + k] += c * r[k];
             // M^T r, M the chain's linear part (cell of j -> anchor of i)
@@ -360,11 +384,21 @@ export class ChainMetric implements BallMetric {
           continue;
         }
         if (d >= 1) continue;
-        E += (1 - d) * (1 - d);
+        E += wi * (1 - d) * (1 - d);
         // the nearest point held fixed: d(d)/du = (u - p) / d
-        if (g && d > 0) for (let k = 0; k < 3; k++) g[3 * i + k] -= ((2 * (1 - d)) / d) * (u[k] - edgeP[3 * e + k]);
+        if ((g || ds) && d > 0) {
+          const c = (2 * wi * (1 - d)) / d;
+          if (g) for (let k = 0; k < 3; k++) g[3 * i + k] -= c * (u[k] - edgeP[3 * e + k]);
+          // dd/ds = (p - u) . p / (s d); dE/ds = -2 w (1 - d) dd/ds
+          if (ds) {
+            let dot = 0;
+            for (let k = 0; k < 3; k++) dot += (edgeP[3 * e + k] - u[k]) * edgeP[3 * e + k];
+            dEds -= (c * dot) / s;
+          }
+        }
       }
     }
+    if (ds) ds[0] = dEds;
     return violation ? worst : E;
   }
 }
@@ -412,9 +446,9 @@ export class BallModel implements PieceModel {
     return this.metric.evaluate(st.cells, st.U, s, null, true);
   }
 
-  /** The kernel's terms (model.ts); the lattice words only (the chain metric has no dE/ds). */
+  /** The kernel's terms (model.ts): the lattice words on the tesseract, the chains elsewhere. */
   terms(st: State, s: number, g: Float64Array | null, violation: boolean, o: TermOptions): number {
-    if (!(this.metric instanceof WordMetric)) throw new Error("search: the kernel's terms need the lattice-word metric (the tesseract)");
+    if (!(this.metric instanceof WordMetric || this.metric instanceof ChainMetric)) throw new Error("search: the kernel's terms need the word or the chain metric");
     if (g) g.fill(0);
     if (o.ds) o.ds[0] = 0;
     return this.metric.evaluate(st.cells, st.U, s, g, violation, o);

@@ -36,6 +36,15 @@ export function pieceName(N: string | number): string {
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** The boundary space's polytopes in words (tesseract; 5-cell, 16-cell, 24-cell, 120-cell, 600-cell: the regular 4-polytopes). */
+const BOUNDARY_TITLES: Record<string, string> = {
+  tesseract: "tesseract",
+  "5cell": "5-cell",
+  "16cell": "16-cell",
+  "24cell": "24-cell",
+  "120cell": "120-cell",
+  "600cell": "600-cell",
+};
 const plural = (s: string) => `${s}s`;
 /** A minus sign rather than a hyphen in front of a negative number. */
 export const minus = (s: string) => s.replace(/^-/, "−");
@@ -259,9 +268,9 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       key: "polytope",
       at: 1,
       label: "Polytope",
-      option: capital,
-      cell: (v) => v,
-      order: ["tesseract"],
+      option: (v) => capital(BOUNDARY_TITLES[v] ?? v),
+      cell: (v) => BOUNDARY_TITLES[v] ?? v,
+      order: ["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"],
       start: "tesseract",
     },
     {

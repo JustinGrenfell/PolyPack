@@ -14,6 +14,7 @@
  *    volunteers' work list offered them until it was removed on 2026-10-29. Since then the volunteer client draws from
  *    the whole domain at random (apps/volunteer/src/pick.ts), and the tests use the sample to walk a domain's ids.
  */
+import { boundaryDomain } from "@polypack/boundary";
 import { polyhedraDomain } from "@polypack/polyhedra";
 import { curvedDomain, sphereDomain, torusDomain } from "./piece-domains";
 import { ballsDomain } from "@polypack/balls";
@@ -94,6 +95,9 @@ export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
   // 2D on 3D, polyhedral surfaces: 141 solids, fold and nofold, N = 0 and 3 to 100, P = 1 to 100; records
   // for the Platonic solids with N in {0, 3, 4, 5, 6, 8} (docs/spaces/SURFACE.md)
   surface: surfaceDomain,
+  // 3D on 4D, polytope boundaries: balls on the six regular 4-polytopes (P = 1 to 24; the tesseract 1 to 16) and the tesseract's
+  // aligned cubes (P = 1 to 16); records for the tesseract's 32 problems (docs/spaces/BOUNDARY.md)
+  boundary: boundaryDomain,
   curved: curvedDomain,
   sphere: sphereDomain,
   torus: torusDomain,
