@@ -387,7 +387,7 @@ TypeScript engine and repeats only its conventions (cell order, frames: the numb
 **Reading a configuration.** The engine's (cell, u) means the ambient point s * origin + sum_k u_k frame_k (floats; the cell's frame is part of the
 engine's conventions). The certifier writes that point as an affine combination of four independent vertices of the cell with dyadic weights
 (rounded to 2^-60, summing to exactly 1), and the exact centre is the same combination of the exact vertices: a point of the cell's hyperplane,
-within about 1e-16 s of the engine's. A centre that falls outside its closed cell by less than 1e-12 of an edge is moved onto the facet planes it
+within 3.4e-16 s of the engine's on the 5-, 16- and 24-cell and within 2.9e-15 s on the 120- and 600-cell ([CALC] over the review's corpus of engine readings). The strict test therefore asks for room: a pair distance or a loop must exceed 1 by more than 2e-13 s, and a clearance must exceed 1/2 by more than 1e-13 s (`READING_SLACK` in `general.py`; the reach is widened to match), so that "strictly valid" binds the configuration as the engine reads it. A centre that falls outside its closed cell by less than 1e-12 of an edge is moved onto the facet planes it
 violates (as the engine's `clampToCell` does) before the exact test "the centre lies in its closed cell"; a larger violation is an error. The
 cells that contain a centre are those whose hyperplane holds it, decided exactly (a centre on a ridge lies in two).
 
@@ -475,7 +475,7 @@ They are not optimal, and nothing about optimality is claimed [SPEC].
 No records: the new problems ship with lower bounds and test packings only (`python/boundary/fixtures/general_packings.json`, 25 packings; P = 1, 2, 3, 5,
 8, 12 on the 5-cell, 1, 2, 4, 6, 10, 16 on the 16-cell, 1, 2, 3, 6, 12, 24 on the 24-cell, 1, 2, 3, 5 on the 600-cell, 1, 2, 3 on the 120-cell). Each is a
 random sequential layout drawn in by the engine's `finish` until the balls touch (`gen-general-packings.ts`), then scaled as in 4.4
-(lam = 1 + k 1e-12; k = 0 or 1 for all) and certified strictly valid by `general.py`. They are not good packings (no search ran) and no optimality is claimed.
+(lam = 1 + k 1e-12; k = 1 to 3) to the first k at which `general.py` certifies them strictly valid with every margin (clearance over 1/2, distances and loops over 1) at least 1e-12: 1.0e-12 to 2.0e-12 in all 25. They are not good packings (no search ran) and no optimality is claimed.
 
 | container | P | s (score_cert) | lower bound | least centre distance | least clearance |
 |---|---|---|---|---|---|
@@ -522,7 +522,7 @@ random sequential layout drawn in by the engine's `finish` until the balls touch
   each container: the cells themselves (P = C pieces at s = 1 for the tetrahedra of the 5-cell and the dodecahedra of the 120-cell, the
   tesseract's cubes) are exact ones. Nothing of this is in the code.
 - The vertex rule (section 3) is argued, not proved, on every container.
-- The ball centre is read through float frames (4A.3): the certified configuration is within about 1e-16 s of the one the engine sees.
+- The ball centre is read through float frames (4A.3): the certified configuration is within 3.4e-16 s (5-, 16-, 24-cell) or 2.9e-15 s (120-, 600-cell) of the one the engine sees; the strict test keeps a slack of 1e-13 s to 2e-13 s for it (4A.3).
 - The 120-cell and 600-cell are nearly flat. Their problems are open, and their bounds are those of 4A.4; nothing is known about their optimal packings.
 
 ## 4B. The d-cube: (d-1)D on dD, d = 5 to 10
@@ -595,8 +595,7 @@ Four exact facts prune it; each holds for every word of the support at hand, so 
 
 The search is capped by a **work budget** (steps of the support and order searches, 4,000,000 per check, `NCUBE_MAX_WORK`; 8,000 per pair in the kernel's energy): a search over its budget throws, and the
 check refuses the configuration with a plain reason. The cap makes the validator **sound but incomplete**: it never accepts an invalid configuration, and refuses a valid one only if
-the balls are so crowded against the (d-3)-faces that the search needs more than its budget. [CALC] The worst pair that the clearance rule allows (two balls at the minimum clearance 1/2 near a common corner,
-every slack 0.3536 on all n axes) costs 129, 374, 1,105, 3,230, 9,025 and 23,590 steps for d = 5 to 10, so the cap holds about 170 such pairs at d = 10 and takes 0.25 s to exhaust.
+the balls are so crowded against the (d-3)-faces that the search needs more than its budget. [CALC] The worst pair found (two balls at the minimum clearance 1/2 near a common corner, every slack 0.3536 on all n axes) cost, measured and approximate, about 129, 374 and 1,105 steps for d = 5 to 7 and 3,294, 9,601 and 26,470 for d = 8 to 10 (an earlier figure for d = 8 to 10, 3,230, 9,025 and 23,590, undershot; none of these is an upper bound); the cap holds about 150 such pairs at d = 10 and takes about 0.25 s to exhaust.
 
 **The loop lemma** [CALC]. *A nonempty word that ends in its start cell crosses at least two lattice axes twice.* Proof: write the frame (normal, A e_1, ..., A e_n) as the matrix F of a signed permutation;
 crossing axis k in direction tau is F <- F G with G the 90 degree rotation of the plane (0, k), by tau. Conjugating by the diagonal matrix of the directions tau_k (which fixes e_0), every crossing becomes the
@@ -664,7 +663,7 @@ For example P = 160 cubes on the 5-cube: exactly 2 (the tiling), and one ball: 0
 
 - **No records.** Test packings only. The cell layouts and the tilings are exact or nearly so; the others have no claim to being good (no search ran, as the tesseract's first two rounds would be); the optima for balls are open; a tesseract-like P = 2d layout below s = 1 would need the pair search at the worst corner (cost above).
 - **Aligned cubes only**, as on the tesseract: a turned cube might do better and would need parts and exact rotations in n dimensions (`parts.ts`, `polyhedron.ts` are 3-dimensional).
-- **The corner cap.** The validator refuses a configuration whose search needs more than 4,000,000 steps; the worst pair of the kind above costs at most 23,590, but a few hundred balls crowded at a common corner of d = 10 could reach it.
+- **The corner cap.** The validator refuses a configuration whose search needs more than 4,000,000 steps; the worst pair of the kind above costs about 26,000 at d = 10 (measured, not a bound), but a few hundred balls crowded at a common corner of d = 10 could reach it.
 - **The vertex rule** (section 3) is argued, not proved, in every d.
 - Not covered: the simplex, orthoplex and demicube boundaries for d >= 5, whose dihedral angles are not right angles; the chain code would need to go to R^(d-1) (phase C3 of the plan).
 

@@ -672,3 +672,49 @@ describe("the d-cube kernel", () => {
     expect(() => boundaryKernel({ polytope: "11cube" as never, piece: "ball", P: 1 })).toThrow();
   });
 });
+
+describe("the loop lemma (BOUNDARY.md 4B.3)", () => {
+  it("never finds a loop shorter than 1 once s is at least 1/sqrt 2, so the validator skips the loop search there", () => {
+    for (const d of [5, 6, 7]) {
+      const n = d - 1;
+      const rnd = mulberry32(40 + d);
+      let tried = 0;
+      for (let t = 0; t < 120; t++) {
+        const s = Math.SQRT1_2 + 1.2 * rnd() ** 2;
+        const h = s / 2;
+        const tight = rnd() < 0.5;
+        const u = Array.from({ length: n }, () =>
+          tight ? (rnd() < 0.5 ? -1 : 1) * Math.max(0, h - 0.3536) * (0.9 + 0.1 * rnd()) : (rnd() * 2 - 1) * h,
+        );
+        if (ncubeClearance(Float64Array.from(u), 0, n, h) < 0.5) continue;
+        tried++;
+        const c = Math.floor(rnd() * 2 * d);
+        let best = Infinity;
+        for (const r of ncubeRealisedWords(
+          d,
+          s,
+          c,
+          Float64Array.from(u),
+          0,
+          c,
+          Float64Array.from(u),
+          0,
+          ncubeBudget(2e6),
+          {
+            excludeEmpty: true,
+          },
+        ))
+          if (r.len > 1e-12) best = Math.min(best, r.len);
+        expect(best, `d=${d} s=${s}`).toBeGreaterThanOrEqual(1);
+      }
+      expect(tried).toBeGreaterThan(15);
+    }
+  });
+
+  it("still rejects a self-overlapping ball below 1/sqrt 2 (the loop search runs there)", () => {
+    // the loop check needs s sqrt 2 < 1 to be able to fire; at such an s the clearance rule (a ball of diameter 1 clear of the faces) already fails
+    // for every u, so the search is only a safeguard: the verdict is invalid either way
+    const v = validateBoundary(problem(5, "ball", 1), { s: 0.7, pieces: [{ cell: 0, u: [0, 0, 0, 0] }] });
+    expect(v.ok).toBe(false);
+  });
+});

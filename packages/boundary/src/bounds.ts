@@ -118,14 +118,14 @@ export const CONTAINER_MAX_P: Record<ContainerName, number> = {
 /**
  * Milliseconds of validation per ball (validateBoundary at tolerance 1e-9, one machine core, [CALC] 2026-11-01): the measured cost of
  * loose random layouts at P = 24 divided by 24 (tesseract 0.3 from BOUNDARY.md section 12), times 3 for tight packings, whose
- * balls see more chains. The chain stage dominates, so a container with small cells relative to the ball costs most.
+ * balls see more chains; raised after review to cover 24-ball crowds measured at 20 ms (5-cell) and 40 ms (600-cell). The chain stage dominates, so a container with small cells relative to the ball costs most.
  */
 export const BOUNDARY_BALL_MS: Record<PolytopeName, number> = {
   tesseract: 0.3,
-  "5cell": 0.5,
+  "5cell": 1.0,
   "16cell": 0.8,
   "24cell": 2.3,
-  "600cell": 1.3,
+  "600cell": 2.0,
   "120cell": 12,
 };
 

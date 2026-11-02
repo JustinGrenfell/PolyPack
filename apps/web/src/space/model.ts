@@ -166,6 +166,12 @@ export function beatsBest(p: LoadedSpaceProblem, score: number): boolean {
 
 // ---------- what the panel shows ----------
 
+/** "tesseract" -> "Tesseract", "5cube" -> "5-cube" (the container in words, for the score label). */
+function boundaryName(polytope: string): string {
+  const w = polytope.replace(/^(\d+)/, "$1-");
+  return `${w.charAt(0).toUpperCase()}${w.slice(1)}`;
+}
+
 /** The name of a configuration's score in this problem. */
 export function scoreLabel(p: SearchProblem): string {
   switch (p.space) {
@@ -178,7 +184,7 @@ export function scoreLabel(p: SearchProblem): string {
     case "torus":
       return p.family === "free" ? "Cell √|det(b1, b2)|" : "Torus side L";
     case "boundary":
-      return `${p.polytope.charAt(0).toUpperCase()}${p.polytope.slice(1)} edge s`;
+      return `${boundaryName(p.polytope)} edge s`;
     case "polyhedra":
       return "Container scale s";
     case "balls":
@@ -575,7 +581,7 @@ export function ballsRound(P: number, code: string): { round: number; fresh: num
  * (the chain metric, packages/boundary/src/search/balls.ts ChainMetric; the tesseract's lattice words take 0.0005): [CALC]
  * measured 2026-11-01 on an Apple Silicon laptop, on squeezed random starts of P = 4 and 12, the larger of the two.
  */
-export const BOUNDARY_BALL_MS: Record<string, number> = {
+export const BOUNDARY_ENERGY_MS: Record<string, number> = {
   "5cell": 0.12,
   "16cell": 0.18,
   "24cell": 0.25,
@@ -588,7 +594,7 @@ export const BOUNDARY_BALL_MS: Record<string, number> = {
  * metric (at least 200 evaluations, at most BOUNDARY_ROUND), so that a round there is as long as elsewhere.
  */
 export function boundaryRound(polytope: string, P: number): number {
-  const ms = BOUNDARY_BALL_MS[polytope];
+  const ms = BOUNDARY_ENERGY_MS[polytope];
   if (ms === undefined) return BOUNDARY_ROUND;
   return Math.max(200, Math.min(BOUNDARY_ROUND, 100 * Math.floor(2000 / (ms * P) / 100)));
 }

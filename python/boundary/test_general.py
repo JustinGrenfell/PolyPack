@@ -391,5 +391,30 @@ class Input(unittest.TestCase):
                 C.check("boundary/24cell/ball/1", conf)
 
 
+class Review(unittest.TestCase):
+    """The fixes from the review of 4A: a reading slack, a cheap pre-check, CertError for guards, ids that end at the end."""
+
+    ONE = {"pieces": [{"cell": 0, "u": [0, 0, 0]}]}
+
+    def test_reading_slack(self):
+        # a ball at a 24-cell cell's centre has clearance s/2: strictly valid needs 1e-13 s of room for the engine's reading
+        self.assertFalse(C.check("boundary/24cell/ball/1", dict(self.ONE, s=1 + 5e-14), strict=True).ok)
+        self.assertTrue(C.check("boundary/24cell/ball/1", dict(self.ONE, s=1 + 1e-12), strict=True).ok)
+
+    def test_tiny_s_is_decided_before_any_chain_search(self):
+        for name in ("5cell", "120cell", "600cell"):
+            v = C.check(f"boundary/{name}/ball/1", dict(self.ONE, s=0.01), strict=True)
+            self.assertFalse(v.ok)
+            self.assertIn("bound", v.reasons[0])
+        v = C.check("boundary/24cell/ball/3", {"s": 0.1, "pieces": self.ONE["pieces"] * 3}, strict=False)
+        self.assertFalse(v.ok)
+
+    def test_ids_end_at_the_end(self):
+        for rid in ("boundary/24cell/ball/1\n", "boundary/5cube/ball/1\n", "boundary/tesseract/cube/2\n"):
+            with self.assertRaises(C.CertError, msg=repr(rid)):
+                C.problem_fields(rid)
+        self.assertEqual(C.problem_fields("boundary/24cell/ball/1"), ("24cell", "ball", 1))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

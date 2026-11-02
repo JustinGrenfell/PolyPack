@@ -67,7 +67,7 @@ PIECES = ("ball", "cube")
 STATUSES = ("best_known", "proven")
 GENERAL_POLYTOPES = ("5cell", "16cell", "24cell", "120cell", "600cell")  # general.py (chains), balls only
 NCUBE_POLYTOPES = ("5cube", "6cube", "7cube", "8cube", "9cube", "10cube")  # ncube.py (lattice words in d - 1 axes, pruned by reach)
-ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})$")
+ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})\Z")
 # pi to 50 decimals, truncated: a rational lower bound and (adding 1e-50) an upper bound
 PI_LO = Fraction("3.14159265358979323846264338327950288419716939937510")
 PI_HI = PI_LO + Fraction(1, 10 ** 50)
@@ -472,7 +472,19 @@ def check_general(polytope, piece, P, config, strict):
         cfg = general.parse_config(polytope, P, config, to_fraction)
     except general.GeneralError as e:
         raise CertError(str(e)) from None
-    v = general.check_balls(polytope, cfg, strict=strict)
+    # cheap first: the volume bound and the one-ball bound decide a tiny s at once (else the chain search runs to its node cap).
+    # check(x) says x is not above the bound. Strict, s equal to the bound is invalid; not strict it is valid, so test a hair above s.
+    sx = cfg["s"] if strict else cfg["s"] * (1 + Fraction(1, 10 ** 40))
+    for kind, text, below in general.exact_bounds(polytope, P):
+        if below(sx):
+            v = general.Verdict(strict)
+            v.fail(f"s is too small for {P} balls: it must be {'more than' if strict else 'at least'} the {kind} bound {text}")
+            v.polytope = polytope
+            return v
+    try:
+        v = general.check_balls(polytope, cfg, strict=strict)
+    except (general.GeneralError, general.ChainLimit) as e:
+        raise CertError(str(e)) from None
     v.polytope = polytope
     return v
 

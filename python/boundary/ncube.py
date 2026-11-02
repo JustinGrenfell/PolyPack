@@ -44,7 +44,7 @@ NCUBES = {"5cube": 5, "6cube": 6, "7cube": 7, "8cube": 8, "9cube": 9, "10cube": 
 PIECES = ("ball", "cube")
 MAX_P = 9999
 MAX_S = Fraction(10) ** 4
-ID_RE = re.compile(r"^boundary/(5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})$")
+ID_RE = re.compile(r"^boundary/(5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})\Z")
 # pi to 50 decimals, truncated: a rational lower bound
 PI_LO = Fraction("3.14159265358979323846264338327950288419716939937510")
 # the search budget of one check: steps of the support and order searches

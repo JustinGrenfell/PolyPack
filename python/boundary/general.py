@@ -50,6 +50,9 @@ from fractions import Fraction
 # ------------------------------------------------------------------ the field Q(sqrt 5)
 
 
+READING_SLACK = Fraction(1, 10 ** 13)  # relative to s; 34 times the largest reading discrepancy measured (2.9e-15 s)
+
+
 def sgn(x):
     """-1, 0 or 1: the exact sign of a Fraction, an int or a Q5."""
     if isinstance(x, Q5):
@@ -470,7 +473,7 @@ class Container:
                 sets.append([i for i in cand if ex[i] == m])
         nV, nE, nC, nR, cv, cf = COUNTS[name]
         if nv != nV or sum(len(a) for a in adj) // 2 != nE or len(sets) != nC or any(len(s) != cv for s in sets):
-            raise AssertionError(f"{name}: counts differ from the literature")
+            raise GeneralError(f"{name}: counts differ from the literature")
         self.raw_cells = [sorted(s) for s in sets]
 
     def _order_like_engine(self):
@@ -532,7 +535,7 @@ class Container:
                 cnt[x] = cnt.get(x, 0) + 1
         nV, nE, nC_, nR, cv, cf = COUNTS[self.name]
         if len(ridges) != nR or any(cnt.get(c.index, 0) != cf for c in self.cells):
-            raise AssertionError(f"{self.name}: ridges differ from the literature")
+            raise GeneralError(f"{self.name}: ridges differ from the literature")
         for c in self.cells:
             c.facets.sort(key=lambda f: f["nbr"])
         for c in self.cells:
@@ -559,7 +562,7 @@ class Container:
             cur = out[-1]
             nxt = [w for w in self.adj[cur] if w in s and w != prev and w not in out]
             if not nxt:
-                raise AssertionError("ridge is not a cycle")
+                raise GeneralError("ridge is not a cycle")
             prev = cur
             out.append(nxt[0])
         return out
@@ -1036,7 +1039,7 @@ def enumerate_chains(cont, anchor, u, R2, max_nodes=200000):
                     if sgn(N[0]) == 0 and sgn(N[1]) == 0 and sgn(N[2]) == 0:
                         continue
                     # a face through the centroid ray: the gate is degenerate seen from u (cannot happen with area > 0)
-                    raise AssertionError("degenerate cone")
+                    raise GeneralError("degenerate cone")
                 window.append(N if sN > 0 else [-x for x in N])
             if len(nodes) >= max_nodes:
                 raise ChainLimit(f"more than {max_nodes} chains")
@@ -1159,8 +1162,14 @@ def check_balls(polytope, config, strict=True, reach_factor=None, max_nodes=2000
         return v
     s = prob.s
     D2 = prob.D2
-    R2 = D2 if reach_factor is None else D2 * reach_factor
+    # Reading slack (strict only): the engine's floats are read to within 2.9e-15 s of the ambient point it means (BOUNDARY.md
+    # 4A.3), so "strictly valid" must hold with room for that. Distances (a pair, a loop: two readings) and the clearance (one)
+    # must exceed their limits by 2e-13 s and 1e-13 s; as a relative factor on the squared limit both are (1 + 2e-13 s)^2.
+    slack = (1 + 2 * READING_SLACK * s) ** 2 if strict else Fraction(1)
+    D2s = D2 * slack
+    R2 = D2s if reach_factor is None else D2s * reach_factor
     half2 = D2 / 4
+    half2s = half2 * slack
     unit2 = s * s / cont.e2  # site squared length per base squared length
     P = len(prob.balls)
     # runs: one per (ball, closed cell containing it)
@@ -1181,12 +1190,12 @@ def check_balls(polytope, config, strict=True, reach_factor=None, max_nodes=2000
     for b, runs in zip(prob.balls, per_ball):
         # clearance: along every chain of every run
         for ci, lam, nodes in runs:
-            d = clearance_d2(cont, nodes, lam, half2 if reach_factor is None else R2)
+            d = clearance_d2(cont, nodes, lam, half2s if reach_factor is None else R2)
             if d is not None and (clear_min is None or d < clear_min):
                 clear_min = d
             if d is not None and (b.index not in v.clear_d2 or d * unit2 < v.clear_d2[b.index]):
                 v.clear_d2[b.index] = d * unit2
-            if d is not None and _bad(d, half2, strict):
+            if d is not None and _bad(d, half2s, strict):
                 v.fail(f"ball {b.index} is too close to an edge of the {polytope}: it must be {'more than' if strict else 'at least'} 1/2 from every edge")
     if clear_min is not None:
         v.margins["clearance_sq"] = clear_min * unit2
@@ -1219,12 +1228,12 @@ def check_balls(polytope, config, strict=True, reach_factor=None, max_nodes=2000
                         if j == i:
                             if loop_min is None or d < loop_min:
                                 loop_min = d
-                            if _bad(d, D2, strict):
+                            if _bad(d, D2s, strict):
                                 v.fail(f"ball {i} overlaps itself: a geodesic loop leaves and returns to its centre and is shorter than 1")
                         else:
                             if pair_min is None or d < pair_min:
                                 pair_min = d
-                            if _bad(d, D2, strict):
+                            if _bad(d, D2s, strict):
                                 v.fail(f"balls {i} and {j} overlap: a path along the boundary joins their centres and is {'at most' if strict else 'less than'} 1 long")
     v.margins["distance_sq"] = None if pair_min is None else pair_min * unit2
     v.margins["loop_sq"] = None if loop_min is None else loop_min * unit2

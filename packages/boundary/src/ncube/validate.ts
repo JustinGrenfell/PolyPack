@@ -218,7 +218,10 @@ function validateBalls(
           `Balls ${i} and ${j} overlap: their centres are ${fmt(best)} apart along the boundary; they must be at least 1 apart.`,
         );
     }
-    for (let i = 0; i < P && reasons.length < maxReasons; i++) {
+    // The loop lemma (BOUNDARY.md 4B.3): a geodesic loop is at least s sqrt 2 long, so for s >= 1/sqrt 2 none is shorter than 1
+    // (nor than 1 - tol) and the search, the biggest consumer of the budget, is skipped. Below that it runs, because a ball of
+    // diameter 1 can then still fit (the clearance rule needs only s >= 1/sqrt 2 - tol).
+    for (let i = 0; i < P && reasons.length < maxReasons && !(s * Math.SQRT2 >= 1); i++) {
       let best = Infinity;
       for (const r of realisedWords(d, s, cells[i], U, i * n, cells[i], U, i * n, budget, { excludeEmpty: true }))
         if (r.len > 1e-12) best = Math.min(best, r.len);
