@@ -49,6 +49,8 @@ import { BOUNDARY_SERVER_RULE, boundaryBound, serverForm, serverRule } from "./k
 import { ballBounds } from "./bounds";
 import { ncubeKernel } from "./ncube/kernel";
 import { isNCubeName } from "./ncube/lattice";
+import { ndKernel } from "./nd/kernel";
+import { isNDName } from "./nd/names";
 import { getPolytope, isPolytopeName } from "./polytope";
 import { type Charts, chartsOf, randomCellPoint } from "./search/chart";
 import type { PieceModel, State } from "./search/model";
@@ -89,7 +91,8 @@ const MAX_WALK_EDGES = 64;
 const POSE_TRIES = 16;
 
 export function boundaryKernel(problem: { polytope: ContainerName; piece: PieceName; P: number }): SpaceKernel {
-  // the d-cubes (d = 5..10) have their own kernel (ncube/kernel.ts)
+  // the simplex, orthoplex and demicube (d = 5..10) have theirs (nd/kernel.ts), and the d-cubes (ncube/kernel.ts)
+  if (problem && isNDName(problem.polytope) && problem.piece === "ball") return ndKernel({ polytope: problem.polytope, piece: "ball", P: problem.P });
   if (problem && isNCubeName(problem.polytope) && (problem.piece === "ball" || problem.piece === "cube"))
     return ncubeKernel({ polytope: problem.polytope, piece: problem.piece, P: problem.P });
   if (!problem || !isPolytopeName(problem.polytope) || !isPieceName(problem.piece) || !isPieceCount(problem.P))

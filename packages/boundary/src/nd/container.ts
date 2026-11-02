@@ -72,6 +72,7 @@ export class NDContainer {
   private readonly oddMasks: Int32Array;
   private readonly oddIndex: Int32Array;
   private readonly sd: number;
+  private cum: Float64Array | null = null;
 
   constructor(name: NDName) {
     const p = ndParse(name);
@@ -266,8 +267,37 @@ export class NDContainer {
     return { c, kind, n, h, nbr: Int32Array.from(nb), nn, hn, rp, nu2, o: this.centre(c), frame, hinges: Int32Array.from(pairs) };
   }
 
+  /**
+   * A random cell, chosen with probability proportional to its (d-1)-volume (the demicube's simplex facets are tiny beside its
+   * (d-1)-demicube facets); `rand` returns numbers in [0, 1).
+   */
+  pickCell(rand: () => number): number {
+    if (this.family !== "demicube") return Math.min(this.C - 1, Math.floor(rand() * this.C));
+    if (!this.cum) {
+      const n = this.n;
+      let nf = 1;
+      for (let i = 2; i <= n; i++) nf *= i;
+      const wSim = Math.sqrt(this.d) / nf;
+      const wDem = 1 - 2 ** (n - 1) / nf;
+      const w: number[] = [];
+      for (let c = 0; c < this.C; c++) w.push(c < 2 * this.d ? wDem : wSim);
+      const total = w.reduce((a, b) => a + b, 0);
+      let acc = 0;
+      this.cum = Float64Array.from(w, (x) => (acc += x / total));
+    }
+    const r = rand();
+    let lo = 0;
+    let hi = this.C - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.cum[mid] >= r) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo;
+  }
+
   /** The ambient point of local coordinates u (n numbers, at edge s) of cell c. */
-  toAmbient(c: number, u: ArrayLike<number>, s: number, uo = 0, out = new Float64Array(this.D)): Float64Array {
+  toAmbient(c: number, u: ArrayLike<number>, s: number, uo = 0, out: Float64Array = new Float64Array(this.D)): Float64Array {
     const cl = this.cell(c);
     const { D, n } = this;
     for (let j = 0; j < D; j++) out[j] = s * cl.o[j];
@@ -280,7 +310,7 @@ export class NDContainer {
   }
 
   /** The local coordinates of an ambient point of cell c's hyperplane (the inverse of toAmbient). */
-  toLocal(c: number, x: ArrayLike<number>, s: number, out = new Float64Array(this.n)): Float64Array {
+  toLocal(c: number, x: ArrayLike<number>, s: number, out: Float64Array = new Float64Array(this.n)): Float64Array {
     const cl = this.cell(c);
     const { D, n } = this;
     for (let k = 0; k < n; k++) {

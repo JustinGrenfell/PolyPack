@@ -39,6 +39,8 @@
  */
 import { isNCubeName } from "../ncube/lattice";
 import { searchNCube } from "../ncube/search";
+import { isNDName } from "../nd/names";
+import { searchND } from "../nd/search";
 import { getPolytope, isPolytopeName } from "../polytope";
 import { isPieceCount, isPieceName } from "../ids";
 import type { BoundaryConfig, BoundaryProblem, PolytopeName } from "../types";
@@ -241,6 +243,8 @@ export function finalizeState(
 }
 
 export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOptions): BoundarySearchResult {
+  // the simplex, orthoplex and demicube (d = 5..10): the same (nd/search.ts)
+  if (problem && isNDName(problem.polytope) && isPieceCount(problem.P) && problem.piece === "ball") return searchND({ polytope: problem.polytope, piece: "ball", P: problem.P }, opts);
   // the d-cubes (d = 5..10): seeds finished by the kernel's exact finishing (ncube/search.ts)
   if (problem && isNCubeName(problem.polytope) && isPieceCount(problem.P) && (problem.piece === "ball" || problem.piece === "cube")) return searchNCube({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, opts);
   if (!problem || !isPolytopeName(problem.polytope) || !isPieceName(problem.piece) || !isPieceCount(problem.P)) throw new Error("searchBoundary: invalid problem");

@@ -21,6 +21,8 @@
 import type { Validation } from "@polypack/methods";
 import { ncubeFormErrors, ncubeServerRule } from "./ncube/rule";
 import { isNCubeName } from "./ncube/lattice";
+import { isNDName } from "./nd/names";
+import { ndFormErrors, ndServerRule } from "./nd/rule";
 import { getPolytope } from "./polytope";
 import type { BoundaryProblem, PieceName, PolytopeName } from "./types";
 import { MAX_S, validateBoundary } from "./validate";
@@ -51,6 +53,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  */
 export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
   const R = BOUNDARY_SERVER_RULE;
+  if (isNDName(problem.polytope)) return ndFormErrors({ polytope: problem.polytope, piece: "ball", P: problem.P }, raw);
   if (isNCubeName(problem.polytope))
     return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, raw);
   if (!isObject(raw)) return ["config must be an object"];
@@ -103,6 +106,7 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
 /** The server's verdict on a configuration of the problem (header). */
 export function serverRule(problem: BoundaryProblem, config: unknown, bound: number): Validation {
   const R = BOUNDARY_SERVER_RULE;
+  if (isNDName(problem.polytope)) return ndServerRule({ polytope: problem.polytope, piece: "ball", P: problem.P }, config, bound);
   if (isNCubeName(problem.polytope))
     return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, config, bound);
   const fail = (reasons: string[], score: number | null = null): Validation => ({ valid: false, score, reasons });

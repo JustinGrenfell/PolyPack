@@ -173,6 +173,18 @@ export function ndCounts(family: NDFamily, d: number): { facets: number; ridges:
   return { facets: dem + sim, ridges: sim * d + (dem * 2 * (d - 1)) / 2, simplexFacets: sim, otherFacets: dem };
 }
 
+/** The edge from which a ball at a cell's centre is valid (for the cell kinds that exist), and for pairs of adjacent centres. */
+export function ndCentreEdge(polytope: NDName): number {
+  const p = ndParse(polytope)!;
+  if (p.family === "demicube") return p.d === 5 ? Math.sqrt(6) / 2 : 1;
+  return Math.sqrt(p.d * (p.d - 2)) / 2;
+}
+export function ndPairEdge(polytope: NDName): number {
+  const p = ndParse(polytope)!;
+  if (p.family === "demicube") return Math.SQRT2;
+  return Math.sqrt((p.d * (p.d - 1)) / 2);
+}
+
 /**
  * Estimated milliseconds of the server's check per ball ([CALC] BOUNDARY.md 4C.7, 2026-11-02, one core): set from measurements.
  */

@@ -62,6 +62,8 @@
  */
 import { isNCubeName } from "./ncube/lattice";
 import { validateNCube } from "./ncube/validate";
+import { isNDName } from "./nd/names";
+import { validateND } from "./nd/validate";
 import { ChainLimitError, ChainNode, RIDGE_SNAP, clipSegmentToWindow, hingeDistanceOverChains, inWindow, ridgeSnap } from "./chains";
 import { MAX_P, isPieceName } from "./ids";
 import { V3, isoApply, isoInverse, isoLinearT, norm3, pointSegmentDistance3, quaternionToMatrix, sub3 } from "./linalg";
@@ -465,6 +467,7 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
 export function validateBoundary(problem: BoundaryProblem, config: unknown, opts: ValidateOptions = {}): BoundaryVerdict {
   // the d-cubes (d = 5..10) have their own validator, with the same rule (ncube/validate.ts)
   if (problem && isNCubeName(problem.polytope)) return validateNCube({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, config, opts);
+  if (problem && isNDName(problem.polytope)) return validateND({ polytope: problem.polytope, piece: "ball", P: problem.P }, config, opts);
   return run(problem, config, opts);
 }
 

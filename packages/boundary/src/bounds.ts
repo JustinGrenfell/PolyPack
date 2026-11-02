@@ -17,6 +17,8 @@
  */
 import { NCUBE_MAX_P, ncubeCheckMs } from "./ncube/bounds";
 import { NCUBE_NAMES, isNCubeName } from "./ncube/lattice";
+import { ndCheckMs } from "./nd/bounds";
+import { ND_MAX_P, ND_NAMES, isNDName } from "./nd/names";
 import type { ContainerName, PieceName, PolytopeName } from "./types";
 
 const PHI = (1 + Math.sqrt(5)) / 2;
@@ -96,6 +98,8 @@ export const CONTAINER_PIECES: Record<ContainerName, readonly PieceName[]> = {
     (typeof NCUBE_NAMES)[number],
     readonly PieceName[]
   >),
+  // the simplex, orthoplex and demicube (d = 5..10) take balls only
+  ...(Object.fromEntries(ND_NAMES.map((n) => [n, ["ball"] as readonly PieceName[]])) as Record<(typeof ND_NAMES)[number], readonly PieceName[]>),
   tesseract: ["ball", "cube"],
   "5cell": ["ball"],
   "16cell": ["ball"],
@@ -107,6 +111,7 @@ export const CONTAINER_PIECES: Record<ContainerName, readonly PieceName[]> = {
 /** The largest P of each container in the catalogue: the tesseract's 16, 24 for the others. */
 export const CONTAINER_MAX_P: Record<ContainerName, number> = {
   ...NCUBE_MAX_P,
+  ...(Object.fromEntries(ND_NAMES.map((n) => [n, ND_MAX_P])) as Record<(typeof ND_NAMES)[number], number>),
   tesseract: 16,
   "5cell": 24,
   "16cell": 24,
@@ -131,6 +136,7 @@ export const BOUNDARY_BALL_MS: Record<PolytopeName, number> = {
 
 /** Estimated milliseconds of the server's check of a configuration of P pieces. Cubes, which have parts instead of chains, cost 0.3 each. */
 export function boundaryCheckMs(problem: { polytope: ContainerName; piece: PieceName; P: number }): number {
+  if (isNDName(problem.polytope)) return ndCheckMs(problem.polytope, problem.P);
   if (isNCubeName(problem.polytope)) return ncubeCheckMs(problem.polytope, problem.piece as "ball" | "cube", problem.P);
   return problem.piece === "cube" ? 0.3 * problem.P : BOUNDARY_BALL_MS[problem.polytope] * problem.P;
 }

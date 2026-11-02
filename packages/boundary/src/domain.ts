@@ -7,11 +7,14 @@ import { CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds } from "./bounds";
 import { boundaryBound } from "./kernel-validate";
 import { NCUBE_TITLES, ncubeProblemBound } from "./ncube/bounds";
 import { isNCubeName } from "./ncube/lattice";
+import { ndBoundKind, ndProblemBound } from "./nd/bounds";
+import { ND_TITLES, isNDName, ndParse } from "./nd/names";
 import type { ContainerName, PieceName, PolytopeName } from "./types";
 import { CONTAINERS, PIECES, POLYTOPES } from "./types";
 
 const TITLES: Record<ContainerName, string> = {
   ...NCUBE_TITLES,
+  ...ND_TITLES,
   tesseract: "Tesseract",
   "5cell": "5-cell",
   "16cell": "16-cell",
@@ -48,6 +51,16 @@ function boundEntry(polytope: ContainerName, piece: PieceName, P: number): { val
           label:
             "[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)",
         };
+  }
+  if (isNDName(polytope)) {
+    const q = ndParse(polytope)!;
+    return {
+      value: ndProblemBound(polytope, P),
+      label:
+        ndBoundKind(q.family, q.d, P) === "volume"
+          ? "[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"
+          : "[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one",
+    };
   }
   if (polytope === "tesseract") {
     const value = boundaryBound(piece, P);

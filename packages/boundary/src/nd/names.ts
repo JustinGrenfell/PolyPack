@@ -44,6 +44,18 @@ export function ndCellCount(family: NDFamily, d: number): number {
 export const ND_PIECES = ["ball"] as const;
 
 /**
+ * The shape of a configuration on any container of dimension d >= 5, for the registries that read configurations (packages/spaces): the
+ * number of cells, the number of local coordinates per piece, and whether the container takes rotations (none of them does). Null for
+ * the 4-polytopes and unknown names. The d-cubes' names are those of ncube/lattice.ts ("5cube".."10cube").
+ */
+export function highDimShape(name: unknown): { cells: number; dimU: number } | null {
+  const p = ndParse(name);
+  if (p) return { cells: ndCellCount(p.family, p.d), dimU: p.d - 1 };
+  const m = typeof name === "string" ? /^(5|6|7|8|9|10)cube$/.exec(name) : null;
+  return m ? { cells: 2 * Number(m[1]), dimU: Number(m[1]) - 1 } : null;
+}
+
+/**
  * The most pieces of each container's problem set. P = 1..24 for every container: the work caps (ND_MAX_WORK) refuse a
  * check that needs more, they do not shorten the range.
  */

@@ -53,5 +53,30 @@ export { NCUBE_SERVER_RULE, ncubeFormErrors, ncubeServerRule } from "./ncube/rul
 export { ncubeKernel } from "./ncube/kernel";
 export { searchNCube } from "./ncube/search";
 export { cellLayout as ncubeCellLayout, ringLayout as ncubeRingLayout } from "./ncube/seeds";
+export {
+  ND_FAMILIES,
+  ND_MAX_P,
+  ND_NAMES,
+  ND_PIECES,
+  ND_TITLES,
+  isNDName,
+  ndCellCount,
+  highDimShape,
+  ndDim,
+  ndParse,
+} from "./nd/names";
+export type { NDFamily, NDName } from "./nd/names";
+export { E0 as ND_E0, NDContainer, getND } from "./nd/container";
+export type { NDCell } from "./nd/container";
+export { type NDBudget, type NDJoin, type NDNode, NDLimitError, develop as ndDevelop, directionAtAnchor as ndDirectionAtAnchor, hingeDistance as ndHingeDistance, inWindow as ndInWindow, joinDistance as ndJoinDistance, newNDBudget } from "./nd/chains";
+export { ND_MAX_CROSSINGS, walkND } from "./nd/move";
+export { ND_BALL_MS, ndBallVolume, ndBound, ndCentreEdge, ndPairEdge, ndBoundKind, ndBoundaryVolume, ndCheckMs, ndCounts, ndProblemBound } from "./nd/bounds";
+export { ND_MAX_WORK, ND_REACH, anchorPiece as ndAnchorPiece, ndSnap, readNDConfig, validateND } from "./nd/validate";
+export type { NDAnchored, NDConfig, NDProblem, NDValidateOptions } from "./nd/validate";
+export { ND_SERVER_RULE, ndFormErrors, ndServerRule } from "./nd/rule";
+export { ND_FINISH_COST, ND_VALIDATE_COST, ndKernel } from "./nd/kernel";
+export { NDBallModel } from "./nd/model";
+export { ndExactLayout, ndSequentialLayout } from "./nd/seeds";
+export { searchND } from "./nd/search";
 export { isContainerName } from "./polytope";
 export * from "./kernel";
