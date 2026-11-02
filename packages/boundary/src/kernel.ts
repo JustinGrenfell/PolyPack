@@ -47,6 +47,7 @@ import { displacementTo } from "./kernel-pose";
 import { cellLayout, generalLayout } from "./kernel-seeds";
 import { BOUNDARY_SERVER_RULE, boundaryBound, serverForm, serverRule } from "./kernel-validate";
 import { ballBounds } from "./bounds";
+import { solidKernel } from "./kernel-solids";
 import { ncubeKernel } from "./ncube/kernel";
 import { isNCubeName } from "./ncube/lattice";
 import { ndKernel } from "./nd/kernel";
@@ -56,7 +57,7 @@ import { type Charts, chartsOf, randomCellPoint } from "./search/chart";
 import type { PieceModel, State } from "./search/model";
 import { randInt } from "./search/random";
 import { finalizeState, modelOf } from "./search/search";
-import type { BoundaryConfig, BoundaryProblem, ContainerName, PieceName, PolytopeName } from "./types";
+import type { BoundaryConfig, BoundaryProblem, ContainerName, PieceName, PolytopeName, PolytopePieceName } from "./types";
 import { BALL_RADIUS } from "./units";
 import { validateBoundary } from "./validate";
 
@@ -101,6 +102,8 @@ export function boundaryKernel(problem: { polytope: ContainerName; piece: PieceN
   if (problem.P > BOUNDARY_SERVER_RULE.maxP)
     throw new Error(`boundaryKernel: P = ${problem.P} is above the server's largest, ${BOUNDARY_SERVER_RULE.maxP}`);
   const prob: BoundaryProblem = { polytope: problem.polytope, piece: problem.piece, P: problem.P };
+  // the Platonic solids, turned (the tesseract's cube is the axis-aligned one below): kernel-solids.ts
+  if (prob.piece !== "ball" && !(prob.piece === "cube" && prob.polytope === "tesseract")) return solidKernel(prob as BoundaryProblem & { piece: PolytopePieceName });
   const { P, piece } = prob;
   const poly = getPolytope(prob.polytope as PolytopeName);
   const charts = chartsOf(poly);
@@ -377,7 +380,7 @@ export function boundaryKernel(problem: { polytope: ContainerName; piece: PieceN
  * multiply). Returns the end cell, or -1 when the segment meets a hinge. `p` holds the start
  * point and is overwritten; `partM` is scratch (9 numbers).
  */
-function walk(
+export function walk(
   charts: Charts,
   cell: number,
   p: Float64Array,

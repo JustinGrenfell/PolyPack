@@ -107,9 +107,17 @@ export function icosphere(detail: number): Float64Array {
 // Convex polygon clipping (3D points on a common plane).
 
 const EPS = 1e-12;
+/**
+ * The same for a polytope piece: a point within POLY_EPS of a clipping plane counts as on it. The engine's gluings carry rounding of no more than about
+ * 1.3e-15 (measured at s = 1: ridge vertices mapped across a gluing, |A A^T - I|, and a round trip), so the rounding is not the reason for the size.
+ * The size is the validator's tolerance: the server accepts a piece up to 1e-9 outside a cell's facet plane, and packings touch to within about 1e-12,
+ * so a solid's face lying in a facet plane, or a piece touching a plane at a vertex, can be off it by that much, and a clip that took it for outside
+ * left slivers and no cut face (a drawing that lost a tenth of a piece).
+ */
+const POLY_EPS = 1e-9;
 
-/** The part of a convex polygon with n . p <= h. */
-export function clipPolygon(pts: Vec3[], pl: Plane): Vec3[] {
+/** The part of a convex polygon with n . p <= h (points within eps of the plane count as on it). */
+export function clipPolygon(pts: Vec3[], pl: Plane, eps = EPS): Vec3[] {
   const out: Vec3[] = [];
   const m = pts.length;
   if (m === 0) return out;
@@ -118,10 +126,10 @@ export function clipPolygon(pts: Vec3[], pl: Plane): Vec3[] {
   for (let i = 0; i < m; i++) {
     const cur = pts[i];
     const dc = dot(pl.n, cur) - pl.h;
-    if (dc <= EPS) {
-      if (dp > EPS) out.push(lerpAt(prev, cur, dp, dc));
+    if (dc <= eps) {
+      if (dp > eps) out.push(lerpAt(prev, cur, dp, dc));
       out.push(cur);
-    } else if (dp <= EPS) {
+    } else if (dp <= eps) {
       out.push(lerpAt(prev, cur, dp, dc));
     }
     prev = cur;
@@ -186,8 +194,11 @@ function clipPolyhedron(faces: Face[], pl: Plane): Face[] {
   const out: Face[] = [];
   const on: Vec3[] = [];
   let hasFaceOnPlane = false;
-  for (const f of faces) {
-    const c = clipPolygon(f.pts, pl);
+  for (const face of faces) {
+    // A point within SNAP of the plane is the plane's (the engine's gluings carry rounding of about 1e-10): it is moved onto it, the same way in every
+    // face that holds it, so that the vertices the faces share stay one point and none is left a hair off on either side.
+    const f: Face = { ...face, pts: face.pts.map((p) => snapTo(p, pl)) };
+    const c = clipPolygon(f.pts, pl, POLY_EPS);
     if (c.length < 3) continue;
     out.push({ pts: c, n: f.n, cut: f.cut });
     let allOn = true;
@@ -203,6 +214,13 @@ function clipPolyhedron(faces: Face[], pl: Plane): Face[] {
     if (poly.length >= 3 && Math.hypot(...newell(poly)) > 1e-12) out.push({ pts: poly, n: pl.n, cut: true });
   }
   return out;
+}
+
+const SNAP = 1e-8;
+
+function snapTo(p: Vec3, pl: Plane): Vec3 {
+  const d = dot(pl.n, p) - pl.h;
+  return Math.abs(d) <= SNAP && d !== 0 ? [p[0] - d * pl.n[0], p[1] - d * pl.n[1], p[2] - d * pl.n[2]] : p;
 }
 
 /** The faces of a placed polytope piece, each oriented CCW seen from outside. */
@@ -378,7 +396,7 @@ function polytopePart(shape: { vertices: number[][]; faces: number[][] }, place:
     for (const f of faces) {
       for (const p of f.pts) {
         const d = dot(pl.n, p) - pl.h;
-        if (d > 1e-12) inside = false;
+        if (d > POLY_EPS) inside = false;
         else beyond = true;
       }
     }

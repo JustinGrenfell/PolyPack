@@ -21,11 +21,14 @@ import {
   quaternionToMatrix,
   tesseractEmbed,
   MAX_S,
-  validateBoundary,
+  validateBoundary as validateBoundaryOf,
 } from "../src/index";
 import { rng, atSite } from "./helpers";
 
 const T = getPolytope("tesseract");
+// These tests exercise the cube rule on the tesseract with turned cubes; the server's own rule for that problem is axis-aligned (solids.test.ts).
+const validateBoundary: typeof validateBoundaryOf = (problem, config, opts = {}) => validateBoundaryOf(problem, config, { turnedCubes: true, ...opts });
+
 const problem = (piece: PieceName, P: number): BoundaryProblem => ({ polytope: "tesseract", piece, P });
 const randQuat = (rand: () => number): [number, number, number, number] => {
   for (;;) {

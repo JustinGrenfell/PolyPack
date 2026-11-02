@@ -19,7 +19,8 @@ import { NCUBE_MAX_P, ncubeCheckMs } from "./ncube/bounds";
 import { NCUBE_NAMES, isNCubeName } from "./ncube/lattice";
 import { ndCheckMs } from "./nd/bounds";
 import { ND_MAX_P, ND_NAMES, isNDName } from "./nd/names";
-import type { ContainerName, PieceName, PolytopeName } from "./types";
+import { pieceShape } from "./pieces";
+import type { ContainerName, PieceName, PolytopeName, PolytopePieceName } from "./types";
 
 const PHI = (1 + Math.sqrt(5)) / 2;
 
@@ -91,7 +92,34 @@ export function ballBounds(
     : { volume, onePiece, value: onePiece, kind: "one piece" };
 }
 
-/** Which pieces each container takes (balls on all six; the tesseract's axis-aligned cubes besides). */
+/**
+ * The proven lower bounds on s of P Platonic pieces on a 4-polytope's boundary, and the larger (docs/spaces/BOUNDARY.md 4C.4).
+ *  - Volume: developments are injective on interiors with disjoint images, so P V_piece <= V_boundary s^3.
+ *  - One piece: the piece contains the ball of its inradius r about its centre, and that ball must be a valid ball; its centre needs
+ *    distance >= r from every hinge, and every point of a cell lies within s rho of its edges (rho the cell's midradius, 4A.4). So s >= r / rho.
+ * Each stored as a binary64 rounded down by a relative 1e-15, like the ball bounds. On the tesseract the cube is not listed here
+ * (its records' bounds are kernel-validate.ts boundaryBound); the other four pieces are.
+ */
+export function pieceBounds(
+  name: PolytopeName,
+  piece: PolytopePieceName,
+  P: number,
+): { volume: number; onePiece: number; value: number; kind: "volume" | "one piece" } {
+  const f = containerFacts(name);
+  const sh = pieceShape(piece);
+  const down = 1 - 1e-15;
+  const volume = Math.cbrt((P * sh.volume) / f.boundaryVolume) * down;
+  const onePiece = (sh.inradius / f.midradius) * down;
+  return volume > onePiece ? { volume, onePiece, value: volume, kind: "volume" } : { volume, onePiece, value: onePiece, kind: "one piece" };
+}
+
+const ALL_PIECES: readonly PieceName[] = ["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"];
+
+/**
+ * Which pieces each container takes. The five regular 4-polytopes besides the tesseract take balls and all five Platonic solids,
+ * freely rotated (so "cube" there is a rotated cube); the tesseract takes balls, its axis-aligned cubes (the records' problems) and
+ * the other four solids; the d-cubes (d = 5..10) take balls and axis-aligned cubes.
+ */
 export const CONTAINER_PIECES: Record<ContainerName, readonly PieceName[]> = {
   // the d-cubes (d = 5..10) take balls and axis-aligned cubes
   ...(Object.fromEntries(NCUBE_NAMES.map((n) => [n, ["ball", "cube"] as readonly PieceName[]])) as Record<
@@ -100,12 +128,12 @@ export const CONTAINER_PIECES: Record<ContainerName, readonly PieceName[]> = {
   >),
   // the simplex, orthoplex and demicube (d = 5..10) take balls only
   ...(Object.fromEntries(ND_NAMES.map((n) => [n, ["ball"] as readonly PieceName[]])) as Record<(typeof ND_NAMES)[number], readonly PieceName[]>),
-  tesseract: ["ball", "cube"],
-  "5cell": ["ball"],
-  "16cell": ["ball"],
-  "24cell": ["ball"],
-  "120cell": ["ball"],
-  "600cell": ["ball"],
+  tesseract: ALL_PIECES,
+  "5cell": ALL_PIECES,
+  "16cell": ALL_PIECES,
+  "24cell": ALL_PIECES,
+  "120cell": ALL_PIECES,
+  "600cell": ALL_PIECES,
 };
 
 /** The largest P of each container in the catalogue: the tesseract's 16, 24 for the others. */
@@ -134,14 +162,37 @@ export const BOUNDARY_BALL_MS: Record<PolytopeName, number> = {
   "120cell": 12,
 };
 
-/** Estimated milliseconds of the server's check of a configuration of P pieces. Cubes, which have parts instead of chains, cost 0.3 each. */
+/**
+ * Milliseconds of validation per Platonic piece (validateBoundary at tolerance 1e-9 with the server's 1024 chains, one machine core, [CALC]
+ * 2026-11-02): the worst measured, over the five solids, of (a) the cells tiling their container at s = 1 (every piece touches all its
+ * neighbours: 5-cell 3.8 ms, 16-cell 2.8, 24-cell 2.3, 120-cell dodecahedra 4.4, 600-cell 1.2 per piece) and (b) one piece alone at 1.02 to
+ * 4 times its smallest edge, in 12 random orientations (at most 2.2 ms, with single outliers of 6 ms on the tesseract and 3.8 ms on the
+ * 120-cell), rounded up. Loose random layouts of 24 pieces took 1.4 to 25 ms in all. Then (c) the worst-case pose that passes the in-cell edge tests
+ * (193 chains), copied P times: icosahedra on the 120-cell 6.8 ms a piece warm (162 ms for 24, 61 for 9), the others on the 120-cell at most 3 ms,
+ * on the 24-cell 1.4. Each figure carries 1.5 times headroom over the worst of (a) to (c), rounded up.
+ */
+export const BOUNDARY_SOLID_MS: Record<PolytopeName, number> = {
+  tesseract: 4,
+  "5cell": 6,
+  "16cell": 5,
+  "24cell": 4,
+  "120cell": 11,
+  "600cell": 2,
+};
+
+/**
+ * Estimated milliseconds of the server's check of a configuration of P pieces. A solid costs BOUNDARY_SOLID_MS each (the tesseract's aligned
+ * cubes, which have no chains to speak of, 0.3 each).
+ */
 export function boundaryCheckMs(problem: { polytope: ContainerName; piece: PieceName; P: number }): number {
   if (isNDName(problem.polytope)) return ndCheckMs(problem.polytope, problem.P);
   if (isNCubeName(problem.polytope)) return ncubeCheckMs(problem.polytope, problem.piece as "ball" | "cube", problem.P);
-  return problem.piece === "cube" ? 0.3 * problem.P : BOUNDARY_BALL_MS[problem.polytope] * problem.P;
+  if (problem.piece === "ball") return BOUNDARY_BALL_MS[problem.polytope] * problem.P;
+  if (problem.piece === "cube" && problem.polytope === "tesseract") return 0.3 * problem.P;
+  return BOUNDARY_SOLID_MS[problem.polytope] * problem.P;
 }
 
-/** A check of at least this many milliseconds waits its turn in the server's heavy queue (the 120-cell from P = 5, the 24-cell from P = 22). */
+/** A check of at least this many milliseconds waits its turn in the server's heavy queue (balls: the 120-cell from P = 5, the 24-cell from P = 22; solids: from P = 13 on the tesseract and 5-cell, 17 on the 16-cell and 24-cell, 10 on the 120-cell, never on the 600-cell). */
 export const BOUNDARY_HEAVY_MS = 50;
 
 export function boundaryIsHeavy(problem: { polytope: ContainerName; piece: PieceName; P: number }): boolean {

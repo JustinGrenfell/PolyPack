@@ -55,7 +55,7 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
   const R = BOUNDARY_SERVER_RULE;
   if (isNDName(problem.polytope)) return ndFormErrors({ polytope: problem.polytope, piece: "ball", P: problem.P }, raw);
   if (isNCubeName(problem.polytope))
-    return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, raw);
+    return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, raw);
   if (!isObject(raw)) return ["config must be an object"];
   const errors: string[] = [];
   const num = (v: unknown, path: string, max: number, positive = false): number => {
@@ -108,7 +108,7 @@ export function serverRule(problem: BoundaryProblem, config: unknown, bound: num
   const R = BOUNDARY_SERVER_RULE;
   if (isNDName(problem.polytope)) return ndServerRule({ polytope: problem.polytope, piece: "ball", P: problem.P }, config, bound);
   if (isNCubeName(problem.polytope))
-    return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, config, bound);
+    return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, config, bound);
   const fail = (reasons: string[], score: number | null = null): Validation => ({ valid: false, score, reasons });
   if (problem.P > R.maxP)
     return fail([`P = ${problem.P} is above the largest P of the boundary catalogue (${R.maxP})`]);

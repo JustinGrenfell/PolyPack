@@ -55,7 +55,8 @@ const BOUNDARY_TITLES: Record<string, string> = {
     (["simplex", "orthoplex", "demicube"] as const).flatMap((f) => [5, 6, 7, 8, 9, 10].map((d) => [`${d}${f}`, `${d}-${f}`] as const)),
   ),
 };
-const plural = (s: string) => `${s}s`;
+/** "balls", "cubes", "tetrahedra" (the Platonic solids of 3D on 4D end in -hedron). */
+const plural = (s: string) => (s.endsWith("hedron") ? `${s.slice(0, -2)}a` : `${s}s`);
 /** A minus sign rather than a hyphen in front of a negative number. */
 export const minus = (s: string) => s.replace(/^-/, "−");
 
@@ -302,7 +303,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       label: "Piece",
       option: (v) => capital(plural(v)),
       cell: (v) => v,
-      order: ["ball", "cube"],
+      order: ["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"],
       start: "ball",
     },
   ],

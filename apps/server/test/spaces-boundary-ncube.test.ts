@@ -81,7 +81,7 @@ describe("the d-cube domain on the server", () => {
   it("is listed among the boundary problems with its containers, pieces and P ranges", async () => {
     const r = (await get("/api/spaces")).body as SpacesResponse;
     const b = r.spaces.find((s) => s.space === "boundary")!;
-    expect(b.problems).toBe(152 + 2 * (160 + 384 + 4 * 400) + 18 * 24);
+    expect(b.problems).toBe(816 + 2 * (160 + 384 + 4 * 400) + 18 * 24);
     expect(b.records).toBe(32);
     const fields = b.domain!.fields;
     expect(fields[0].values).toEqual(["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell", ...NCUBE_NAMES, ...ND_NAMES]);

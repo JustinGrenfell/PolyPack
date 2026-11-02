@@ -209,9 +209,11 @@ describe("boundary kernel: configurations", () => {
     expect(cube.fromConfig({ s: 2, pieces: [{ ...piece, q: [c45, 0, 0, c45] }] })).not.toBeNull();
     const turned = { s: 2, pieces: [{ ...piece, q: [Math.cos(Math.PI / 8), 0, 0, Math.sin(Math.PI / 8)] }] };
     expect(cube.fromConfig(turned)).toBeNull();
-    // validate is the server's rule: it judges turned cubes too
-    expect(cube.validate(turned)).toEqual({ valid: true, score: 2, reasons: [] });
-    expect(validateBoundary(problem("cube", 1), turned, BOUNDARY_SERVER_RULE).ok).toBe(true);
+    // validate is the server's rule: the tesseract's cube problem is axis-aligned, so a turned cube is refused
+    expect(cube.validate(turned).valid).toBe(false);
+    expect(cube.validate(turned).reasons[0]).toMatch(/axis-aligned/);
+    expect(validateBoundary(problem("cube", 1), turned, BOUNDARY_SERVER_RULE).ok).toBe(false);
+    expect(validateBoundary(problem("cube", 1), turned, { ...BOUNDARY_SERVER_RULE, turnedCubes: true }).ok).toBe(true);
   });
 
   it("converts and validates every research record, and finishes each at or below its score", () => {

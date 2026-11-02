@@ -191,7 +191,7 @@ describe("the spaces options", () => {
     // and never without the option
     expect(run("--N", "4").spaces).toBeNull();
     const help = helpText(machine);
-    expect(help).toMatch(/boundary \(3D on 4D: unit balls and cubes on the boundary\s+of\s+a tesseract\)/);
+    expect(help).toMatch(/boundary \(3D on 4D: unit balls and Platonic solids on the boundary\s+of\s+a regular 4-polytope\)/);
     expect(help).toMatch(/surface, curved, sphere, torus,\s+boundary, polyhedra, balls, ndim, comma-separated, or all/);
     expect(run("--dimensions", "balls")).toMatchObject({ spaces: ["balls"], onlySpaces: false });
     expect(run("--dimensions", "all").spaces).toContain("balls");

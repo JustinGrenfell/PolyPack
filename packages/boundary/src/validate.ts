@@ -68,10 +68,11 @@ import { ChainLimitError, ChainNode, RIDGE_SNAP, clipSegmentToWindow, hingeDista
 import { MAX_P, isPieceName } from "./ids";
 import { V3, isoApply, isoInverse, isoLinearT, norm3, pointSegmentDistance3, quaternionToMatrix, sub3 } from "./linalg";
 import { Development, PART_EPS, developPiece, partsOfDevelopment, pieceReach } from "./parts";
+import { PieceShape, pieceShape } from "./pieces";
 import { SatShape, polyhedronThickness, satDepth, satShape } from "./polyhedron";
 import { boundaryVolume, cellExcess, getPolytope, isPolytopeName, topo } from "./polytope";
 import { BALL_RADIUS, BALL_WORK } from "./units";
-import type { BoundaryPiece, BoundaryProblem, BoundaryVerdict, PieceName, Polytope, PolytopeName } from "./types";
+import type { BoundaryPiece, BoundaryProblem, BoundaryVerdict, PieceName, Polytope, PolytopeName, PolytopePieceName } from "./types";
 
 export interface ValidateOptions {
   /** Float tolerance (default 1e-9). */
@@ -80,8 +81,15 @@ export interface ValidateOptions {
   maxChains?: number;
   /** Stop collecting reasons after this many (default 20). */
   maxReasons?: number;
+  /** Platonic pieces: the most pairs of parts tested before the check is refused (default MAX_PAIR_TESTS = 20,000). */
+  maxPairs?: number;
   /** The d-cubes only (ncube/): the most search steps of one check (default NCUBE_MAX_WORK); maxChains is for the 4-polytopes. */
   maxWork?: number;
+  /**
+   * Tests of the rotated-cube rule only (default false): accept a turned cube on the tesseract, whose cube problem is the axis-aligned one (q absent or
+   * one of the cube's 24 symmetries). The server never sets it.
+   */
+  turnedCubes?: boolean;
 }
 
 /**
@@ -94,6 +102,10 @@ export interface ValidateOptions {
  * a centre by less than 2e-10.
  */
 export const MAX_S = 1e4;
+
+const capital = (x: string) => x[0].toUpperCase() + x.slice(1);
+/** Plural of a piece's name (tetrahedra, cubes, ...). */
+export const plural = (x: string) => (x.endsWith("hedron") ? `${x.slice(0, -2)}a` : `${x}s`);
 
 const fmt = (x: number) => (Number.isFinite(x) ? String(Number(x.toPrecision(10))) : String(x));
 
@@ -117,7 +129,7 @@ function finiteNumbers(x: unknown, n: number): number[] | null {
  * Checks the problem and the configuration's shape; returns the typed pieces or pushes reasons.
  * `given`: a polytope to use instead of the catalogue's (its name is then not checked).
  */
-function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reasons: string[], maxReasons: number, given?: Polytope): { poly: Polytope; s: number; pieces: BoundaryPiece[] } | null {
+function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reasons: string[], maxReasons: number, given?: Polytope, turnedCubes = false): { poly: Polytope; s: number; pieces: BoundaryPiece[] } | null {
   const push = (r: string) => {
     if (reasons.length < maxReasons) reasons.push(r);
   };
@@ -182,6 +194,10 @@ function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reas
         if (!(Math.abs(n - 1) <= 1e-9)) {
           push(`Piece ${i}: its rotation q must be a unit quaternion; its length is ${fmt(n)}.`);
           ok = false;
+        } else if (!given && !turnedCubes && problem.polytope === "tesseract" && problem.piece === "cube" && !mapsCubeOntoItself(qv)) {
+          // boundary/tesseract/cube/P is the axis-aligned cube problem (4.3): a rotation is allowed only when it is one of the cube's 24 symmetries
+          push(`Piece ${i}: the cubes of the tesseract are axis-aligned; q must be absent or a rotation that maps the cube onto itself (one of its 24 symmetries), not a turned cube.`);
+          ok = false;
         }
       }
     }
@@ -232,8 +248,48 @@ function segmentDepthInCube(R: number[], u: V3, a: V3, b: V3, t0: number, t1: nu
   return 0.5 - best;
 }
 
-/** Largest depth of a hinge point inside a cube, over the chains given (hinges clipped to each window). */
-function hingeDepthInCube(poly: Polytope, s: number, nodes: readonly ChainNode[], R: number[], u: V3): number {
+/**
+ * Depth of the segment a + t (b - a), t in [t0, t1], inside the Platonic solid `shape` with pose (R, u): the maximum over t of
+ * min over faces k of (r - n_k . p(t)), p = R^T (x(t) - u), r the inradius. The function is concave piecewise linear in t:
+ * its maximum is at an end or where an increasing face function crosses a decreasing one.
+ */
+function segmentDepthInShape(shape: PieceShape, R: number[], u: V3, a: V3, b: V3, t0: number, t1: number): number {
+  const T = { m: R, t: [0, 0, 0] as V3 };
+  const A = isoLinearT(T, sub3(a, u));
+  const B = isoLinearT(T, sub3(b, a));
+  const F = shape.normals.length;
+  const ca = new Float64Array(F);
+  const cb = new Float64Array(F);
+  for (let k = 0; k < F; k++) {
+    const n = shape.normals[k];
+    ca[k] = n[0] * A[0] + n[1] * A[1] + n[2] * A[2];
+    cb[k] = n[0] * B[0] + n[1] * B[1] + n[2] * B[2];
+  }
+  const r = shape.inradius;
+  // depth at t: r - max_k (ca + t cb)
+  const g = (t: number) => {
+    let m = -Infinity;
+    for (let k = 0; k < F; k++) {
+      const x = ca[k] + t * cb[k];
+      if (x > m) m = x;
+    }
+    return r - m;
+  };
+  let best = Math.max(g(t0), g(t1));
+  for (let i = 0; i < F; i++) {
+    if (!(cb[i] > 0)) continue;
+    for (let j = 0; j < F; j++) {
+      if (!(cb[j] < 0)) continue;
+      // face i's value rises with t, face j's falls: the max over faces is lowest where they cross
+      const t = (ca[j] - ca[i]) / (cb[i] - cb[j]);
+      if (t >= t0 && t <= t1) best = Math.max(best, g(t));
+    }
+  }
+  return best;
+}
+
+/** Largest depth of a hinge point inside a piece, over the chains given (hinges clipped to each window). */
+function hingeDepthInCube(poly: Polytope, s: number, nodes: readonly ChainNode[], R: number[], u: V3, shape: PieceShape = pieceShape("cube")): number {
   const T = topo(poly);
   let worst = -Infinity;
   for (const node of nodes) {
@@ -241,7 +297,7 @@ function hingeDepthInCube(poly: Polytope, s: number, nodes: readonly ChainNode[]
     for (const [i, j] of poly.cells[node.cell].hinges) {
       const iv = clipSegmentToWindow(node.window, u, V[i], V[j]);
       if (!iv) continue;
-      worst = Math.max(worst, segmentDepthInCube(R, u, V[i], V[j], iv[0], iv[1]));
+      worst = Math.max(worst, shape.name === "cube" ? segmentDepthInCube(R, u, V[i], V[j], iv[0], iv[1]) : segmentDepthInShape(shape, R, u, V[i], V[j], iv[0], iv[1]));
     }
   }
   return worst;
@@ -387,7 +443,23 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
   return reasons;
 }
 
-function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number): string[] {
+/** True when the unit quaternion turns a cube onto itself: its matrix is a signed permutation matrix to within 1e-9 (the unit-length tolerance). */
+function mapsCubeOntoItself(q: readonly number[]): boolean {
+  return quaternionToMatrix(q).every((x) => Math.min(Math.abs(x), Math.abs(Math.abs(x) - 1)) <= 1e-9);
+}
+
+/**
+ * Tests of pairs of parts one check may run before it is refused. One separating-axis test costs 0.4 us (tetrahedra) to 8.8 us (icosahedra), so 20,000
+ * tests take at most 0.18 s. Real layouts need 0 to 12 (the densest valid packings; the cell tilings need none) and pieces that pass the edge tests have
+ * at most 193 chains, so the cap refuses nothing real; it fails closed with a reason.
+ */
+export const MAX_PAIR_TESTS = 20000;
+
+/** The rule for rotated polytope pieces (the cube included; on the tesseract the cube problems use it for their axis-aligned cubes). */
+function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number, maxPairs = MAX_PAIR_TESTS): string[] {
+  const shape = pieceShape(piece as PolytopePieceName);
+  const one = capital(piece);
+  const many = capital(plural(piece));
   const reasons: string[] = [];
   const push = (r: string) => {
     if (reasons.length < maxReasons) reasons.push(r);
@@ -397,29 +469,30 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
   // in-cell hinge test first: the anchor's own edges against the cube
   pieces.forEach((p, i) => {
     const root: ChainNode = { cell: p.cell, toAnchor: { m: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] }, window: [], gate: [], gateDist: 0, entry: -1, parent: -1, depth: 0, cells: [p.cell], runEdge: -1, runAngle: 0 };
-    const depth = hingeDepthInCube(poly, s, [root], rot[i], [p.u[0], p.u[1], p.u[2]]);
-    if (!(depth <= tol)) push(`Cube ${i} has an edge of the ${name} passing through its interior (depth ${fmt(depth)}).`);
+    const depth = hingeDepthInCube(poly, s, [root], rot[i], [p.u[0], p.u[1], p.u[2]], shape);
+    if (!(depth <= tol)) push(`${one} ${i} has an edge of the ${name} passing through its interior (depth ${fmt(depth)}).`);
   });
   if (reasons.length) return reasons;
   const shapes: { piece: number; cell: number; sat: SatShape; mu: number }[][] = poly.cells.map(() => []);
   const snap = ridgeSnap(s, tol);
   for (let i = 0; i < pieces.length; i++) {
     if (reasons.length >= maxReasons) return reasons;
-    const dev = develop(poly, "cube", pieces[i], s, pieceReach("cube"), maxChains, snap, i, reasons);
+    const dev = develop(poly, piece, pieces[i], s, pieceReach(piece), maxChains, snap, i, reasons);
     if (!dev) return reasons;
-    const depth = hingeDepthInCube(poly, s, dev.nodes, rot[i], dev.u);
-    if (!(depth <= allowed(tol, dev.snapped))) push(`Cube ${i} has an edge of the ${name} passing through its interior beyond its anchor cell (depth ${fmt(depth)}).`);
-    for (const x of partsOfDevelopment(poly, "cube", i, dev, s)) {
+    const depth = hingeDepthInCube(poly, s, dev.nodes, rot[i], dev.u, shape);
+    if (!(depth <= allowed(tol, dev.snapped))) push(`${one} ${i} has an edge of the ${name} passing through its interior beyond its anchor cell (depth ${fmt(depth)}).`);
+    for (const x of partsOfDevelopment(poly, piece, i, dev, s)) {
       const P = x.poly!;
       if (polyhedronThickness(P) <= PART_EPS) continue;
       shapes[x.part.cell].push({ piece: i, cell: x.part.cell, sat: satShape(P), mu: dev.snapped });
     }
   }
   if (reasons.length) return reasons;
-  // Pairs: a uniform grid of side G = 2 per cell, keyed by the low corner of each part's bounding
-  // box. A part's extent is at most the cube's diameter sqrt 3 < G, so two parts whose boxes
+  // Pairs: a uniform grid of side G per cell (2, or the piece's diameter when that is larger), keyed by the low corner of each part's
+  // bounding box. A part's extent is at most the piece's diameter (the cube's sqrt 3 < 2) <= G, so two parts whose boxes
   // overlap have low corners within G of each other on every axis: neighbouring grid cells only.
-  const G = 2;
+  const G = Math.max(2, 2 * shape.circumradius + 1e-9);
+  let pairs = 0;
   const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
   shapes.forEach((list, cell) => {
     if (reasons.length >= maxReasons) return;
@@ -446,13 +519,18 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
               if (!(Math.min(A.sat.hi[0], B.sat.hi[0]) - Math.max(A.sat.lo[0], B.sat.lo[0]) > thr)) continue;
               if (!(Math.min(A.sat.hi[1], B.sat.hi[1]) - Math.max(A.sat.lo[1], B.sat.lo[1]) > thr)) continue;
               if (!(Math.min(A.sat.hi[2], B.sat.hi[2]) - Math.max(A.sat.lo[2], B.sat.lo[2]) > thr)) continue;
+              // the work cap: a check that needs more separating-axis tests than this is refused, never accepted
+              if (++pairs > maxPairs) {
+                push(`The check needs more than ${maxPairs} tests of pairs of parts; the configuration is too crowded for the server to check.`);
+                return reasons;
+              }
               // stops early once an axis shows an overlap <= thr; otherwise it is the full penetration depth
               const depth = satDepth(A.sat, B.sat, thr);
               if (depth <= thr) continue;
-              if (A.piece === B.piece) push(`Cube ${A.piece} overlaps itself in cell ${cell} (depth ${fmt(depth)}).`);
+              if (A.piece === B.piece) push(`${one} ${A.piece} overlaps itself in cell ${cell} (depth ${fmt(depth)}).`);
               else {
                 const [i, j] = A.piece < B.piece ? [A.piece, B.piece] : [B.piece, A.piece];
-                push(`Cubes ${i} and ${j} overlap in cell ${cell} (depth ${fmt(depth)}).`);
+                push(`${many} ${i} and ${j} overlap in cell ${cell} (depth ${fmt(depth)}).`);
               }
             }
     }
@@ -466,8 +544,13 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
  */
 export function validateBoundary(problem: BoundaryProblem, config: unknown, opts: ValidateOptions = {}): BoundaryVerdict {
   // the d-cubes (d = 5..10) have their own validator, with the same rule (ncube/validate.ts)
-  if (problem && isNCubeName(problem.polytope)) return validateNCube({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, config, opts);
-  if (problem && isNDName(problem.polytope)) return validateND({ polytope: problem.polytope, piece: "ball", P: problem.P }, config, opts);
+  if (problem && isNCubeName(problem.polytope)) {
+    // the d-cubes take balls and axis-aligned cubes only
+    if (problem.piece !== "ball" && problem.piece !== "cube") return { ok: false, score: null, reasons: [`The ${problem.polytope} takes balls and cubes only, not "${String(problem.piece)}".`] };
+    return validateNCube({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, config, opts);
+  }
+  // the simplex, orthoplex and demicube take balls only (validateND refuses any other piece in its own words)
+  if (problem && isNDName(problem.polytope)) return validateND({ polytope: problem.polytope, piece: problem.piece as "ball", P: problem.P }, config, opts);
   return run(problem, config, opts);
 }
 
@@ -489,20 +572,20 @@ function run(problem: BoundaryProblem, config: unknown, opts: ValidateOptions, g
   const mc = opts.maxChains ?? 4096;
   const maxChains = mc >= 1 ? Math.floor(mc) : 1;
   const reasons: string[] = [];
-  const shape = checkShape(problem, config, tol, reasons, maxReasons, given);
+  const shape = checkShape(problem, config, tol, reasons, maxReasons, given, opts.turnedCubes === true);
   if (!shape) return { ok: false, score: null, reasons: reasons.length ? reasons : ["The configuration is malformed."] };
   const { poly, s, pieces } = shape;
   // Volume bound [CALC]: developments are injective on interiors and interiors are disjoint, so
   // the pieces' volumes add up to at most the boundary's (the relative margin 1e-6 absorbs
   // overlaps within tol). Cheap, and it keeps huge P at small s away from the chain stage.
-  const pieceVolume = problem.piece === "ball" ? (4 * Math.PI * BALL_RADIUS ** 3) / 3 : 1;
+  const pieceVolume = problem.piece === "ball" ? (4 * Math.PI * BALL_RADIUS ** 3) / 3 : pieceShape(problem.piece).volume;
   const volume = boundaryVolume(poly) * s ** 3;
   if (!(pieces.length * pieceVolume <= volume * (1 + 1e-6)))
     return {
       ok: false,
       score: null,
-      reasons: [`${pieces.length} ${problem.piece}s have a total volume of ${fmt(pieces.length * pieceVolume)}, more than the ${fmt(volume)} of the ${poly.name}'s boundary at s = ${fmt(s)}.`],
+      reasons: [`${pieces.length} ${plural(problem.piece)} have a total volume of ${fmt(pieces.length * pieceVolume)}, more than the ${fmt(volume)} of the ${poly.name}'s boundary at s = ${fmt(s)}.`],
     };
-  const geo = problem.piece === "ball" ? validateBallsSite(poly, s, pieces, tol, maxChains, maxReasons) : validateCubes(poly, s, pieces, tol, maxChains, maxReasons);
+  const geo = problem.piece === "ball" ? validateBallsSite(poly, s, pieces, tol, maxChains, maxReasons) : validatePieces(poly, problem.piece, s, pieces, tol, maxChains, maxReasons, opts.maxPairs);
   return geo.length ? { ok: false, score: null, reasons: geo } : { ok: true, score: s, reasons: [] };
 }

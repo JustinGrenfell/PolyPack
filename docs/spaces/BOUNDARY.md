@@ -1,19 +1,19 @@
-# 3D on 4D, polytope boundaries: balls (diameter 1) and cubes on the boundary of a regular 4-polytope
+# 3D on 4D, polytope boundaries: balls (diameter 1), cubes and the other Platonic solids on the boundary of a regular 4-polytope
 
 **Dimension.** Under Dimensions this is **3D on 4D**: solid 3D pieces packed on the 3-dimensional
 boundary of a 4D polytope, with no container around them. Problem ids and records use the space
 name `boundary`.
 
 P balls of diameter 1 (radius 1/2) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
-edge s. Since 2026-11-01 balls can also be packed on the boundary of the other five regular
+edge s. Since 2026-11-02 the other four Platonic solids of edge 1 (tetrahedron, octahedron, dodecahedron, icosahedron), freely rotated, can be packed there too, and all five on each of the other five 4-polytopes (section 4C: on the tesseract the cube stays the axis-aligned one of section 4.3, everywhere else it is a rotated cube). Since 2026-11-01 balls can also be packed on the boundary of the other five regular
 4-polytopes, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell (section 4A). Also since 2026-11-01 balls and
 axis-aligned cubes (of dimension d - 1) can be packed on the boundary of the d-cube, d = 5 to 10 (4D on 5D to 9D on 10D, section 4B), and, since 2026-11-02, balls on the boundary of the d-simplex, d-orthoplex and d-demicube for the same d (section 4D). The score is the smallest s,
 the polytope's edge. Since 2026-10-27 balls have diameter 1; before, radius 1, and every ball score was twice as large (cube scores are unchanged). The sections below are stated in the site's units; the certifier and the ball code may work in radius-1 units internally (a factor of 2, exact) and convert at their edges. Every record is certified by an exact checker
 (`python/boundary/certify.py`, exact arithmetic only), so its validity is proven, not just
 tested. Records: `data/boundary/records.json`, from the PolyPack research prototype (2026-10-24),
-the PolyPack boundary search (2026-10-25) and exact constructions (section 4.6). They are the tesseract's. The five other containers have
-problems and lower bounds but no records (section 4A.7); their test packings are certified by the
-general exact certifier (`python/boundary/general.py`, section 4A).
+the PolyPack boundary search (2026-10-25) and exact constructions (section 4.6). They are the tesseract's. The five other containers, and the Platonic solids other than the aligned cube, have
+problems and lower bounds but no records (sections 4A.7 and 4C.6); their test packings are certified by the
+general exact certifiers (`python/boundary/general.py`, section 4A; `python/boundary/platonic.py`, section 4C).
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -32,7 +32,7 @@ cell, lying flat across it like a ribbon laid over the edge of a box. No edge or
 tesseract may pass through its interior. Pieces may touch but not overlap. The task: find the
 smallest tesseract that holds P pieces.
 
-There are 32 problems: P = 1..16 for balls and for cubes.
+There are 32 problems with records: P = 1..16 for balls and for cubes. Since 2026-11-01 the other containers have problems too (sections 4A and 4C): 816 on the six regular 4-polytopes in all.
 
 ## 2. Conventions
 
@@ -283,7 +283,7 @@ exact versions, P + 1 minus a piece, and the research note's constructions) with
 
 Added 2026-11-01. The engine is general over convex 4-polytopes, so the same rule (sections 2 and 3) holds on the other five regular 4-polytopes.
 Only the tesseract's lattice words (4.1) are specific to it; for the others the developments are found by chains of cells, and the
-exact certifier is `python/boundary/general.py`. Only balls are covered here (4A.8 says what the Platonic pieces need).
+exact certifier is `python/boundary/general.py`. Only balls are covered here (the Platonic pieces are section 4C).
 
 ### 4A.1 The containers
 
@@ -314,7 +314,7 @@ should behave like nofold packings until P is large].
   at its centre, its frame the standard basis projected on its hyperplane and orthonormalised in order, the gluing across a ridge the rotation of
   R^4 in the plane of the two normals that fixes the ridge. `buildPolytope` builds all six (the 120-cell, with 600 vertices, in about 0.4 s).
 - **Ids**: `boundary/<polytope>/ball/<P>` with polytope `5cell`, `16cell`, `24cell`, `120cell` or `600cell`, P = 1 to 24 (the tesseract keeps
-  its 32 problems, P = 1 to 16, ball and cube). A cube on any of the five is not a problem. 152 problems in all.
+  its 32 problems, P = 1 to 16, ball and cube). The Platonic solids, a cube included, are section 4C (on these five the id `cube` is a rotated cube). 152 problems with balls and the tesseract's cubes; 816 with the solids.
 
 ### 4A.2 Chains, windows and completeness
 
@@ -452,7 +452,7 @@ They are not optimal, and nothing about optimality is claimed [SPEC].
 
 ### 4A.6 The problems, the server and the kernel
 
-- **Problems.** 152 in all: the tesseract's 32 (P = 1 to 16, ball and cube), and balls on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24 each
+- **Problems.** 152 in all (664 more with the Platonic solids, 4C.1): the tesseract's 32 (P = 1 to 16, ball and cube), and balls on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24 each
   (120). A smaller range for a container was not needed: the 24-ball problem is the most expensive to check (about 0.3 s on the 120-cell),
   and the range follows the research note's proposal (P = 1 to 24). The 120 new problems have no research record (status `no_record`): the first valid entry is kept, and an
   entry on a problem without a record must be valid at the strict tolerance 1e-11 (section 12).
@@ -507,20 +507,9 @@ random sequential layout drawn in by the engine's `finish` until the balls touch
 
 ### 4A.8 Limitations
 
-- **Platonic pieces are not built** (the tetrahedron, cube, octahedron, dodecahedron and icosahedron, rotated, on the six containers). What
-  remains, in the order it would be done: (1) the float validator's parts for these shapes (`parts.ts` knows the unit cube only; the clipping
-  and the separating-axis code of `polyhedron.ts` are general, and `validateCubes` would become a validator of polytope pieces, with the hinge
-  depth inside a piece taken over its faces instead of a cube's axes); (2) a penalty model for rotated polytope pieces in the search and the
-  kernel (today's cube model, `search/cubes.ts`, is axis-aligned: the state needs a rotation per piece carried across ridges by the gluings'
-  linear parts, the energy is the separating-axis depth of the pieces' parts in each cell, and the kernel's `dim` becomes 6 with a `swap`
-  for equal pieces); (3) the exact certifier's polytope-part test: the piece, turned by an exact rational rotation (a rational quaternion gives
-  one), intersected with each developed cell and window, and the parts of different pieces, and of one piece, compared in each cell by an exact
-  separating-axis test, with the hinges outside the piece's interior; (4) the field: in base units a piece has edge lambda = e0 / s times the
-  unit-edge solid's coordinates, which involve sqrt 2 (tetrahedron, octahedron) or sqrt 5 (dodecahedron, icosahedron); with e0 = sqrt 2
-  (5-cell, 16-cell, 24-cell) the tetrahedron and octahedron come out rational and the other three in Q(sqrt 2) or Q(sqrt 2, sqrt 5), and
-  on the 120-cell and 600-cell the tetrahedron and octahedron need Q(sqrt 2, sqrt 5), a field of degree 4; (5) test packings of each piece on
-  each container: the cells themselves (P = C pieces at s = 1 for the tetrahedra of the 5-cell and the dodecahedra of the 120-cell, the
-  tesseract's cubes) are exact ones. Nothing of this is in the code.
+- **Platonic pieces** (the tetrahedron, cube, octahedron, dodecahedron and icosahedron, rotated, on the six containers) were not built when 4A was written; they are section 4C. Its plan for them, in order, and where each
+  part is: (1) the float validator's parts for these shapes: `validate.ts` `validatePieces`, `parts.ts`, `pieces.ts`; (2) a penalty model for rotated pieces in the search and the kernel: `search/solids.ts`, `kernel-solids.ts`
+  (dim 6, with a swap); (3) the exact certifier's polytope-part test: `platonic.py`; (4) the field: `qmulti.py` (degree 4 only for some pieces: 4C.3); (5) test packings: 4C.6.
 - The vertex rule (section 3) is argued, not proved, on every container.
 - The ball centre is read through float frames (4A.3): the certified configuration is within 3.4e-16 s (5-, 16-, 24-cell) or 2.9e-15 s (120-, 600-cell) of the one the engine sees; the strict test keeps a slack of 1e-13 s to 2e-13 s for it (4A.3).
 - The 120-cell and 600-cell are nearly flat. Their problems are open, and their bounds are those of 4A.4; nothing is known about their optimal packings.
@@ -667,6 +656,194 @@ For example P = 160 cubes on the 5-cube: exactly 2 (the tiling), and one ball: 0
 - **The vertex rule** (section 3) is argued, not proved, in every d.
 - Not covered here: the simplex, orthoplex and demicube boundaries for d >= 5, whose dihedral angles are not right angles. Balls on them are section 4D (2026-11-02); polytope pieces on them are not built.
 
+
+## 4C. Platonic solids on the regular 4-polytopes
+
+Added 2026-11-02. Pieces other than balls: the tetrahedron, cube, octahedron, dodecahedron and icosahedron of **edge 1**, freely rotated, on the
+boundary of the tesseract, 5-cell, 16-cell, 24-cell, 120-cell and 600-cell (4A.1). Same score (the container's edge s), same gluing,
+same rule (sections 2 and 3: no edge of the polytope inside a developed piece, the pieces' interiors pairwise disjoint, a piece not overlapping
+itself), same tolerances as the balls and the aligned cubes. This section adds what the solids need: their coordinates, the validator's parts, the
+exact certifier (a field of degree 4, an exact rotation), the lower bounds, the search with rotations and the test packings.
+
+### 4C.1 The pieces, the ids, the problems
+
+- **Standard solids** (`packages/boundary/src/pieces.ts`; `python/boundary/platonic.py` repeats them exactly), unit edge, centred at the origin, phi = (1 + sqrt 5) / 2:
+  the tetrahedron (1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1) / (2 sqrt 2); the cube (+-1/2)^3; the octahedron +-e_k / sqrt 2; the dodecahedron (+-phi/2)^3 and the
+  cyclic shifts of (0, +-1/2, +-phi^2/2); the icosahedron the cyclic shifts of (0, +-1/2, +-phi/2). Every Platonic solid is mirror-symmetric, so a
+  rotation is all a piece needs (an improper orientation, which a gluing that reverses handedness produces, is the same piece turned by the solid's mirror,
+  `PieceShape.mirror`).
+- **Pose.** `{cell, u, q}` as for the cubes (section 2): q is the unit quaternion (w, x, y, z) that rotates the standard solid about its centre in the anchor's
+  local frame; absent means no rotation. The circumradius (0.612, 0.866, 0.707, 1.401, 0.951 for the five) is how far a piece reaches from its centre.
+- **Ids.** `boundary/<container>/<piece>/<P>` with piece `tetrahedron`, `cube`, `octahedron`, `dodecahedron` or `icosahedron`. **The id `cube` on the 5-cell, 16-cell, 24-cell,
+  120-cell and 600-cell is a freely rotated cube; on the tesseract it is the axis-aligned cube of section 4.3, with its records, rules and ids unchanged: the server accepts a `q` there only when it is absent or one of the cube's 24 symmetry rotations (the rotation matrix a signed permutation to 1e-9), and refuses a turned cube with that reason. No stored entry was affected (the 16 tesseract cube problems had no site entries and no record or fixture carries a `q`).**
+  The tesseract takes the four other solids freely rotated. The d-cubes (4B) take balls and aligned cubes only.
+- **P** = 1 to 24 on the five general containers, 1 to 16 on the tesseract, as for their balls.
+- **Problems.** 664 more than before: the tesseract's four solids (4 x 16 = 64) and five solids on each of the five others (5 x 5 x 24 = 600); 816 on the 4-polytopes in all (152 + 664),
+  none with a research record (status `no_record`). A first entry on such a problem must pass the strict tolerance 1e-11 of section 12.
+
+### 4C.2 The float validator
+
+`validateBoundary` (`packages/boundary/src/validate.ts`) is the cube validator made general. A solid X with pose (u, R) is developed from its centre exactly as a cube: the chains of cells
+within its circumradius are enumerated (chains.ts), and for each chain C ending in cell c the part of X in c is X cut by c's facets and by C's window, mapped
+into c's frame (`partPolyhedron` clips the solid's faces; the piece's face normals are carried through the placement, so a reversed handedness stays outward). The checks:
+
+1. **Edges of the polytope.** Every hinge of every chain's cell, clipped to the closed window, against the interior of the solid: the depth of a point x in the solid is the least over the
+   faces of (inradius - n_k . (R^T (x - u))), concave and piecewise linear along a segment, so its maximum is at an end or where a rising face function crosses a falling one
+   (`segmentDepthInShape`); the cube keeps its closed form. A depth above the tolerance rejects.
+2. **Parts.** In every cell all parts, those of one piece included, have disjoint interiors: a uniform grid of side max(2, diameter) per cell bins the parts' bounding boxes, and two
+   parts whose boxes overlap by more than the tolerance get the separating-axis test on their face normals and edge-edge axes (`satDepth`); its depth is the penetration.
+3. **The volume bound** first: P V_piece <= V_boundary s^3 (1 + 1e-6), then the in-cell edge tests, so that a container far too small for its pieces fails before any chain is enumerated.
+
+*Work caps (fail closed).* At most 1024 chains per piece on the server (4096 for the library), a configuration that reaches it is rejected with "reaches more than N chains of cells; the
+polytope is far too small for its pieces"; at most 20,000 tests of pairs of parts (`maxPairs`, `MAX_PAIR_TESTS`; a test takes 0.4 to 8.8 us, so at most 0.18 s; real layouts need 0 to 12), a configuration that needs more is rejected with the reason "more than N tests of pairs of parts; the
+configuration is too crowded for the server to check". A cap never turns a failure into a pass.
+
+*Measured times* [CALC, 2026-11-02, Apple Silicon, one core, tolerance 1e-9, 1024 chains]: one solid alone at 1.02 to 4 times its smallest edge in 12 random orientations, at most 2.2 ms
+(single outliers of 6 ms on the tesseract and 3.8 ms on the 120-cell); a loose random layout of P = 24 (16 on the tesseract) 1.4 to 25 ms; the cells themselves, every solid touching its
+neighbours, 3.8 ms a piece on the 5-cell, 2.8 on the 16-cell, 2.3 on the 24-cell, 4.4 on the 120-cell (120 dodecahedra, 0.53 s) and 1.2 on the 600-cell (600 tetrahedra, 0.73 s).
+**Heavy rule.** The server prices a solid at `BOUNDARY_SOLID_MS` per piece: 4 ms on the tesseract, 6 on the 5-cell, 5 on the 16-cell, 4 on the 24-cell, 11 on the 120-cell and 2 on the 600-cell (the aligned cubes keep
+0.3 and the balls their own), and a check estimated at 50 ms or more waits in the heavy queue: solids from P = 13 on the tesseract, 9 on the 5-cell, 10 on the 16-cell, 13 on the 24-cell, 5 on the 120-cell, never on the
+600-cell (24 x 2 ms). Each figure is 1.5 times the worst warm measurement, rounded up. The worst is the cells tiling the container for the 5-, 16-, 24- and 600-cell (3.8, 2.8, 2.3, 1.2 ms a piece) and, for the 120-cell, a pose that passes the in-cell edge
+tests with 193 chains, copied P times: icosahedra 6.8 ms a piece (162 ms for 24 pieces, 61 ms for 9; [CALC] 2026-11-02, a loaded machine, median of 5), the other solids at most 3 ms; on the 24-cell
+the icosahedra took 1.4 ms and the tetrahedra 1.3 ms a piece, on the tesseract 1.3 ms, on the 600-cell 0.9 ms. An earlier figure of 5 ms on the 120-cell was 30% short of the icosahedra.
+
+### 4C.3 The exact certifier
+
+`python/boundary/platonic.py` (called by `certify.py` for these problems through the same entry point; `check_pieces`) reuses `general.py`'s container, charts, gluings and chain enumerator unchanged
+and adds `python/boundary/qmulti.py`, exact arithmetic in Q(sqrt 2, sqrt 5) (elements (n0 + n1 sqrt 2 + n2 sqrt 5 + n3 sqrt 10) / d in integers; signs decided exactly, with a rigorous float
+fast path; `Q5` accepts it in mixed arithmetic). It shares no code with the TypeScript engine.
+
+*The field.* A piece's vertex is x + sum_k (kappa / s) (R v)_k f_k (R an exact rational rotation, v the standard vertex, f_k three mutually orthogonal vectors of equal squared length m
+of the cell's hyperplane, built from the cell's own vertices: the tetrahedron's circumscribed-cube axes, the octahedron's diameters, the cube's edges, the dodecahedron's inscribed-cube edges), where kappa = e0 / sqrt m
+is 1/sqrt 2 (tetrahedral and octahedral cells), 1 (cubes) or 1/phi (dodecahedra) and e0 the base polytope's edge (`cell_frame` checks kappa^2 m = e0^2 in the field). The coefficients' field,
+and so the pieces' field beyond the container's own (Q for the tesseract, 5-cell, 16-cell, 24-cell; Q(sqrt 5) for the 120-cell and 600-cell):
+
+| | tetrahedron | cube | octahedron | dodecahedron | icosahedron |
+|---|---|---|---|---|---|
+| tesseract | Q(sqrt 2) | (aligned: 4.3) | Q(sqrt 2) | Q(sqrt 5) | Q(sqrt 5) |
+| 5-, 16-, 24-cell | Q | Q(sqrt 2) | Q | Q(sqrt 2, sqrt 5) | Q(sqrt 2, sqrt 5) |
+| 120-cell | Q(sqrt 2, sqrt 5) | Q(sqrt 5) | Q(sqrt 2, sqrt 5) | Q(sqrt 5) | Q(sqrt 5) |
+| 600-cell | Q(sqrt 5) | Q(sqrt 2, sqrt 5) | Q(sqrt 5) | Q(sqrt 2, sqrt 5) | Q(sqrt 2, sqrt 5) |
+
+The cells' own frames matter. The plan of 4A.8 (written before this) took the tetrahedron and octahedron to need the degree-4 field on both the 120-cell and the 600-cell. It holds for the 120-cell (the frame of a
+dodecahedral cell has squared length phi^2 e0^2, so 1/sqrt 2 stays in the coefficients). The 600-cell's tetrahedral cells have the circumscribed-cube frame of squared length 2 e0^2, and kappa = 1/sqrt 2 cancels the 1/(2 sqrt 2) of the
+tetrahedron's and the 1/sqrt 2 of the octahedron's coordinates: Q(sqrt 5) there, and Q on the 5-cell, 16-cell and 24-cell. [CALC: `Frames` in `test_platonic.py` checks every frame exactly; the table is read off the vertices.]
+
+*Reading a configuration* (the engine's floats). The centre is read as in 4A.3 (dyadic weights of four vertices, an exact point of the cell's hyperplane, moved onto the facet planes it exceeds by less than
+1e-12 of an edge). The rotation: the engine's frame F_e and the exact frame F_x (scaled to unit length, in the engine's float coordinates by the affine map that takes the cell's exact vertices to the engine's
+unit-edge vertices) span the same 3-space, so the engine's rotation in the exact frame is O R_e, O = F_x^T F_e, R_e the matrix of the normalised float quaternion; if det O < 0 the third exact frame vector changes sign.
+That float matrix becomes a quaternion, rounded to the grid 2^-60, and the exact rational rotation of that rational quaternion (entries rational, exactly orthogonal, determinant 1) is the pose's. A centre that lies on
+a ridge is developed from every closed cell that contains it (the runs' parts are compared together), as for the balls.
+
+*Discrepancy and slack.* [CALC, measured, not proven] The distance between a vertex of the exact pose and the engine's own float computation of it has a constant part and a part proportional to s. The constant part
+is the rotation's rounding times the solid's circumradius, about 1.4e-15 in all (it dominates at small s: up to 9.5e-15 s at s = 0.15). The proportional part reached 2.74e-15 s over 540 random poses at s = 0.6 to 5
+and the 12 test packings, and 4.8e-15 s at s = 101 on the 120-cell and 4.3e-15 s on the 600-cell (3,000 random poses each); the largest ratio to s seen anywhere was 9.5e-15, at s of 7 or less on the 600-cell's dodecahedron.
+For balls 4A.3 found 2.9e-15 s. Strict validity is decided on the pieces **inflated about their centres by the factor 1 + EPS_STRICT, EPS_STRICT = 2^-40 = 9.1e-13**: if the inflated solids are valid
+(interiors disjoint, no edge through an interior, embedded), the closed solids are strictly valid, each at distance at least EPS_STRICT times its inradius (the room) from the others and from every edge, which is
+1.9e-13 for the tetrahedron (the smallest). A strict check is held to two limits: (1) it is refused (with that reason, never accepted) when s READING_BOUND > EPS_STRICT r_in, READING_BOUND = 3e-14, three times the
+largest ratio measured: s above 6.2 for the tetrahedron, 12 for the octahedron, 15 for the cube, 23 for the icosahedron, 34 for the dodecahedron; below the cut the measured reading used at most 0.10 of the room
+(random poses in every cell of every container, s up to the cut); (2) for the configuration in hand, `reading_discrepancy` (the exact pose against the engine's float vertices, mirroring the engine's steps, times s) is
+computed, and the check is refused with a reason when it exceeds READING_SHARE = 1/2 of the room. The claim "strictly valid binds the configuration as the engine reads it" therefore rests on a per-configuration
+measurement with a factor 2 in hand, not on the bound alone. The reach of the chain enumeration is the inflated circumradius.
+
+*Decisions* (exact): the lower bounds first (4C.4; strict: s equal to the bound is invalid); the centre in its closed cell; then for each piece and run the chains within the circumradius (at most 40,000 per piece and run,
+refused with a reason beyond), and in each node (1) every hinge of the node's cell clipped to the closed window against the open interior of the piece (an interval test per face), (2) the part: the piece's vertices
+in the cell's own chart, clipped one plane at a time by the cell's facets and the window's planes (exactly, each vertex keeping the bitmask of the planes it lies on, so the part's edges are known without ordering
+anything; parts without interior are dropped), and (3) in every cell every two parts of different (piece, run, chain), parts of one piece included, interior-disjoint: the bounding boxes first (rigorous floats, margin 1e-7),
+then the separating-axis test, a pair being accepted **only with an exact separating plane** among the face normals of either and the cross products of an edge of each (candidates ordered by their float gap, the
+first 12 face and 40 edge candidates verified exactly). A pair without a verified plane is reported as overlapping, so an unexpected case is refused, never accepted.
+
+*Cost* [CALC, Apple Silicon, a loaded machine]: certifying 2 or 3 solids takes 0.1 to 2.6 s (2.6 s for 2 dodecahedra on the 120-cell); the 5 tetrahedra of the 5-cell 0.8 s, the 16 of the 16-cell 2.6 s, the 24 octahedra of the 24-cell 3.3 s, 24 tetrahedra of the 600-cell 4.8 s, 24 dodecahedra of the 120-cell 25 s.
+
+### 4C.4 Lower bounds
+
+Both bounds of section 5 hold for solids [CALC]; stored as binary64 rounded down by a relative 1e-15 (`pieceBounds`, `packages/boundary/src/bounds.ts`), checked exactly by `platonic.exact_bounds`
+(enclosures of sqrt 2 and sqrt 5 to 45 digits; `Bounds` in `test_platonic.py` checks all 664 stored values: each not above the exact bound and within 1e-12 of it).
+
+- **Volume.** The developed solids have disjoint interiors and the developments are injective, so P V_piece <= V s^3, V the volume of the boundary at unit edge (4A.4). V_piece = sqrt 2 / 12 (tetrahedron), 1 (cube),
+  sqrt 2 / 3 (octahedron), (15 + 7 sqrt 5) / 4 (dodecahedron), 5 (3 + sqrt 5) / 12 (icosahedron).
+- **One piece.** The solid contains the open ball of its inradius r about its centre (r = sqrt 6 / 12, 1/2, sqrt 6 / 6, sqrt (250 + 110 sqrt 5) / 20, phi^2 / (2 sqrt 3)), and the development of that ball is part of the solid's: it is injective and
+  contains no point of an edge. By 4.2 the centre has clearance at least r from the edges; but every point of a cell lies within s rho of the cell's edges, rho the cell's midradius (4A.4). So s >= r / rho. For the cube
+  on a container other than the tesseract this is the ball bound of 4A.4 (r = 1/2).
+
+One-piece bound / volume bound at P = 24 (16 on the tesseract), 6 decimals; the larger is the stored bound:
+
+| container | tetrahedron | cube | octahedron | dodecahedron | icosahedron |
+|---|---|---|---|---|---|
+| tesseract | 0.288675 / 0.617715 | 0.707107 / 1.000000 (aligned, 4.3) | 0.577350 / 0.980561 | 1.574750 / 2.483963 | 1.068808 / 1.634085 |
+| 5-cell | 0.577350 / 1.686865 | 1.414214 / 3.440613 | 1.154701 / 2.677732 | 3.149500 / 6.783248 | 2.137616 / 4.462386 |
+| 16-cell | 0.577350 / 1.144714 | 1.414214 / 2.334815 | 1.154701 / 1.817121 | 3.149500 / 4.603142 | 2.137616 / 3.028195 |
+| 24-cell | 0.408248 / 0.629961 | 1.000000 / 1.284898 | 0.816497 / 1.000000 | 2.227033 / 2.533207 | 1.511523 / 1.666480 |
+| 120-cell | 0.155937 / 0.145430 | 0.381966 / 0.296625 | 0.311874 / 0.230855 | 0.850651 / 0.584804 | 0.577350 / 0.384715 |
+| 600-cell | 0.577350 / 0.341995 | 1.414214 / 0.697550 | 1.154701 / 0.542884 | 3.149500 / 1.375236 | 2.137616 / 0.904705 |
+
+*Where a bound is met* [CALC]: the 5 tetrahedra of the 5-cell, the 16 of the 16-cell, the 24 octahedra of the 24-cell and (as a subset of the cells) any number of dodecahedra of the 120-cell and tetrahedra of the
+600-cell fill their cells at s = 1; for P = 5, 16 and 24 the volume bound is exactly 1 on the first three, so those packings are optimal by our own derivation [CALC]. PolyPack calls a value proven only with a
+published proof (section 5), so they stay unrecorded here: these problems have no records at all. Beyond them nothing is known about optimality [SPEC].
+
+### 4C.5 Checks around the certifier
+
+- **Engine against certifier** (`fixtures/platonic_crosscheck.json`, `gen-platonic-crosscheck.ts`): for every container and solid (29 pairs), two solids at random cells and turns, a third of them with a centre on a ridge, a
+  second family at the centres of two adjacent cells; the engine's validator finds the critical scale k* of the whole configuration (bisection on validity, monotone in the scale), and the configuration is emitted at k* (1 +- d), d = 1e-5
+  everywhere and 1e-9 for the tolerance-0 entries of every fourth pair. 58 entries, 136 configurations: 11 entries (22 configurations) with a centre on a ridge, 29 entries (58 configurations) at adjacent centres; the refused side's reason is an edge through a solid in 44 and
+  an overlap in 24. **The exact verdict (plain validity) is the engine's on all 136** (tolerance 0, or 1e-9 for the entries with a centre on a ridge, whose float coordinates can be a rounding unit outside their cell), and the
+  strict verdict on the 1e-5 side of every fourth entry agrees too. So the float validator never accepts what the exact certifier refuses, and the reverse, outside a margin of 1e-9 of s.
+- **Frames and field.** Every frame is orthogonal, of equal length m, with kappa^2 m = e0^2; its image in the engine's coordinates is orthonormal and orthogonal to the engine's normal (every cell of the 5-, 16- and 24-cell and the tesseract,
+  six of the 120-cell and 600-cell); the field's signs against enclosures; the rational rotations exactly orthogonal; the tesseract's cubes by this path against the lattice words of 4.3 (s = 1 +- 1e-6 and exactly 1, plain and strict).
+- **Adversarial tests** (`test_platonic.py`, `packages/boundary/test/solids.test.ts`): a tetrahedron filling its cell pushed through a face; the octahedra of the 24-cell at s = 1 + 1e-6, 1 + 1e-9 (valid, strictly valid) and 1 - 1e-6 (an edge through
+  them); touching variants (the cells at s = 1 are valid, not strictly); a centre on a ridge, and on an edge (refused); malformed input; the work caps; an s beyond the strict reading bound; the volume bound.
+  A solid cannot overlap itself around a sharp edge: a convex piece spans at most 180 degrees round an edge, and the smallest total angle is 211.6 (5-cell); 4000 random poses on each of four containers and five solids found no
+  such overlap, only edges through a solid.
+
+### 4C.6 The search, the kernel and the test packings
+
+*Model* (`packages/boundary/src/search/solids.ts`, `SolidModel`). A state is each piece's anchor, centre u and orientation R (3 x 3, orthogonal, improper allowed). The penalty energy is the sum of squared
+penetration depths: (1) for each pair of pieces and each chain of cells from i's centre within twice the circumradius whose window holds the image of j's centre, the separating-axis depth of the rigid copy of j
+(centre T u_j, orientation M R_j) against i (a copy of a piece along a non-trivial chain is a loop and counts alike); (2) for each edge of the polytope, its deepest hit inside a piece over the chains. It is the validator's rule with
+rigid copies instead of clipped parts, equal where the development is flat; the final scale and nudge (`finalizeState`) are decided by the validator, so a difference costs quality, never validity. Gradients are analytic in the
+centres, in the rotation increments theta (R' = exp(theta) R, theta in the anchor's frame) and in s at fixed centres, by the contact feature that sets the depth (a face against a vertex, an edge against an edge, the active
+face(s) of a hinge hit). [CALC] They agree with central differences on all six containers and five solids (to 1e-9 in the checks run; `solids-search.test.ts` asks 1e-6). Cost of an energy evaluation with its gradient per piece, the
+worst of the five solids on squeezed random starts: 0.2 to 0.9 ms on the tesseract, 5-cell, 16-cell, 24-cell and 600-cell, 3.4 ms on the 120-cell (`BOUNDARY_SOLID_ENERGY_MS` rounds these up: 0.7, 0.4, 0.35, 1, 0.3 and 4).
+
+*Driver.* `searchBoundary` adds three rotation variables per piece after the 3P displacements: a displacement is moved through the charts, the orientation after it is M exp(omega) R, and the gradient in omega is
+Jl(omega)^T det(M) M^T times the model's gradient in theta (Jl the left Jacobian of the exponential, det M = -1 when a gluing reverses handedness). Starts: the cells themselves when the solid is the container's cell and P <= C
+(`constructedStart`, valid from s = 1), random layouts at a start edge at which a cell's inscribed ball holds the solid's circumscribed ball; hops move one to three pieces.
+
+*Kernel* (`packages/boundary/src/kernel-solids.ts`, section 14): `dim` = 6 (the displacement and a rotation vector about the anchor orientation), a typical step the inradius and inradius / circumradius radians, `swap`
+exchanges two pieces' orientations (an orientation of the wrong handedness for the walk is replaced by its mirror image, the same piece), `seeds` as above, `finishCost` 60 and `validateCost` 15 energy evaluations. The
+generic methods' contract (`checkKernel`) passes on every container and solid tested.
+
+*Test packings* (`python/boundary/fixtures/platonic_packings.json`, 12; raw configurations from `gen-platonic-packings.ts`, scaled by lam_k = 1 + k 1e-12 about the cells' centres to the first k at which the exact
+certifier accepts them strictly **and with twice the inflation**, then stored with the largest power of two inflation they pass): the cells themselves (5 tetrahedra of the 5-cell, 16 of the 16-cell, 24 octahedra of the 24-cell,
+24 of the 120-cell's dodecahedra, 24 of the 600-cell's tetrahedra) and one short seeded run per container and solid. They are not good packings (no long search ran) and no optimality is claimed.
+
+| problem | source | s (score_cert) | lower bound | k | inflation certified (margin) | reading error | chains / parts |
+|---|---|---|---|---|---|---|---|
+| 5cell/tetrahedron/5 | the cells themselves, s = 1 | 1.000000000002 | 1.000000 (volume) | 2 | 9.1e-13 (1.8e-12) | 3.0e-16 | 385 / 5 |
+| 16cell/tetrahedron/16 | the cells themselves, s = 1 | 1.000000000002 | 1.000000 (volume) | 2 | 9.1e-13 (1.8e-12) | 5.4e-16 | 1232 / 16 |
+| 24cell/octahedron/24 | the cells themselves, s = 1 | 1.000000000002 | 1.000000 (volume) | 2 | 9.1e-13 (1.8e-12) | 4.2e-16 | 792 / 24 |
+| 120cell/dodecahedron/24 | 24 of the 120 cells, s = 1 | 1.000000000002 | 0.850651 (one piece) | 2 | 9.1e-13 (1.8e-12) | 1.7e-15 | 1752 / 24 |
+| 600cell/tetrahedron/24 | 24 of the 600 cells, s = 1 | 1.000000000002 | 0.577350 (one piece) | 2 | 9.1e-13 (1.8e-12) | 4.5e-16 | 1848 / 24 |
+| tesseract/icosahedron/2 | search, seed 1, 40000 | 2.137615801704 | 1.068808 (one piece) | 2 | 9.1e-13 (1.8e-12) | 3.3e-16 | 11 / 7 |
+| tesseract/tetrahedron/3 | search, seed 2, 90000 | 0.577288575347 | 0.353553 (volume) | 2 | 9.1e-13 (1.8e-12) | 4.4e-16 | 204 / 18 |
+| 5cell/octahedron/2 | search, seed 3, 60000 | 1.561196353847 | 1.169607 (volume) | 2 | 9.1e-13 (1.8e-12) | 2.1e-16 | 41 / 12 |
+| 16cell/cube/2 | search, seed 4, 60000 | 2.103033866188 | 1.414214 (one piece) | 0 | 9.1e-13 (5.8e-11) | 2.3e-16 | 46 / 11 |
+| 24cell/tetrahedron/3 | search, seed 5, 60000 | 0.800000000033 | 0.408248 (one piece) | 2 | 9.1e-13 (1.8e-12) | 4.2e-16 | 387 / 15 |
+| 120cell/dodecahedron/2 | search, seed 6, 40000 | 1.000000000002 | 0.850651 (one piece) | 2 | 9.1e-13 (1.8e-12) | 1.7e-15 | 146 / 2 |
+| 600cell/octahedron/2 | search, seed 7, 60000 | 1.250000000224 | 1.154701 (one piece) | 2 | 9.1e-13 (1.8e-12) | 1.3e-15 | 52 / 13 |
+
+### 4C.7 Limitations
+
+- No research records: the 664 new problems have lower bounds and the test packings above only. Nothing is known about their optimal values [SPEC]; the test packings are not good ones (no long run) and nothing about their
+  distance from the optimum is claimed.
+- The model (4C.6) is not the validator: where a piece wraps round an edge, rigid copies and clipped parts differ, so a search can be slower or stop higher than the exact rule allows; it cannot return an invalid packing.
+- The search is slow and its first results are rough: the first valid packing (a random start relaxed and drawn in to touching) comes after 700 evaluations for one solid and 5,000 for six on the tesseract, but the compression
+  that follows needs tens of thousands (40,000 to 90,000 for the test packings), at 0.1 to 4 ms per piece and evaluation. The board sizes its first round accordingly (section 13).
+- The exact certifier is slow on crowded packings (25 s for 24 dodecahedra of the 120-cell; 40,000 chains per piece and run is its cap).
+- The vertex rule (section 3) is argued, not proved, on every container, as before.
+- u is capped at 1e4 (the form check), while s may be as large as 1e4: on the 120-cell, whose cells have circumradius 1.40 s, part of each cell cannot be written for s above about 7,100 (four configurations at s = 9,560 of the review's corpus were refused by both the server and the certifier).
+- A configuration with a centre exactly on an edge is refused as invalid (the edge is inside the piece).
+- Whether the tesseract should also have a rotated-cube problem (its `cube` is the aligned cube) is a question for the project owner; the id `boundary/tesseract/cube/P` is the aligned problem and stays so.
 
 ## 4D. Balls on the d-simplex, d-orthoplex and d-demicube: (d-1)D on dD, d = 5 to 10
 
@@ -860,12 +1037,12 @@ x_i = const is a disk when neither axis is i.
 - **Finiteness of the chain enumeration** is not proved (4D.2); the budget makes it safe. A configuration with many balls crowded against hinges is refused with a reason rather than decided (sound, incomplete); packings with margins of 1e-12 and more are decided.
 - **The exact certifier is slow on the big demicubes** (seconds to tens of seconds per check at d = 7 ... 10), because its numbers are Python integers in Q(sqrt k); the engine takes milliseconds.
 - **The vertex rule** (section 3) is argued, not proved, in every d.
-- Not covered: the Gosset polytopes (2_21, 1_22, 3_21, 4_21) of dimensions 6 to 8, and the 4-polytopes' rotated Platonic pieces (4A.8).
+- Not covered: the Gosset polytopes (2_21, 1_22, 3_21, 4_21) of dimensions 6 to 8, and rotated Platonic pieces on these containers (section 4C has them on the regular 4-polytopes only).
 
 
 ## 5. Lower bounds
 
-Only proven bounds are stored [CALC]. Each is stored as a binary64 value rounded down, and the
+Only proven bounds are stored [CALC]. (The Platonic solids on the 4-polytopes have the two bounds of 4C.4.) Each is stored as a binary64 value rounded down, and the
 record's `bound` is the larger one.
 
 - **Volume.** Developments are local isometries, injective on interiors, with disjoint images, so
@@ -1017,6 +1194,10 @@ its field `previous`.
   `packages/boundary/src/bounds.ts` (facts, lower bounds, check-size estimates), `packages/boundary/src/domain.ts` (the 152 problems),
   `packages/boundary/scripts/gen-containers.ts`, `gen-general-crosscheck.ts` and `gen-general-packings.ts` (the fixtures
   `containers.json`, `general_crosscheck.json`, `general_packings_raw.json` of `python/boundary/fixtures`).
+- The Platonic solids (section 4C): `packages/boundary/src/pieces.ts` (the solids), `validate.ts` and `parts.ts` (the validator), `bounds.ts` (`pieceBounds`, `BOUNDARY_SOLID_MS`),
+  `search/solids.ts`, `search/rot.ts` and `kernel-solids.ts` (the model, the rotations, the kernel), `python/boundary/platonic.py` and `qmulti.py` (the exact certifier and its field),
+  `python/boundary/test_platonic.py`, `packages/boundary/test/solids.test.ts` and `solids-search.test.ts` (tests), `python/boundary/build_platonic_packings.py` (certifies the test packings),
+  `packages/boundary/scripts/gen-platonic-packings.ts` and `gen-platonic-crosscheck.ts` (the fixtures `platonic_packings_raw.json` and `platonic_crosscheck.json`).
 - The d-cubes (section 4B): `packages/boundary/src/ncube/` (`lattice.ts` words and the reach search, `validate.ts`, `bounds.ts`, `move.ts`, `model.ts`, `kernel.ts`, `seeds.ts`, `rule.ts`, `search.ts`),
   `python/boundary/ncube.py` (the exact certifier), `python/boundary/test_ncube.py` and `packages/boundary/test/ncube.test.ts` (tests), `python/boundary/build_ncube_packings.py` (the test packings),
   `packages/boundary/scripts/gen-ncube-crosscheck.ts` and `gen-ncube-bounds.ts` (the fixtures `ncube_crosscheck.json`, `ncube_bounds.json`).
@@ -1030,6 +1211,7 @@ python3 python/boundary/test_boundary.py
 python3 python/boundary/test_general.py
 python3 python/boundary/test_ncube.py
 python3 python/boundary/test_ndpoly.py
+python3 python/boundary/test_platonic.py
 npx tsx packages/boundary/scripts/search-sources.ts
 python3 python/boundary/build_records.py
 npx tsx packages/boundary/scripts/check-records.ts
@@ -1039,6 +1221,9 @@ npx tsx packages/boundary/scripts/gen-general-crosscheck.ts
 npx tsx packages/boundary/scripts/gen-general-packings.ts
 python3 python/boundary/build_general_packings.py
 python3 python/boundary/build_ncube_packings.py
+npx tsx packages/boundary/scripts/gen-platonic-packings.ts
+python3 python/boundary/build_platonic_packings.py
+npx tsx packages/boundary/scripts/gen-platonic-crosscheck.ts
 npx tsx packages/boundary/scripts/gen-ncube-crosscheck.ts
 npx tsx packages/boundary/scripts/gen-ncube-bounds.ts
 npx tsx packages/boundary/scripts/gen-nd-crosscheck.ts
@@ -1049,7 +1234,7 @@ python3 python/boundary/build_nd_packings.py
 
 Timing (Apple Silicon, shared machine): the 11 searches about 2.5 minutes in all (the longest,
 balls P = 13 and 15, 44 and 49 s); building the records file 3 s; certifying all 32 records with
-their exact constructions 2.3 s; the Python tests about 26 s; the engine check 0.3 s for 64
+their exact constructions 2.3 s; the Python tests about 26 s (`test_general.py` 90 s, `test_platonic.py` 100 s); the engine check 0.3 s for 64
 validations.
 
 ## 11. Sources
@@ -1084,7 +1269,7 @@ The server lists the space as `boundary` (title "Polytope boundaries", viewer
 `/spaces/boundary.html`) through the same routes as the other spaces; the API page, `/api`,
 describes them all. Everything below goes through the spaces registry, `packages/spaces`.
 
-- `GET /api/spaces`: the space with its conventions and its 152 problems (its `domain`: polytope, piece, P; the pieces and the P range depend on the polytope).
+- `GET /api/spaces`: the space with its conventions and its problems (its `domain`: polytope, piece, P; the pieces and the P range depend on the polytope): 816 on the 4-polytopes (4C.1) and the d-cubes' 4,288.
 - `GET /api/spaces/boundary/records`: every problem with a research record (the tesseract's 32) with `fields` `{polytope, piece, P}`, the
   research record (`certified`: score_cert, display, status), the lower bound (`bound`), the site's
   best entry and `best_score`. Boundary problems also carry `extra`:
@@ -1103,20 +1288,20 @@ describes them all. Everything below goes through the spaces registry, `packages
 
 **The server's rule** for a configuration:
 
-1. The id must be a problem of the domain, in its one written form (no leading zeros): balls and cubes on the tesseract, P = 1 to 16, balls on
+1. The id must be a problem of the domain, in its one written form (no leading zeros): balls, aligned cubes and the four other solids (rotated) on the tesseract, P = 1 to 16, balls and the five solids on
    the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24, balls and cubes on the d-cubes (section 4B), balls on the d-simplex, d-orthoplex and d-demicube, d = 5 to 10, P = 1 to 24 (section 4D). P is at most 64 for the space and at most the
    catalogue's largest P (24) for a submission.
 2. The configuration must be well formed, or the answer is 400 with what is wrong: s a finite
    number in (0, 1e4]; `pieces` a list; each piece `{cell, u}` with `cell` an integer from 0 to C - 1 (C = 8 on the tesseract, 5, 16, 24, 120, 600 on the others)
-   and `u` three finite numbers, each at most 1e4 in absolute value; a cube may have `q`, four finite
-   numbers whose norm is within 1e-9 of 1; a ball has no `q`. Unknown fields are dropped.
+   and `u` three finite numbers, each at most 1e4 in absolute value; a cube or another solid may have `q`, four finite
+   numbers whose norm is within 1e-9 of 1 (absent: no rotation); a ball has no `q`. Unknown fields are dropped.
 3. A wrong number of pieces, or an s below the problem's lower bound (less a relative 1e-9), is an
    invalid packing: 422 with the reason, before any geometry.
 4. `validateBoundary` (section 4.5's engine validator) at the touching tolerance 1e-9, with at most
    1024 chains of cells per piece: 422 with up to 20 reasons when it refuses.
 5. An entry below score_cert by more than a relative 1e-9 must also pass at tolerance 1e-11
    ("beats the research record only within the float tolerance" otherwise). Every record passes it
-   at its stored s. On a problem without a record (the five new containers) every entry must pass it
+   at its stored s. On a problem without a record (all but the tesseract's 32) every entry must pass it
    (`SPACE_STRICT_NO_RECORD_REASON`).
 6. It is kept only when it beats the problem's best (record or site leader) by more than a relative
    1e-9, and it is stored as sent, with its known fields.
@@ -1131,6 +1316,8 @@ refuse most bad input before any chain is enumerated. The server keeps the 32 re
 55 kB of heap. On the other containers the test packings need at most 399 chains per piece (the 120-cell; 245 on the 5-cell and 600-cell),
 and a check of 24 balls took 4 to 18 ms (5-cell, 16-cell, 24-cell, 600-cell) and 91 ms (120-cell) on loose layouts; balls on the 120-cell from P = 5
 and on the 24-cell from P = 22 wait in the server's heavy-check queue (4A.6).
+
+[CALC] Platonic solids: a check costs 1.2 to 4.4 ms a piece when every solid touches its neighbours, at most 2.2 ms a piece alone, and a solid reaches at most 813 chains of cells (400 random poses of each pair of container and solid, at 1 to 3 times the one-piece bound: the tetrahedron on the 120-cell where nothing fits; 47 to 566 for the others) and about 80 per piece in the test packings (4C.6), so the cap refuses no real packing; the server prices them at `BOUNDARY_SOLID_MS` per piece (4C.2) and queues those of 50 ms or more. The work caps: 1024 chains per piece, 20,000 tests of pairs of parts.
 
 **Searches.** The board and the volunteer client run the same job, `runSpaceJob` in
 `packages/spaces/src/search`, under the method name "boundary compression search": the boundary
@@ -1147,7 +1334,7 @@ curl -s --compressed https://polypack.fly.dev/api/spaces/boundary/problems/bound
 
 **On the board.** Choose **3D on 4D** under Dimension (its one kind, Polytope boundaries, is chosen
 with it), or follow a link such as `/#space=boundary/tesseract/ball/9`; `/#space=boundary` opens
-that problem. The Problem section offers Polytope (Tesseract), Piece (Balls, Cubes) and Pieces (P),
+that problem. The Problem section offers Polytope (Tesseract, 5-cell, 16-cell, 24-cell, 120-cell, 600-cell), Piece (Balls, Cubes, Tetrahedra, Octahedra, Dodecahedra, Icosahedra) and Pieces (P),
 each with the values the catalogue has. The stage shows the drawing (below), the panel the usual
 values (the edge s of the packing shown, the certified value, the status, the lower bound, the
 site best, whether the problem takes entries) and two of this kind:
@@ -1159,7 +1346,7 @@ site best, whether the problem takes entries) and two of this kind:
 
 Run optimizer runs section 12's search in the browser, one complete search call per round, of
 300,000 energy evaluations (up to three times that while rounds get nowhere), about 1.5 to 2.2 s
-each at P = 16, and Submit sends a result that passes the server's rule
+each at P = 16 (balls and aligned cubes on the tesseract; on the other containers and for the Platonic solids a round is about two seconds of the model, at least 200 evaluations, and a solid's first round 2,000 + 1,000 P, which holds the search's first offer: 4C.6), and Submit sends a result that passes the server's rule
 and beats the problem's best by more than a relative 1e-9; the board's notes
 ([BOARD.md](BOARD.md)) describe both. Pieces cannot be moved by hand.
 
@@ -1261,3 +1448,8 @@ It reuses the boundary search's own parts, so a method sees the same model as se
   up to 2.5 edges instead. The seeds are balls at the centres of P cells (valid from s0 of 4A.4), or a sequential random layout when P exceeds the
   number of cells. The bound is 4A.4's, the form check takes cells 0 to C - 1, `finish` and `validate` are unchanged. [CALC] One energy evaluation
   with its gradient costs 0.1 to 0.8 ms per ball (4A.6).
+- **The Platonic solids** (4C.6; `packages/boundary/src/kernel-solids.ts`). `dim` is 6: the displacement (3 lengths) and a rotation vector (3 radians) about the anchor's orientation. The orientation at the piece's centre is M exp(w) R_a,
+  M the linear part of the gluings crossed (a piece whose path meets an edge keeps its rotation), and the gradient in w is Jl(w)^T det(M) M^T times the model's gradient in the rotation increment. A typical step is the solid's inradius and
+  inradius / circumradius radians. `swap` gives each of two pieces the other's orientation; every Platonic solid is mirror-symmetric, so an orientation of the wrong handedness for the walk is replaced by its mirror image. `seeds`: the cells
+  themselves when the solid is the container's cell and P is at most the cell count, else a sequential random layout accepted piece by piece by the model; no `shape`. `finishCost` is 60 and `validateCost` 15 energy evaluations
+  [CALC: a finish took 12 to 55 energy evaluations, a validator call 0.1 to 1 on random states and up to about 15 on a crowd of touching solids]. `bound` is 4C.4's. The tesseract's `cube` keeps the aligned-cube kernel above.

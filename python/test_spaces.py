@@ -13,6 +13,7 @@ TESTS = [
     "balls/test_certify.py",
     "boundary/test_boundary.py",
     "boundary/test_general.py",
+    "boundary/test_platonic.py",
     "boundary/test_ncube.py",
     "boundary/test_ndpoly.py",
     "curved/test_certify.py",

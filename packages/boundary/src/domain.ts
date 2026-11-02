@@ -1,15 +1,16 @@
 /**
  * The domain of the boundary space for the spaces listing (packages/spaces domain.ts): balls on all six regular 4-polytopes
- * (P = 1 to 24 on the five added 2026-11-01, 1 to 16 on the tesseract) and the tesseract's axis-aligned cubes (P = 1 to 16).
- * The tesseract's 32 problems have research records; the other 120 problems have none, only their lower bounds.
+ * (P = 1 to 24 on the five added 2026-11-01, 1 to 16 on the tesseract) and the tesseract's axis-aligned cubes (P = 1 to 16); since
+ * 2026-11-02 the five Platonic solids, freely rotated, on all six (the cube on the tesseract being the aligned one), same ranges; and the d-cubes.
+ * The tesseract's 32 problems have research records; the others have none, only their lower bounds.
  */
-import { CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds } from "./bounds";
+import { CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds, pieceBounds } from "./bounds";
 import { boundaryBound } from "./kernel-validate";
 import { NCUBE_TITLES, ncubeProblemBound } from "./ncube/bounds";
 import { isNCubeName } from "./ncube/lattice";
 import { ndBoundKind, ndProblemBound } from "./nd/bounds";
 import { ND_TITLES, isNDName, ndParse } from "./nd/names";
-import type { ContainerName, PieceName, PolytopeName } from "./types";
+import type { ContainerName, PieceName, PolytopeName, PolytopePieceName } from "./types";
 import { CONTAINERS, PIECES, POLYTOPES } from "./types";
 
 const TITLES: Record<ContainerName, string> = {
@@ -62,6 +63,17 @@ function boundEntry(polytope: ContainerName, piece: PieceName, P: number): { val
           : "[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one",
     };
   }
+  // the Platonic solids, turned (the tesseract's cube is the aligned one of its records, below): the volume and one-piece bounds of 4C.4
+  if (piece !== "ball" && !(piece === "cube" && polytope === "tesseract")) {
+    const b = pieceBounds(polytope as PolytopeName, piece as PolytopePieceName, P);
+    return {
+      value: b.value,
+      label:
+        b.kind === "volume"
+          ? `[CALC] volume: the developed ${piece}s have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume`
+          : `[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them`,
+    };
+  }
   if (polytope === "tesseract") {
     const value = boundaryBound(piece, P);
     return piece === "ball"
@@ -91,8 +103,8 @@ export const boundaryDomain = {
         key: "piece",
         label: "Piece",
         values: [...PIECES],
-        titles: { ball: "Balls", cube: "Cubes" },
-        // a field whose values depend on the polytope: balls on all, the aligned cubes on the tesseract
+        titles: { ball: "Balls", cube: "Cubes", tetrahedron: "Tetrahedra", octahedron: "Octahedra", dodecahedron: "Dodecahedra", icosahedron: "Icosahedra" },
+        // a field whose values depend on the polytope: balls and the Platonic solids on the 4-polytopes (the tesseract's cube is the aligned one, the others' a rotated one), balls and aligned cubes on the d-cubes
         dependent: { on: "polytope", values: Object.fromEntries(CONTAINERS.map((n) => [n, [...CONTAINER_PIECES[n]]])) },
       },
       {
