@@ -58,22 +58,23 @@ function withRecord(): { s: GameState; p: ReturnType<typeof newProblem> } {
 describe("Tighter seams", () => {
   it("give standing only for points the server has confirmed", () => {
     const { s, p } = withRecord();
-    owning(s, ["standing"]);
-    // a cycle of 2,000 M RP, 1,800 M of them paid per click and still waiting for the server's answer
+    owning(s, ["collections", "rent", "ring120"]);
+    // a cycle of 2,000 M RP in hand, 1,800 M of them paid per click and still waiting for the server's answer
     s.standing.cycleEarned = 2_000_000_000;
+    s.rp = 2_000_000_000;
     p.unconfirmed = 1_800_000_000;
-    expect(resetPreview(s).gain).toBe(0);
+    expect(resetPreview(s)).toMatchObject({ can: false, short: 800_000_000 });
     expect(resetCycle(s, T0)).toBe(0);
     // once confirmed, they count
     p.unconfirmed = 0;
-    expect(resetPreview(s).gain).toBe(7);
+    expect(resetPreview(s).can).toBe(true);
     // a send on its way carries its points: not confirmed yet either
     p.sending = { score: 6.5, name: "Ada", leaderBefore: null, at: T0, rp: 1_800_000_000 };
-    expect(resetPreview(s).gain).toBe(0);
+    expect(resetPreview(s).can).toBe(false);
     // a reset trades only the confirmed points; those still waiting carry into the next cycle
     s.standing.cycleEarned = 4_000_000_000;
     s.rp = 2_000_000_000;
-    expect(resetCycle(s, T0)).toBe(7);
+    expect(resetCycle(s, T0)).toBe(1);
     expect(s.rp).toBe(1_800_000_000);
     expect(s.standing.cycleEarned).toBe(1_800_000_000);
     // and if the server does not confirm them, they are taken from there, once
@@ -85,6 +86,8 @@ describe("Tighter seams", () => {
   it("pay no rent for the time a record was lost to a faster entry, even when it is won back", () => {
     const { s, p } = withRecord();
     owning(s, ["rent"]);
+    // the first record paid only its bonus, which rent does not count: the record has earned 100 from improvements
+    s.economy.base[p.key] = 100;
     applyAnswer(s, p, null, 6.5, { kind: "leader", score: 6.5, id: 3, pending: false }, T0);
     expect(s.economy.checks[p.key]).toBe(T0);
     // another entry got there first: the record is lost at once
@@ -101,8 +104,9 @@ describe("Tighter seams", () => {
 
   it("drop offers drawn for the old tree at a reset, and keep lost records offered for a retake", () => {
     const s = newGame(T0, 1);
-    owning(s, ["standing", "pick3"]);
+    owning(s, ["collections", "rent", "ring120", "pick3"]);
     s.standing.cycleEarned = 2_000_000_000;
+    s.rp = 2_000_000_000;
     const offer = (P: number, retake: boolean): Offer => ({
       family: "polygon",
       N: 7,

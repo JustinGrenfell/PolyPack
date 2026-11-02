@@ -176,16 +176,16 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(await game(page, (s) => s.rp)).toBeLessThan(rp);
   await expect(page.locator("#t-evolve")).toBeAttached();
 
-  // Standing: its row appears once Standing is owned, priced in standing
+  // Standing: its row appears from the first reset on, priced at 1 standing a level
   expect(await page.locator('.t-band[data-row="standing"]').count()).toBe(0);
-  await give(page, ["standing"]);
+  await page.evaluate(() => ((window as any).tighter.state.standing.resets = 1));
   await expect(page.locator('.t-band[data-row="standing"]')).toBeVisible();
-  await expect(page.locator('.t-card[data-id="head1"]')).toContainText("1 standing");
-  await expect(page.locator('.t-card[data-id="head1"]')).toHaveAttribute("data-state", "dear");
+  await expect(page.locator('.t-card[data-id="head"]')).toContainText("1 standing");
+  await expect(page.locator('.t-card[data-id="head"]')).toHaveAttribute("data-state", "dear");
   await page.evaluate(() => ((window as any).tighter.state.standing.points = 1));
-  await expect(page.locator('.t-card[data-id="head1"]')).toHaveAttribute("data-state", "buyable");
-  await page.click('.t-card[data-id="head1"] .t-node-act');
-  await expect.poll(() => game(page, (s) => [s.owned.includes("head1"), s.standing.points])).toEqual([true, 0]);
+  await expect(page.locator('.t-card[data-id="head"]')).toHaveAttribute("data-state", "buyable");
+  await page.click('.t-card[data-id="head"] .t-node-act');
+  await expect.poll(() => game(page, (s) => [s.levels.head, s.standing.points])).toEqual([1, 0]);
 
   // at phone width: no sideways scroll, and still clean for assistive technology with a node's details open
   await page.setViewportSize({ width: 390, height: 844 });
@@ -357,7 +357,7 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
 
   // Lattice is owned, but the game runs its build by itself: it is neither in the Method list nor a stage
-  await give(page, ["lattice", "standing", "pipeline"]);
+  await give(page, ["lattice", "pipeline"]);
   await expect(page.locator("#t-runs h3").first()).toHaveText("Pipeline");
   await expect(select.locator('option[value="seed"]')).toHaveCount(0);
   await expect(page.locator('#t-pipeline-method option[value="seed"]')).toHaveCount(0);
@@ -419,6 +419,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await firstRecord(page);
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
   const p = await focused(page);
+  // a first record pays only its flat bonus, which rent's base does not count: give the record a base
+  await page.evaluate((k) => ((window as any).tighter.state.economy.base[k] = 5000), p.key);
   // a confirmed record is remembered for collections, with its tier
   await expect.poll(() => game(page, (s) => s.economy.recorded)).toContain(p.key);
   await give(page, ["rent", "collections"]);
@@ -441,42 +443,58 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   expect(paid / (24 * 0.01 * rate * 1.05)).toBeCloseTo(1, 2);
   await expect(page.locator("#t-rc-note")).toContainText("The last rent paid was +");
 
-  // a reset for standing, the next cycle under One method, with Head start I
-  await give(page, ["standing", "rules", "head1"]);
+  // buying Standing is the reset: the next cycle under One method, with Head start level 1
+  await give(page, ["ring120", "rules", "head"]);
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
+    s.levels.head = 1;
     s.standing.cycleEarned = 1_200_000_000;
     s.rp += 1_200_000_000;
     s.rpEarned += 1_200_000_000;
   });
-  await expect(page.locator("#t-standing")).toBeVisible();
-  await expect(page.locator("#t-st-preview")).toContainText("Reset now for 5 standing");
+  await openTree(page);
+  const standingCard = page.locator('.t-card[data-id="standing"]');
+  await expect(standingCard).toHaveAttribute("data-state", "buyable");
+  await expect(standingCard).toContainText("1,000,000,000 RP");
+  await standingCard.locator(".t-node-act").click();
+  // the in-page confirm opens first, and cancelling buys nothing
+  await expect(page.locator("#t-reset")).toBeVisible();
+  await page.click("#t-st-no");
+  await expect(page.locator("#t-reset")).toBeHidden();
+  expect(await game(page, (s) => s.standing.resets)).toBe(0);
+  await standingCard.locator(".t-node-act").click();
   await page.selectOption("#t-st-rule", "method");
   await expect(page.locator("#t-st-rule-note")).toContainText("One method");
-  await page.click("#t-st-reset");
-  await expect(page.locator("#t-st-confirm")).toBeVisible();
-  await expect(page.locator("#t-st-confirm-text")).toContainText("You keep the 1 record you hold and its rent");
+  await expect(page.locator("#t-st-confirm-text")).toContainText("You keep the 1 record you hold");
+  await expect(page.locator("#t-st-confirm-text")).toContainText("Records pay rent goes until you buy it again");
   await page.click("#t-st-yes");
   await expect.poll(() => game(page, (s) => s.standing.resets)).toBe(1);
+  await page.click("#t-tab-board");
   const after = await game(page, (s) => ({
     rp: s.rp,
     owned: s.owned,
     standing: s.standing,
     recorded: s.economy.recorded,
+    checks: s.economy.checks,
     ourId: s.queue.find((q: { key: string }) => q.key === s.focus)?.ourId,
   }));
   expect(after.rp).toBe(0);
-  expect(after.standing).toMatchObject({ points: 5, total: 5, rule: "method", cycleEarned: 0 });
+  expect(after.standing).toMatchObject({ points: 1, total: 1, rule: "method", cycleEarned: 0 });
   expect(after.standing.dimensions).toEqual(["2-in-2", "2-on-3"]);
-  // kept: Standing and its row, rent and collections; granted: Head start I's upgrades
-  expect(after.owned).toEqual(
-    expect.arrayContaining(["standing", "rules", "head1", "rent", "collections", "trace", "click5", "auto1"]),
-  );
-  expect(after.owned).not.toContain("click6");
+  // kept: the Standing row's options; granted: Head start level 1's upgrades. Standing, rent and collections went.
+  expect(after.owned).toEqual(expect.arrayContaining(["rules", "head", "trace", "click5", "auto1"]));
+  // level 1 gives back every card priced up to 10,000 RP: 6 evaluations per click (3,200) yes, 10 (11,000) no
+  expect(after.owned).toContain("click6");
+  expect(after.owned).not.toContain("click10");
+  expect(after.owned).not.toContain("standing");
+  expect(after.owned).not.toContain("rent");
+  expect(after.owned).not.toContain("collections");
+  // no rent runs without Rent, and the record is still ours and still counted
+  expect(after.checks).toEqual({});
   expect(after.recorded).toContain(p.key);
   expect(after.ourId).toBe(p.ourId);
-  await expect(page.locator("#t-bar-standing")).toHaveText("5 · ×1.5");
-  await expect(page.locator("#t-evolve")).toHaveText("Evolve ×5");
+  await expect(page.locator("#t-bar-standing")).toHaveText("1 · ×2");
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve ×9");
   // the rule holds: with Basin hopping owned, the select still offers only mc_compress
   await give(page, ["basin"]);
   await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
@@ -487,7 +505,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await page.waitForTimeout(1500);
   await page.reload();
   await expect(page.locator("#t-standing")).toBeVisible();
-  expect(await game(page, (s) => [s.standing.rule, s.standing.resets, s.standing.points])).toEqual(["method", 1, 5]);
+  expect(await game(page, (s) => [s.standing.rule, s.standing.resets, s.standing.points])).toEqual(["method", 1, 1]);
   await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
   await expect(page.locator("#t-st-history-box")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -495,7 +513,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
   await page.locator("#t-standing").screenshot({ path: test.info().outputPath("standing-390.png") });
-  await page.locator("#t-records").screenshot({ path: test.info().outputPath("records-390.png") });
+  // the reset took Records pay rent and Collections, and the Records panel shows only with one of them
+  await expect(page.locator("#t-records")).toBeHidden();
   expect(await axe(page)).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -564,7 +583,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   // amount by what the save could buy next costs now over then: 5 evaluations per click, 350 RP now and
   // 780 then. The opening's prices came down, so the factor is below 1 (the migrated amounts shrink on purpose)
   const f = 350 / 780;
-  expect(s).toMatchObject({ version: 10, levels: {}, picks: 0, pipeline: [] });
+  expect(s).toMatchObject({ version: 11, levels: {}, picks: 0, pipeline: [] });
   // and version 8 pays back the 40 RP that Auto-eval costs less now (80 then)
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f) + 40, 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);

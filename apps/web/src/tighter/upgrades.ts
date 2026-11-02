@@ -5,7 +5,7 @@ import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
-import { BEAT_OTHER_FACTOR, RESET_GROWTH, RESET_MIN } from "./points";
+import { FIRST_BONUS, LEAD_BONUS, RESET_GROWTH, RESET_MIN } from "./points";
 import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, SURFACE_JOHNSON, domainProblems } from "./catalogue";
 import { GAME_BALLS_COUNT, GAME_PAIR_COUNT, SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
@@ -25,7 +25,8 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
  * nothing has a last rung.
  *
  * The whole tree shows in the shop. A mystery upgrade shows as ?????? until every prerequisite is
- * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets.
+ * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets. The
+ * Standing card itself is the reset: buying it ends the cycle (standing.ts resetCycle).
  *
  * Costs (2026-10-22, with the size and gap weights at 10,000, points.ts): priced in a pacing model of
  * real mc_compress runs from Load all (16 games of one click a second, the first problem from the
@@ -136,9 +137,7 @@ export type UpgradeId =
   | "collections"
   | "standing"
   // standing (paid in standing, kept through resets)
-  | "head1"
-  | "head2"
-  | "head3"
+  | "head"
   | "keepAuto"
   | "keepMethods"
   | "study"
@@ -323,8 +322,10 @@ export function autoLevelPrice(level: number): number {
   // Infinity less Infinity is NaN: a level nobody can pay for is Infinity
   return Number.isFinite(price) ? price : Infinity;
 }
-/** Levels of Faster auto-eval that Head start II gives each cycle: 9, so 10 evaluations a second as the old fifth rung did. */
+/** Levels of Faster auto-eval that Head start gives each cycle at most: 9, so 10 evaluations a second (Keep auto-eval keeps more). */
 export const HEAD2_AUTO_LEVELS = 9;
+/** What each level of Head start gives back: the upgrades whose own price is at most this (in RP, without Quick study). */
+export const HEAD_START_PRICES: readonly number[] = [10_000, 1_000_000, 100_000_000];
 /** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
 const AUTOX_COST = AUTO_RATE_PRICE * 1.0025 ** 2;
 /** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
@@ -367,6 +368,7 @@ export const RING: Partial<Record<UpgradeId, number>> = {
 const listed = (xs: readonly string[]) =>
   xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 /** A number as the shop writes it: whole, or to one decimal ("2.5"). */
+const rpText = (x: number) => x.toLocaleString("en-US");
 const number = (x: number) => (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(1));
 const seconds = (x: number) => `${number(x)} s`;
 
@@ -472,6 +474,7 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
         "The queue holds the problems you work on, one in each slot. The dealer earns a deal as you and auto-eval work. A deal puts a new problem in a free slot.",
         `Work counts in clicks. An Evolve click counts as one, however many evaluations it runs. ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The dealer saves up at most one deal for each slot. If the queue is empty, it deals a problem anyway, and your next work pays for it.`,
         "A problem leaves the queue when you drop it or when Auto-advance replaces it.",
+        "The queue never has fewer slots than you have lanes. If you own more lanes than this card gives slots, the queue has one slot for each lane, and the dealer works with that size.",
       ],
       math: [
         `${t} ← min(${sym("q")}, ${t} + ${sym("q")} × ${sym("c")} / ${DEAL_CLICKS})`,
@@ -596,11 +599,12 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
     how: {
       text: [
         `When a deal is due, the dealer draws ${k} problems and checks each with the server. It ranks them and deals the best one. If that one cannot be read, it deals the next. Problems from Retake and Collector come before the ranked ones.`,
-        "The dealer ranks problems by how many record points each should pay per evaluation, and problems that run faster rank higher. Speed counts only as a square root, because your clicks cost the same however long an evaluation takes, while your computer limits auto-eval on larger problems.",
+        `The dealer ranks problems by how many record points each should pay per evaluation, and problems that run faster rank higher. The points count the expected improvement pay and the expected bonus. An open problem is sure to pay its ${rpText(FIRST_BONUS)} RP bonus. On a problem that already has a record, the bonus is ${rpText(LEAD_BONUS)} RP times the chance of taking the lead, which the dealer takes to be the room left, and it counts for nothing once the bonus is paid this cycle. The bonus is spread over 1,000 evaluations.`,
+        " Speed counts only as a square root, because your clicks cost the same however long an evaluation takes, while your computer limits auto-eval on larger problems.",
       ],
       note: `${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1.`,
       math: [
-        `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × ${number(RP_PER_EVAL)} × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
+        `${sym("V")} = (${sym("w")} × ${sym("R")} × ${number(RP_PER_EVAL)} + ${sym("B")} / 1000) × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
         `${sym("w")} = ${sym("d")}(${sym("N")}) × ${sym("d")}(${sym("M")})`,
         `${sym("d")}(${sym("x")}) = 1 for a circle or ${sym("x")} ≤ 20, else 20 / ${sym("x")}`,
       ],
@@ -611,8 +615,8 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
         [sym("M"), "sides of the container (0 for a circle)"],
         [`${sym("d")}(${sym("x")})`, "how far a shape with x sides is from a circle"],
         [
-          sym("c"),
-          "the contest weight, 1 for an open problem, 3 for a loose record, 10 for another site record and 100 for a published value",
+          sym("B"),
+          `the expected bonus, ${rpText(FIRST_BONUS)} for an open problem, ${rpText(LEAD_BONUS)} × R for a site record or a published value, and 0 once it is paid this cycle`,
         ],
         [
           sym("R"),
@@ -662,16 +666,16 @@ const LANE_TEXT =
   "A lane is a worker that runs one problem. Two lanes never work on the same problem. The lanes share auto-eval's rate, so a new lane lets one more problem progress at once but adds no evaluations. If evaluations are slow, more lanes also spread the work over more cores.";
 const LANE_NOTE = "A lane with nothing to work on leaves its share to the others.";
 
+/** Every Standing-row option costs 1 standing point, and each level of a levelled one costs 1. */
 function standingRung(
   id: UpgradeId,
   name: string,
-  cost: number,
   requires: UpgradeId[],
   effect: string,
   how: How,
   levels?: { max: number; growth: number },
 ): Upgrade {
-  return { id, name, cost, requires, effect, how, row: "standing", mystery: true, currency: "standing", levels };
+  return { id, name, cost: 1, requires, effect, how, row: "standing", mystery: true, currency: "standing", levels };
 }
 
 const RENT_MATH = [
@@ -680,9 +684,12 @@ const RENT_MATH = [
 ];
 const RENT_VARS: readonly Var[] = [
   [sym("h"), "a record's rent, in record points per hour"],
-  [sym("B"), "the record points that problem earned, before multipliers"],
+  [
+    sym("B"),
+    "the record points that problem earned from its improvements, before multipliers (bonuses are not counted)",
+  ],
   [sym("a"), "levels of Higher rent"],
-  [sym("m"), "your points multiplier now (standing, collections and the rewards of cycle rules)"],
+  [sym("m"), "your points multiplier now (resets, collections and the rewards of cycle rules)"],
   [sym("Δ"), "hours since the record's last payday (24 hours a day, 168 hours at most)"],
 ];
 
@@ -754,7 +761,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
  * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
  * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
  * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
- * Curved costs 1,500,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
+ * Curved costs 1,500,000,000 in the first cycle, 1.5 times the Standing card (SLICE_FIRST_CYCLE).
  */
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
@@ -1028,11 +1035,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: site records",
     cost: 48000,
     requires: ["basin"],
-    effect: "The dealer also deals weak site records, worth 3 times the points.",
+    effect: "The dealer also deals weak site records, where taking the lead pays a bonus.",
     how: {
       text: [
         `${RING_TEXT} With Reach, two in three draws are contested problems.`,
-        "A loose record is a site record that is weaker than the records of similar problems. Reach deals loose records of size 300 and up. Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 3.",
+        "A loose record is a site record that is weaker than the records of similar problems. Reach deals loose records of size 300 and up. Your board starts from the leader's packing. Taking the lead on one pays a 10,000 RP bonus.",
       ],
       math: [
         `${sym("g")} = ${sym("s")} / ${sym("b")} − 1`,
@@ -1075,6 +1082,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         `${LANE_TEXT} Your own clicks go to the lane that holds the problem on the board.`,
         "Without Auto-advance, the first lane works on the problem on the board and the second on the next problem in the queue. With it, a lane stays on its problem while it makes progress. Otherwise it moves to the problem that is still improving and has run the fewest evaluations since progress.",
+        "The queue has a slot for each lane, so it holds at least 2 problems.",
       ],
       math: LANE_MATH,
       vars: LANE_VARS,
@@ -1112,6 +1120,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "Each record you hold earns rent every hour, even while this page is closed. It is paid once a day. On payday, the game checks all your records with the server at once. It pays the rent for the days since each record's last payday, up to a week of them.",
         "If another name has taken a record, the rent since its last payday is not paid.",
+        "A reset takes this upgrade away unless Head start gives it back. No rent builds up while you do not own it. When you own it again, every record you still hold starts earning from that moment, and rent that was not paid before is lost.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1156,10 +1165,10 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Collections",
     cost: 280_000,
     requires: ["queue3", "reach2"],
-    effect: "Groups of similar records add to all your points, and the bonus stays through resets.",
+    effect: "Groups of similar records add to all your points.",
     how: {
       text: [
-        "Every record the server confirmed for you counts, even if someone beat it later. Only polygon problems count for now.",
+        "Every record the server confirmed for you counts, even if someone beat it later. Only polygon problems count for now. A reset takes this upgrade away, but your records still count when you buy it again.",
         "Same pieces and container. When you have 9 records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +2 %. The piece counts can be anything.",
         "Same pieces. When you have 10 records with the same pieces, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100.",
         "Tiers. Your first record in each tier adds 5 %. The tiers are open problems, loose records, site records and published values.",
@@ -1180,11 +1189,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: every site record",
     cost: 320_000,
     requires: ["ring200"],
-    effect: "The dealer also deals all other site records, worth 10 times the points.",
+    effect: "The dealer also deals all other site records, where taking the lead pays a bonus.",
     how: {
       text: [
         `${RING_TEXT} This adds every site record that has no published value, loose or not.`,
-        "Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 10. These records have been worked on a lot, so the dealer expects little room to improve them.",
+        "Your board starts from the leader's packing. Taking the lead on one pays a 10,000 RP bonus. These records have been worked on a lot, so the dealer expects little room to improve them.",
       ],
       note: "The dealer expects 0.1 of the room an open problem has.",
     },
@@ -1201,8 +1210,8 @@ export const UPGRADES: readonly Upgrade[] = [
     how: {
       text: [
         "Sometimes another name takes a record of yours on a problem that is no longer in your queue. That problem then goes on a retake list, and at each deal the oldest problem on the list comes before all others, as long as someone else still leads it.",
-        `It starts from the new leader's packing, which your board must beat by more than one billionth. Beating an existing record pays double on your accepted new record, and that goes for each time you take the lead back.`,
-        "A problem with a shape of more than 20 sides counts as a loose record, worth 3 times the points. Problems with smaller shapes rank like other site records, or like published values where there is one.",
+        `It starts from the new leader's packing, which your board must beat by more than one billionth. Taking the lead pays a 10,000 RP bonus, but only once for each problem in each cycle.`,
+        "A problem with a shape of more than 20 sides counts as a loose record. Problems with smaller shapes rank like other site records, or like published values where there is one.",
       ],
     },
     row: "dealer",
@@ -1217,7 +1226,6 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "When the game places a new open problem, it looks for a good packing of the same shapes with fewer pieces. This is your own board in the queue, or else the site's record for the nearest piece count it finds. It keeps those pieces where they are and adds the missing ones in free space.",
         "The game uses this start only if it is clearly smaller than the usual start, with every piece on rings around the centre. Your first record on the problem must beat the best of these starts.",
-        "Your points still count from the usual start, so a transfer saves time without costing points.",
       ],
       note: "It looks up at most 4 piece counts. With 6 or fewer pieces missing, each goes where it grows the container least. The start counts as clearly smaller when its side is under 98 % of Load all's. The starting score is the smallest of the sides below, and your first record must beat it by more than 10⁻⁹ (relative).",
       math: [
@@ -1244,7 +1252,11 @@ export const UPGRADES: readonly Upgrade[] = [
     requires: ["lanes2", "continuous"],
     effect: "Each level adds one lane, up to one less than your computer's cores.",
     how: {
-      text: [LANE_TEXT, "Levels past your cores less one add nothing, so the shop stops offering them."],
+      text: [
+        LANE_TEXT,
+        "Levels past your cores less one add nothing, so the shop stops offering them.",
+        "Each lane also adds a slot to the queue when you own more lanes than the Problem queue card has slots.",
+      ],
       math: LANE_MATH,
       vars: LANE_VARS,
       note: `Each level costs 2.2 times the one before. ${LANE_NOTE}`,
@@ -1314,7 +1326,7 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("E"), "the evaluations it ran"],
         [
           sym("p"),
-          `the record points per evaluation the dealer expected (w × c × R × κ × ${number(RP_PER_EVAL)}, with κ the cost factor of the points)`,
+          `the record points per evaluation the dealer expected (w × R × κ × ${number(RP_PER_EVAL)}, with κ the cost factor of the points, plus the expected bonus)`,
         ],
         [sym("θ"), "the kind's correction for this ranking"],
         [sym("z"), "a random draw from the standard normal distribution"],
@@ -1408,11 +1420,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: published values",
     cost: 4_000_000,
     requires: ["batch", "ring120"],
-    effect: "The dealer also deals problems with a published value, worth 100 times the points.",
+    effect: "The dealer also deals problems with a published value, where beating it pays a bonus.",
     how: {
       text: [
         `${RING_TEXT} This adds problems with a best-known value in the literature. Proven values are never dealt.`,
-        "Your board starts from the best packing the site can draw, which is a site record or the published coordinates. Nothing pays until your board goes below the published value by at least its last printed digit, and from then on every point is multiplied by 100.",
+        "Your board starts from the best packing the site can draw, which is a site record or the published coordinates. Nothing pays until your board goes below the published value by at least its last printed digit, and from then on your board is past the published value. That pays the 10,000 RP bonus for taking the lead.",
         "A record below a published value waits for an administrator's review. Many published values are excellent, so the dealer expects little room to improve them.",
       ],
       note: "The dealer expects 0.004 of the room an open problem has.",
@@ -1429,27 +1441,24 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "standing",
     name: "Standing",
-    cost: 3_000_000_000,
+    cost: RESET_MIN,
     requires: ["collections", "rent", "ring120"],
-    effect: "You can reset for standing, and each point of standing adds 10 % to all points.",
+    effect: "Buying it resets the game, gives you 1 standing point and doubles all your points.",
     how: {
       text: [
-        `A reset ends the cycle, the play since the last reset. Your record points and most upgrades go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
-        "Your records stay on the server and keep paying rent. Your collections, the dealer's learning and the queue stay too, and so do Records pay rent, Higher rent and Collections. Every point of standing you earn adds 10 % to all record points, whether you spend it or not, and you can also spend standing on the Standing row.",
+        `Standing is the reset. It costs ${RESET_MIN.toLocaleString("en-US")} RP in the first cycle, and ${RESET_GROWTH} times as much after each reset. You can buy it when you have that many RP to spend and this cycle has earned at least that many that the server has confirmed. The game asks you to confirm before it resets.`,
+        "A reset takes your record points and most of your upgrades. Records pay rent, Higher rent and Collections go too, unless Head start gives them back. Your records stay on the server, and your list of records, the dealer's learning, the queue and every count stay. Standing and the Standing row stay, but you buy the Standing card again for the next reset.",
+        "Each reset gives 1 standing point to spend on the Standing row, and 1 more if you finished the cycle under a rule. Each reset also doubles all your record points. After 3 resets they pay 8 times as much.",
         "The first reset opens 2D on 3D, where pieces are packed on the surfaces of solids. The second opens 3D in 3D, where solids are packed in solids. An opened dimension stays open, but its cards in the Dimensions row must be bought again in each cycle.",
       ],
       math: [
-        `${sym("S")} = ⌊5 × √(${sym("E")} / ${sym("T")})⌋`,
         `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
-        `${sym("m", "s")} = 1 + 0.1 × ${sym("S", "all")}`,
+        `${sym("m", "s")} = 2<sup>${sym("r")}</sup>`,
       ],
       vars: [
-        [sym("S"), "the standing a reset gives (5 at the threshold)"],
-        [sym("E"), "the record points of this cycle that the server has confirmed (at least T)"],
-        [sym("T"), "the record points this cycle needs for a reset"],
+        [sym("T"), "the price of Standing, and the record points this cycle must have earned and the server confirmed"],
         [sym("r"), "the resets you have made so far (0 in the first cycle)"],
         [sym("m", "s"), "the multiplier standing puts on every record point"],
-        [sym("S", "all"), "the standing you have ever earned"],
       ],
     },
     row: "records",
@@ -1459,45 +1468,29 @@ export const UPGRADES: readonly Upgrade[] = [
   ringRung("ringAll", 24_000_000, ["ring30"], true),
   // ---- standing: paid in standing, kept through resets ----
   standingRung(
-    "head1",
-    "Head start I",
-    1,
-    ["standing"],
-    "Each new cycle starts with 2 to 5 evaluations per click and Auto-eval.",
+    "head",
+    "Head start",
+    [],
+    "Each new cycle starts with the upgrades that cost 10,000 RP or less, and each level raises that limit.",
     {
       text: [
-        `Every reset starts the next cycle with Trace detail, 2 to 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO_BASE)}.`,
+        `At each reset, Head start gives you back, for nothing, the upgrades that cost ${HEAD_START_PRICES.map((p) => p.toLocaleString("en-US")).join(", ")} RP or less at levels 1, 2 and 3. Each level of an upgrade with levels counts as its own upgrade, and every upgrade comes with the ones it needs.`,
+        `Faster auto-eval comes up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}). Keep auto-eval keeps more. Another lane, the Dimensions row and Standing itself never come back this way.`,
+        "Level 2 also brings back Records pay rent, Higher rent (the first 2 levels) and Collections, and level 3 the rest of Higher rent. Prices are the ones without Quick study.",
       ],
     },
-  ),
-  standingRung(
-    "head2",
-    "Head start II",
-    3,
-    ["head1"],
-    "Each new cycle also starts with Basin hopping and the queue of 3.",
-    {
-      text: [
-        `Every reset also starts the next cycle with the basin_hopping method and what it needs (6 to 10 evaluations per click). It also gives Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}) and a queue of 3.`,
-      ],
-    },
+    { max: 3, growth: 1 },
   ),
   standingRung(
     "rules",
     "Cycle rules",
-    3,
-    ["standing"],
+    [],
     "Before a reset, you can pick a rule for the next cycle and earn a lasting reward.",
     {
       text: [
-        "Before a reset, you can pick a rule for the next cycle in the Standing panel. You then play that cycle under the rule, and when you reset at its end, you get extra standing and the rule's reward for good.",
+        "When you buy Standing, you can pick a rule for the next cycle. You then play that cycle under the rule, and when you reset at its end, you get 1 more standing point and the rule's reward for good.",
         "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only problems of size 120 or less, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
         "Circles only and Small problems only apply to the problems of 2D in 2D. Other dimensions are dealt as usual and pay no reward from these rules.",
-      ],
-      math: [`${sym("S", "rule")} = max(1, ⌈${sym("S")} / 2⌉)`],
-      vars: [
-        [sym("S", "rule"), "the extra standing for finishing a cycle under a rule"],
-        [sym("S"), "the standing the reset gives otherwise"],
       ],
       note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },
@@ -1505,8 +1498,7 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "pipeline",
     "Pipelines",
-    4,
-    ["standing"],
+    [],
     "You put methods in order, and each new run on a problem uses the next one.",
     {
       text: [
@@ -1524,8 +1516,7 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "keepAuto",
     "Keep auto-eval",
-    5,
-    ["head1"],
+    ["head"],
     "Your Auto-eval upgrades survive resets, Faster auto-eval's levels included.",
     {
       text: [
@@ -1536,8 +1527,7 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "autoTune",
     "Auto-tune",
-    6,
-    ["standing"],
+    [],
     "With Auto chosen, the game also picks each run's tuning level from what has paid.",
     {
       text: [
@@ -1550,19 +1540,7 @@ export const UPGRADES: readonly Upgrade[] = [
       ],
     },
   ),
-  standingRung(
-    "head3",
-    "Head start III",
-    8,
-    ["head2"],
-    "Each new cycle also starts with Auto-advance, the second lane and Reach.",
-    {
-      text: [
-        "Every reset also starts the next cycle with Reach: site records, Auto-advance and the Second lane, and what they need.",
-      ],
-    },
-  ),
-  standingRung("keepMethods", "Keep methods", 10, ["keepAuto"], "The methods you own survive resets.", {
+  standingRung("keepMethods", "Keep methods", ["keepAuto"], "The methods you own survive resets.", {
     text: [
       `At a reset, you keep every Method upgrade you own (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule, only mc_compress runs in that cycle.`,
     ],
@@ -1570,12 +1548,11 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "study",
     "Quick study",
-    2,
-    ["standing"],
+    [],
     "Each level makes every record-point price 10 % cheaper.",
     {
       text: [
-        "Each level multiplies every price in record points by 0.9. At level 1 you pay 0.9 of the price, at level 2 0.81, at level 5 about 0.59 and at level 10 about 0.35. Prices in standing do not change.",
+        "Each level multiplies every price in record points by 0.9. At level 1 you pay 0.9 of the price, at level 2 0.81, at level 5 about 0.59 and at level 10 about 0.35. Prices in standing do not change, and neither does the price of Standing.",
       ],
       math: [`${sym("p")} = round(${sym("p", "0")} × 0.9<sup>${sym("a")}</sup>)`],
       vars: [
@@ -1583,9 +1560,8 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("p", "0"), "the price without Quick study"],
         [sym("a"), "levels of Quick study"],
       ],
-      note: "Each level costs 1.6 times the one before, in standing.",
     },
-    { max: 10, growth: 1.6 },
+    { max: 10, growth: 1 },
   ),
   // ---- dimensions ----
   ...SLICE_CARDS,
@@ -1612,6 +1588,8 @@ export function costOf(o: Owned, id: UpgradeId): number | null {
   if (!u) return null;
   const l = level(o, id);
   if (u.levels ? l >= u.levels.max : l > 0) return null;
+  // Standing's price is the cycle's reset threshold, and Quick study does not discount it
+  if (id === "standing") return Math.round(thresholdAfter(o.resets ?? 0));
   const base = isCardSlice(id)
     ? slicePrice(id, o.resets ?? 0)
     : id === "autox"
@@ -1630,13 +1608,24 @@ export function isRevealed(o: Owned, id: UpgradeId): boolean {
 
 /** Upgrades that can be bought next (prerequisites owned, a level left): the shop's open cards. */
 export function available(o: Owned): Upgrade[] {
-  return UPGRADES.filter((u) => exists(o, u.id) && costOf(o, u.id) !== null && u.requires.every((r) => o.has(r)));
+  return UPGRADES.filter(
+    (u) =>
+      exists(o, u.id) &&
+      (u.row !== "standing" || standingRowOpen(o)) &&
+      costOf(o, u.id) !== null &&
+      u.requires.every((r) => o.has(r)),
+  );
 }
+
+/** The Standing row is open from the first reset on (Standing is bought as the reset, and again each cycle). */
+export const standingRowOpen = (o: Owned): boolean => o.has("standing") || (o.resets ?? 0) > 0;
 
 /** What the player can pay with. */
 export interface Funds {
   rp: number;
   standing: number;
+  /** Record points of this cycle the server confirmed (standing.ts confirmedCycleEarned): Standing needs its price in these too. */
+  confirmed?: number;
 }
 
 export type BuyCheck = { ok: true } | { ok: false; reason: "owned" | "locked" | "points" };
@@ -1650,7 +1639,10 @@ export function canBuy(o: Owned, funds: Funds | number, id: UpgradeId): BuyCheck
   const f = typeof funds === "number" ? { rp: funds, standing: 0 } : funds;
   const have = currencyOf(u) === "rp" ? f.rp : f.standing;
   // A tiny tolerance so that 4.9999999999 RP after floating sums still buys a 5 RP card.
-  if (have + 1e-9 < cost) return { ok: false, reason: "points" };
+  if (!(have + 1e-9 >= cost)) return { ok: false, reason: "points" };
+  // a reset trades only points the server confirmed
+  if (id === "standing" && f.confirmed !== undefined && !(f.confirmed + 1e-9 >= cost))
+    return { ok: false, reason: "points" };
   return { ok: true };
 }
 
@@ -1777,8 +1769,12 @@ export function laneCount(o: Owned, coreCount = cores()): number {
   return Math.min(2 + level(o, "lanesx"), Math.max(2, coreCount - 1));
 }
 
+/** Problem slots: the queue cards' size, or one for each lane owned when that is more (no cap; the "Lanes in use" setting does not count). */
 export function queueSize(o: Owned): number {
-  return highest(o, QUEUE, 1, (a, b) => a > b);
+  return Math.max(
+    laneCount(o),
+    highest(o, QUEUE, 1, (a, b) => a > b),
+  );
 }
 
 /** Problems with a site record (N, M ≤ 20) are dealt down to this N+M+P; Infinity before Reach. */
@@ -1859,4 +1855,40 @@ export function laneLevelsUseful(coreCount = cores()): number {
 /** Another lane is owned to every level this CPU can use: buying more would add nothing. */
 export function lanesMaxed(o: Owned, coreCount = cores()): boolean {
   return o.has("lanes2") && level(o, "lanesx") >= laneLevelsUseful(coreCount);
+}
+
+// ---------- Head start ----------
+
+/** The list price of level `l` + 1 of an upgrade in record points (level 0 is the first), without Quick study. */
+export function listPrice(id: UpgradeId, l = 0): number {
+  const u = upgrade(id);
+  return id === "autox" ? autoLevelPrice(l) : u.levels ? u.cost * Math.pow(u.levels.growth, l) : u.cost;
+}
+
+/**
+ * The upgrades a level of Head start gives at the start of a cycle, with their levels: every card paid
+ * in record points, and every level of a levelled one, whose own list price is at most the level's
+ * limit, and what they need. Never given: Standing, the Dimensions row's cards, Another lane, and
+ * Faster auto-eval's levels past HEAD2_AUTO_LEVELS.
+ */
+export function headStartGives(headLevel: number): { ids: UpgradeId[]; levels: Partial<Record<UpgradeId, number>> } {
+  const limit = HEAD_START_PRICES[Math.min(headLevel, HEAD_START_PRICES.length) - 1];
+  const levels: Partial<Record<UpgradeId, number>> = {};
+  const ids = new Set<UpgradeId>();
+  if (limit === undefined) return { ids: [], levels };
+  const add = (id: UpgradeId) => {
+    if (ids.has(id)) return;
+    ids.add(id);
+    for (const r of upgrade(id).requires) add(r);
+  };
+  for (const u of UPGRADES) {
+    if (currencyOf(u) !== "rp" || u.id === "standing" || u.id === "lanesx" || isCardSlice(u.id)) continue;
+    const most = u.id === "autox" ? HEAD2_AUTO_LEVELS : (u.levels?.max ?? 1);
+    let n = 0;
+    while (n < most && listPrice(u.id, n) <= limit) n++;
+    if (n === 0) continue;
+    add(u.id);
+    if (u.levels) levels[u.id] = n;
+  }
+  return { ids: UPGRADES.filter((u) => ids.has(u.id)).map((u) => u.id), levels };
 }

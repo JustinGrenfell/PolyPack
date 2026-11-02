@@ -26,13 +26,12 @@ import {
   RATE_LIMITED_BACKOFF_MS,
 } from "./pacer";
 import {
-  BEAT_OTHER_FACTOR,
-  CONTEST,
-  FIRST_RECORD_BONUS,
-  FIRST_RECORD_GAP_RATIO,
+  FIRST_BONUS,
   FLOOR,
   GAP_WEIGHT,
+  LEAD_BONUS,
   SIZE_WEIGHT,
+  STEP_WEIGHT,
   TIER_LABEL,
   costFactor,
   recordPoints,
@@ -109,8 +108,8 @@ function exampleLine(delta: number, label: string): string {
         : `<var>t</var><sub>size</sub> = ${r.size.toFixed(2)}, <var>t</var><sub>gap</sub> = ${r.gap.toFixed(2)}`;
   const sum = r.nibble + r.size + r.gap;
   return (
-    `<var>Δ</var> ${label} gives <var>t</var><sub>step</sub> = ${r.nibble.toFixed(0)}, ${terms}, ` +
-    `so ${exampleW.toFixed(3)} × ${r.k.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.total.toFixed(2)} RP`
+    `<var>Δ</var> ${label} gives <var>t</var><sub>step</sub> = ${r.nibble.toFixed(2)}, ${terms}, ` +
+    `so ${exampleW.toFixed(3)} × ${r.k.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.improvement.toFixed(2)} RP`
   );
 }
 
@@ -120,27 +119,28 @@ const POINTS: How[] = [
       `You earn record points (RP) whenever a click makes your board smaller by more than ${MIN_STEP} of its size, which is the same limit the server uses. The points are paid right away, whether you pressed Evolve yourself or auto-eval did it for you.`,
       "Your records are sent to PolyPack under your display name, and points are paid from your very first click. You can change the name at any time in Settings.",
       "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
-      `Every click that improves the board also pays a small step part, which is larger for larger steps. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
-      "The payment is then multiplied by three weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The contest weight makes problems that other players work on, and published values, pay more. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
-      "Beating an existing record pays double on your accepted new record. Every payment is doubled from the moment your board is better than the other record, until the server accepts your board as the new record. After that, payments are single again.",
+      `Every click that improves the board also pays a small step part, which is larger for larger steps.`,
+      "The payment is then multiplied by two weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
+      `Two bonuses come on top. The first record on a problem pays a ${int(FIRST_BONUS)} RP bonus. That payment pays only the bonus, and later payments count from your first record. Taking the lead on a problem that already has a record pays a ${int(LEAD_BONUS)} RP bonus. The record can be another name's, a published value or a research record. The bonus is paid on the payment whose board is better than that record, at 6 decimals and by at least one millionth. That payment also pays the usual parts for how far the board is past the record.`,
+      "A bonus is paid at most once for each problem in each cycle. Weights and multipliers do not change it, and it does not count toward rent. If the server does not accept your board as the record, the bonus is taken back with the other points, and it can be paid again later.",
       "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
     ],
     math: [
       `<var>Δ</var> = 1 − <var>s</var><sub>new</sub> / <var>s</var><sub>prev</sub>, paid only when <var>Δ</var> &gt; <var>F</var>`,
-      `RP = <var>m</var> × <var>w</var> × <var>c</var> × <var>κ</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>) × <var>β</var>`,
-      `<var>t</var><sub>step</sub> = 1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>)`,
+      `RP = <var>m</var> × <var>w</var> × <var>κ</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub>) + <var>B</var>`,
+      `<var>t</var><sub>step</sub> = ${STEP_WEIGHT} × (1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>))`,
       `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
       `<var>g</var><sub>prev</sub> = <var>s</var><sub>prev</sub> / <var>b</var> − 1, <var>g</var><sub>new</sub> = <var>s</var><sub>new</sub> / <var>b</var> − 1`,
       `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above`,
-      `<var>m</var> = (1 + 0.1 × <var>T</var>) × (1 + <var>C</var>) × <var>R</var>`,
+      `<var>m</var> = 2<sup><var>n</var></sup> × (1 + <var>C</var>) × <var>R</var>`,
     ],
     vars: [
       ["<var>Δ</var>", "the relative improvement of this step (0.001 means the side shrank by 0.1 %)"],
       ["<var>F</var>", `${MIN_STEP}, the smallest improvement that counts`],
       [
         "<var>s</var><sub>prev</sub>",
-        "the side the payment is measured from. It is the side at your last payment on this problem, or before any payment the current record, or with no record the starting score (the side your first record must beat).",
+        "the side the payment is measured from. It is the side at your last payment on this problem, or before any payment the current record. Your first record pays only its bonus, so the next payment counts from it.",
       ],
       [
         "<var>s</var><sub>new</sub>",
@@ -164,23 +164,15 @@ const POINTS: How[] = [
       ["<var>d</var>(<var>n</var>)", "how distinct a shape with n sides is (n = 0 for a circle)"],
       ["<var>N</var>, <var>M</var>", "the number of sides of a piece and of the container (0 for a circle)"],
       [
-        "<var>c</var>",
-        `the contest weight, which is ${CONTEST.open} for an ${TIER_LABEL.open} (no entry yet), ${CONTEST.loose} for a ${TIER_LABEL.loose} (a site record clearly weaker than its neighbours), ${CONTEST.batch} for any other ${TIER_LABEL.batch} and ${CONTEST.published} for a ${TIER_LABEL.published} from the literature`,
-      ],
-      [
         "<var>B</var>",
-        `bonus points, ${FIRST_RECORD_BONUS} for a problem's first record when its gap is at most ${FIRST_RECORD_GAP_RATIO} of the starting score's gap, otherwise 0`,
+        `the flat bonus, ${int(FIRST_BONUS)} for the first record on a problem (that payment counts only the bonus, not the other terms), ${int(LEAD_BONUS)} for taking the lead on a problem that has a record, and 0 on any other payment. It is paid at most once for each problem in each cycle, and no weight or multiplier changes it`,
       ],
       [
         "<var>κ</var>",
         "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one",
       ],
-      [
-        "<var>β</var>",
-        `${BEAT_OTHER_FACTOR} for every payment while your board is better, at 6 decimals, than another name's record or a published value and the server has not yet made your entry the record. It starts again each time another name takes the lead and you beat it. Otherwise 1`,
-      ],
       ["<var>m</var>", "your points multiplier"],
-      ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
+      ["<var>n</var>", "the resets you have made, each of which doubles your points"],
       ["<var>C</var>", "the collections bonus (0.05 means +5 %, and 0 without Collections)"],
       [
         "<var>R</var>",
@@ -202,7 +194,7 @@ const POINTS: How[] = [
       ["<var>κ</var>", `the cost factor here, ${costFactor(EXAMPLE).toFixed(3)}`],
       [
         "<var>b</var>",
-        `the area bound here, ${exampleBound.toFixed(6)}. The board's side is ${exampleSide.toFixed(6)}, 20 % above it. The contest weight of an open problem is ${CONTEST.open}.`,
+        `the area bound here, ${exampleBound.toFixed(6)}. The board's side is ${exampleSide.toFixed(6)}, 20 % above it.`,
       ],
     ],
     note: "The step term depends only on how big the step is. It does not grow as your record gets better, which is why it rises and falls from one click to the next. The size and gap terms of many small steps add up to those of one big step that shrinks the side as much.",
@@ -264,7 +256,7 @@ const COUNTS: How = {
       "<var>c</var><sub>deal</sub>",
       "the clicks that earn you one new problem, which the game deals (gives you) once a slot of your queue is free",
     ],
-    ["<var>q</var>", "the slots in your queue (1 at the start)"],
+    ["<var>q</var>", "the slots in your queue (1 at the start, or the lanes you own if that is more)"],
     ["<var>c</var>", "the clicks a stretch of work counts as"],
     ["<var>e</var><sub>you</sub>", "the evaluations of your own clicks in it"],
     ["<var>e</var><sub>auto</sub>", "auto-eval's evaluations in it"],
@@ -276,44 +268,36 @@ const COUNTS: How = {
 
 const STANDING: How = {
   text: [
-    "A cycle is the time between two resets. When you reset, you trade this cycle's record points and most of your tech tree for standing.",
-    "Each point of standing adds 10 % to all the record points you earn, and it counts whether you spend it or not. You can spend standing on the upgrades in the Standing row of the tech tree, and resets keep those upgrades.",
-    `You can reset once this cycle has earned ${int(RESET_MIN)} RP that the server has confirmed. Each cycle needs 5 times as many as the one before it, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points that are still waiting for the server carry over into the next cycle.`,
+    "A cycle is the time between two resets. You reset by buying the Standing card in the tech tree, and you buy it again for each reset. The game asks you to confirm first. A reset takes this cycle's record points and most of your tech tree, and it gives you standing to spend.",
+    "Each reset gives 1 standing point, and 1 more if you finished the cycle under a rule. You can spend standing on the upgrades in the Standing row of the tech tree, and resets keep those upgrades. Each reset also doubles all the record points you earn.",
+    `Standing costs ${int(RESET_MIN)} RP in the first cycle. You need that many RP to spend, and this cycle must have earned at least that many RP that the server has confirmed. Each cycle costs 5 times as much as the one before it, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points that are still waiting for the server carry over into the next cycle.`,
     `The first reset opens ${DIMENSION_TEXT["2-on-3"].label}, ${DIMENSION_TEXT["2-on-3"].what}. The second opens ${DIMENSION_TEXT["3-in-3"].label}, ${DIMENSION_TEXT["3-in-3"].what}. A dimension stays open for good, and the problems in it are dealt by cards in the Dimensions row, which you buy again in each cycle. Curved problems, a part of ${DIMENSION_TEXT["2-in-2"].label}, have a card from the first cycle on.`,
-    "A reset takes away your RP and every upgrade bought with RP, the Dimensions row included. The only exceptions are Records pay rent, Higher rent, Collections and Standing. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods. Head starts give their upgrades back at once, at level 1.",
-    "A reset keeps your records on the server, and they go on paying rent. It also keeps your collections, your standing, the Standing row, the queue, what the dealer has learned and every count.",
+    "A reset takes away your RP and every upgrade bought with RP, the Dimensions row included. Records pay rent, Higher rent and Collections go too. Head start gives back the upgrades whose own price is small enough, and level 2 brings back Records pay rent and Collections. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods.",
+    "A reset keeps your records on the server. They earn rent again once you own Records pay rent, from that moment on, and the rent that built up before is not paid. A reset also keeps your list of records, your standing, the Standing row, the queue, what the dealer has learned and every count.",
   ],
   math: [
-    `<var>G</var> = ⌊5 × √(<var>E</var> / <var>R</var>)⌋, once <var>E</var> ≥ <var>R</var>`,
-    `<var>R</var> = ${int(RESET_MIN)} × 5<sup><var>n</var></sup>`,
-    `<var>G</var><sub>rule</sub> = max(1, ⌈<var>G</var> / 2⌉), added only for a cycle played under a rule`,
-    `multiplier on all points = 1 + 0.1 × <var>T</var>`,
-    `<var>E</var><sub>next</sub> = <var>R</var> × ((<var>G</var> + 1) / 5)<sup>2</sup>`,
+    `<var>P</var> = ${int(RESET_MIN)} × 5<sup><var>n</var></sup>`,
+    `<var>G</var> = 1, or 2 for a cycle played under a rule`,
+    `multiplier on all points = 2<sup><var>n</var></sup>`,
   ],
   vars: [
-    ["<var>G</var>", "the standing a reset gives now"],
-    ["<var>E</var>", "the record points earned in this cycle and confirmed by the server, rent included"],
-    ["<var>R</var>", "the record points this cycle needs for a reset (the threshold)"],
-    ["<var>n</var>", "the resets you have made so far (0 in the first cycle)"],
-    ["<var>G</var><sub>rule</sub>", "the extra standing for finishing a cycle under a rule"],
-    ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
     [
-      "<var>E</var><sub>next</sub>",
-      "the confirmed record points of this cycle at which the reset gives one more standing",
+      "<var>P</var>",
+      "the price of Standing, and the record points this cycle must have earned and the server confirmed",
     ],
+    ["<var>n</var>", "the resets you have made so far (0 in the first cycle)"],
+    ["<var>G</var>", "the standing points the reset gives"],
   ],
   note: "The milestones show how long this cycle took to reach a few key upgrades, next to your fastest earlier cycle.",
 };
 
 const RULES_HOW: How = {
   text: [
-    "Before a reset you can choose a rule for the next cycle, and the rule limits that whole cycle. If you finish a cycle under a rule, the reset gives half again as much standing, rounded up and at least 1 more. You also keep the rule's reward for good, but it comes only once per rule, while the extra standing comes every time you finish a cycle under it.",
+    "When you buy Standing, you can choose a rule for the next cycle, and the rule limits that whole cycle. If you finish a cycle under a rule, the reset gives 1 more standing point. You also keep the rule's reward for good, but it comes only once per rule, while the extra standing point comes every time you finish a cycle under it.",
     ...RULES.map((r) => `${r.name}. ${r.limit} Once finished, ${lowerFirst(r.reward)}`),
   ],
-  math: [`<var>G</var><sub>rule</sub> = max(1, ⌈<var>G</var> / 2⌉)`, `<var>R</var> = 1.5<sup><var>j</var></sup>`],
+  math: [`<var>R</var> = 1.5<sup><var>j</var></sup>`],
   vars: [
-    ["<var>G</var><sub>rule</sub>", "the extra standing for finishing a cycle under a rule"],
-    ["<var>G</var>", "the standing the reset gives without the rule"],
     ["<var>R</var>", "the multiplier the finished rules put on a problem's points"],
     [
       "<var>j</var>",
@@ -329,7 +313,7 @@ const RECORDS: How[] = [
     text: [
       `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
       `Rent builds up all the time, even while the game is closed. When the page opens, and every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours after that, it is payday. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record you won during the day is paid for its part of a day. A record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
-      "Rent counts as record points earned in this cycle, so it also counts toward a reset.",
+      "Rent counts as record points earned in this cycle, so it also counts toward a reset. A reset takes Records pay rent away unless Head start gives it back. No rent builds up while you do not own it. Once you own it again, every record you still hold starts earning from that moment, and the rent that was not paid before is lost.",
     ],
     math: [
       `<var>h</var> = ${RENT_SHARE} × <var>p</var> × ${RENT_GROWTH}<sup><var>v</var></sup> × <var>m</var>`,
@@ -339,13 +323,13 @@ const RECORDS: How[] = [
       ["<var>h</var>", "the rent of one record, in RP an hour"],
       ["<var>p</var>", "the RP its problem earned before multipliers, less any taken back"],
       ["<var>v</var>", "your level of Higher rent (0 without it)"],
-      ["<var>m</var>", "your points multiplier on that problem now (standing, collections and rules)"],
+      ["<var>m</var>", "your points multiplier on that problem now (resets, collections and rules)"],
       ["<var>t</var>", "the time since the record's last payday, in hours"],
     ],
   },
   {
     text: [
-      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points, and they stay through resets. Only polygon problems count for now.",
+      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points. A reset takes the card away, but your records still count when you buy it again. Only polygon problems count for now.",
       `Same pieces and container. When you have ${COMBO_RECORDS} confirmed records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
       `Same pieces. A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Each milestone gives +${SHAPE_BONUS * 100} %.`,
       `Tiers. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}. Each gives +${TIER_BONUS * 100} %.`,
@@ -369,7 +353,7 @@ const RECORDS: How[] = [
 const AUTO: How = {
   text: [
     "Auto-eval runs evaluations for you while it is on, alongside your own clicks. Its rate is in evaluations a second, and it is set by Auto-eval and Faster auto-eval. Upgrades of evaluations per click make your own clicks bigger but do not speed auto-eval up. Its evaluations pay just as yours do.",
-    "A lane is a solver worker in your browser. It holds one open run, and each lane works on a different problem. The lanes share auto-eval's rate, so more lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board, and each other lane works on another problem in the queue that already has a record. Auto-advance also moves on from problems that have stopped improving.",
+    "A lane is a solver worker in your browser. It holds one open run, and each lane works on a different problem. The lanes share auto-eval's rate, so more lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board, and each other lane works on another problem in the queue that already has a record. Auto-advance also moves on from problems that have stopped improving. The queue has a slot for every lane.",
     "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and it pauses on battery power, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks never pause.",
     `Auto-eval gives each lane its evaluations in small batches, so a lane's worker gets only a few messages a second. A batch is at most about ${AUTO_JOB_SECONDS} s of your computer's time, judged from how long that problem's evaluations have taken here. So a click of yours waits behind very little, even on a large problem or with a slow method.`,
     "The lanes do not get equal numbers of evaluations. Each lane that has work gets about the same solving time, so a lane on a large problem, where an evaluation takes longer, runs fewer evaluations a second than a lane on a small one. Every lane still gets at least a quarter of an equal share. The total stays at the rate you bought. The Lanes panel has a setting for how many of your lanes run.",
@@ -493,7 +477,7 @@ export const TRANSFERS: How = {
   text: [
     "With Transfers, a new open problem can start from the best known packing of the same shapes with fewer pieces. Without it, every piece starts on rings around the centre of the container.",
     `The game looks first at your own boards in the queue with fewer pieces. Then it looks at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. Those are the counts below the problem's among ${andList(FRONTIER_P.map(String))}. With More open problems they also include the three counts just below it. The missing pieces are placed in free space around the packing. When 6 or fewer are missing, each goes where it grows the container least.`,
-    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it. Your points still count from the start without the transfer, so a transfer costs you no points.`,
+    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it.`,
   ],
   math: [
     `use the transfer when <var>s</var><sub>T</sub> &lt; ${TRANSFER_MARGIN} × <var>s</var><sub>L</sub>`,
