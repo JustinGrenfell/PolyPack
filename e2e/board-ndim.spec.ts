@@ -414,7 +414,11 @@ test("the Records page files the nD dimensions under their tabs and filters", as
   // the d-cube tab, and the older address of 3D on 4D
   await tabs.getByRole("link", { name: "4D on 5D" }).click();
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText("4D on 5D");
-  await expect(page.locator("#pick-polytope option")).toHaveText(["5-cube"]);
+  await expect(page.locator("#pick-polytope option")).toHaveText(["5-cube", "5-simplex", "5-orthoplex", "5-demicube"]);
+  // an address that names the simplex, orthoplex or demicube of a dimension opens that dimension's tab, listing the new problems
+  await page.goto("/records.html#space=boundary&polytope=7demicube");
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText("6D on 7D");
+  await expect(page.locator("#pick-polytope")).toHaveValue("7demicube");
   await page.goto("/records.html#space=boundary&polytope=tesseract");
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText("3D on 4D");
   await expect(page.locator("#pick-polytope option")).toHaveCount(6);
@@ -436,7 +440,8 @@ test("the dimensions page has a card for each nD dimension and links it to the b
   await expect(four).toContainText("1,911");
   const cube = page.locator('section[data-dimension="9-on-10"]');
   await expect(cube.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/#space=boundary/10cube/ball/9");
-  await expect(cube).toContainText("800");
+  // 800 balls and cubes on the 10-cube and 72 balls on the 10-simplex, 10-orthoplex and 10-demicube
+  await expect(cube).toContainText("872");
   // a keyed card opens its own dimension on the board
   await four.getByRole("link", { name: /^Board/ }).click();
   await shown(page, "ndim/4/cube/cube/12", LAZY_VIEW);
