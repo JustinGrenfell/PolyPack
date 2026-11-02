@@ -50,6 +50,8 @@ import { AlignedCubeModel } from "./cubes";
 import { lbfgs } from "./lbfgs";
 import { type PieceModel, type State, scaleState } from "./model";
 import { mulberry32 } from "./random";
+import { expRot, leftJacobian, mul9, orthonormalize } from "./rot";
+import { SolidModel } from "./solids";
 
 export interface BoundarySearchOptions {
   /** Configuration to start from (any s; an invalid one is grown until the model finds it feasible). */
@@ -79,7 +81,7 @@ export interface BoundarySearchEvent {
   seconds: number;
   score: number;
   /** "start": the given start itself; "warm": compressed from it; then random, hop or rings starts. */
-  source: "start" | "warm" | "random" | "hop" | "rings";
+  source: "start" | "warm" | "random" | "hop" | "rings" | "cells";
   stage: "given" | "coarse" | "polish";
 }
 
@@ -158,7 +160,9 @@ function cloneConfig(c: BoundaryConfig): BoundaryConfig {
 /** The search's model of a problem's pieces. */
 export function modelOf(problem: BoundaryProblem, ballMetric?: "words" | "chains"): PieceModel {
   const poly = getPolytope(problem.polytope as PolytopeName);
-  if (problem.piece === "cube") return new AlignedCubeModel(poly, problem.P, chartsOf(poly));
+  // the tesseract's cube is the axis-aligned one of its records; every other solid, the cube on the other 4-polytopes included, is rotated
+  if (problem.piece === "cube" && poly.name === "tesseract") return new AlignedCubeModel(poly, problem.P, chartsOf(poly));
+  if (problem.piece !== "ball") return new SolidModel(poly, problem.piece, problem.P);
   // balls: the working model (radius 1) behind its site-unit wrapper (ball-site.ts)
   return new SiteBallModel(ballMetric === "chains" ? new BallModel(poly, problem.P, new ChainMetric(poly)) : new BallModel(poly, problem.P));
 }
@@ -267,15 +271,29 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
 
   // ------------------------------------------------------------ relax
   const P3 = 3 * P;
-  const gU = new Float64Array(P3);
+  // rotated pieces (solids.ts) add three rotation variables per piece after the 3P displacements
+  const rot = !!model.rotates;
+  const NV = rot ? 2 * P3 : P3;
+  const gU = new Float64Array(NV);
   const Ms = new Float64Array(9 * P);
-  const moved: State = { cells: new Int32Array(P), U: new Float64Array(P3) };
-  /** Moves every piece of `base` by its displacement in x; false when a path meets a hinge. */
+  const newState = (): State => (rot ? { cells: new Int32Array(P), U: new Float64Array(P3), R: new Float64Array(9 * P) } : { cells: new Int32Array(P), U: new Float64Array(P3) });
+  const moved: State = newState();
+  const eRot = new Float64Array(9);
+  const tmpRot = new Float64Array(9);
+  const jac = new Float64Array(9);
+  /** Moves every piece of `base` by its displacement (and turns it by its rotation increment) in x; false when a path meets a hinge. */
   const place = (base: State, x: Float64Array, s: number, out: State): boolean => {
     for (let q = 0; q < P; q++) {
       const c = charts.move(base.cells[q], base.U, 3 * q, x[3 * q], x[3 * q + 1], x[3 * q + 2], s, out.U, 3 * q, Ms, 9 * q);
       if (c < 0) return false;
       out.cells[q] = c;
+      if (rot) {
+        // the new orientation, in the end cell's frame: M exp(omega) R, omega an increment in the start frame
+        expRot(x[P3 + 3 * q], x[P3 + 3 * q + 1], x[P3 + 3 * q + 2], eRot);
+        mul9(eRot, 0, base.R!, 9 * q, tmpRot, 0);
+        mul9(Ms, 9 * q, tmpRot, 0, out.R!, 9 * q);
+        orthonormalize(out.R!, 9 * q);
+      }
     }
     return true;
   };
@@ -300,11 +318,25 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
           g[3 * q] = Ms[m] * a + Ms[m + 3] * b + Ms[m + 6] * c;
           g[3 * q + 1] = Ms[m + 1] * a + Ms[m + 4] * b + Ms[m + 7] * c;
           g[3 * q + 2] = Ms[m + 2] * a + Ms[m + 5] * b + Ms[m + 8] * c;
+          if (rot) {
+            // the rotation increment omega (start frame): d theta_end = det(M) M Jl(omega) d omega, so g_omega = Jl^T det(M) M^T g_theta
+            const ta = gU[P3 + 3 * q];
+            const tb = gU[P3 + 3 * q + 1];
+            const tc = gU[P3 + 3 * q + 2];
+            const det = Ms[m] * (Ms[m + 4] * Ms[m + 8] - Ms[m + 5] * Ms[m + 7]) - Ms[m + 1] * (Ms[m + 3] * Ms[m + 8] - Ms[m + 5] * Ms[m + 6]) + Ms[m + 2] * (Ms[m + 3] * Ms[m + 7] - Ms[m + 4] * Ms[m + 6]);
+            const h0 = det * (Ms[m] * ta + Ms[m + 3] * tb + Ms[m + 6] * tc);
+            const h1 = det * (Ms[m + 1] * ta + Ms[m + 4] * tb + Ms[m + 7] * tc);
+            const h2 = det * (Ms[m + 2] * ta + Ms[m + 5] * tb + Ms[m + 8] * tc);
+            leftJacobian(x[P3 + 3 * q], x[P3 + 3 * q + 1], x[P3 + 3 * q + 2], jac);
+            g[P3 + 3 * q] = jac[0] * h0 + jac[3] * h1 + jac[6] * h2;
+            g[P3 + 3 * q + 1] = jac[1] * h0 + jac[4] * h1 + jac[7] * h2;
+            g[P3 + 3 * q + 2] = jac[2] * h0 + jac[5] * h1 + jac[8] * h2;
+          }
         }
         return e;
       };
-      const res = lbfgs(f, new Float64Array(P3), { maxIter, target: model.target, maxStep: model.maxStep });
-      const next: State = { cells: new Int32Array(P), U: new Float64Array(P3) };
+      const res = lbfgs(f, new Float64Array(NV), { maxIter, target: model.target, maxStep: model.maxStep });
+      const next: State = newState();
       if (!(res.f < Infinity) || !place(base, res.x, s, next)) break;
       const prev = E;
       cur = next;
@@ -409,7 +441,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
       const from = hopFrom as { st: State; s: number } | null;
       if (built) {
         ({ st, s } = built);
-        source = "rings";
+        source = problem.piece === "cube" && problem.polytope === "tesseract" ? "rings" : "cells";
       } else if (from && n % plan.hopEvery === plan.hopEvery - 1) {
         s = from.s * plan.hopGrow;
         st = model.hop(scaleState(from.st, plan.hopGrow), s, rand);

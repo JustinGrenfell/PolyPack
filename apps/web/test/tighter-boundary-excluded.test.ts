@@ -1,9 +1,13 @@
 /**
- * The 3D on 4D space (balls on the tesseract and, since 2026-11-01, on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell) and
+ * The 3D on 4D space (balls on the tesseract and, since 2026-11-01, on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell; since
+ * 2026-11-02 also the five Platonic solids, freely rotated, on all six) and
  * the (d-1)D on dD spaces of the d-cubes (4D on 5D to 9D on 10D, balls and axis-aligned cubes, since 2026-11-01) are
  * not in Tighter: the game takes its problems from explicit slices and id patterns (src/tighter/families.ts spaceFields,
  * slices.ts SLICES), none of which names `boundary`, and not from the spaces' domains. The tesseract was never dealt, and the new
- * containers cannot be: this pins that down, with no line of the game changed.
+ * containers and pieces cannot be: this pins that down, with no line of the game changed.
+ *
+ * The expected id count of the 4-polytopes is 816 since 2026-11-02 (it was 152): 664 more problems, the tetrahedron, octahedron,
+ * dodecahedron and icosahedron on the tesseract (4 x 16) and the five solids on each of the other five (5 x 5 x 24).
  */
 import { describe, expect, it } from "vitest";
 import { NCUBE_NAMES, boundaryDomain } from "@polypack/boundary";
@@ -15,13 +19,13 @@ import { familyDimension } from "../src/tighter/frontier";
 import { SLICES } from "../src/tighter/slices";
 
 describe("Tighter and 3D on 4D", () => {
-  it("has no slice for it and does not read any of its 152 ids as a problem", () => {
+  it("has no slice for it and does not read any of its 816 ids as a problem", () => {
     expect(SPACE_DOMAINS.boundary).toBe(boundaryDomain);
     expect(SLICES.some((s) => /boundary|tesseract|5cell|16cell|24cell|120cell|600cell/.test(JSON.stringify(s)))).toBe(
       false,
     );
     const ids = boundaryDomain.sample(100000).filter((id) => !/^boundary\/\d+cube\//.test(id));
-    expect(ids).toHaveLength(152);
+    expect(ids).toHaveLength(816);
     for (const id of ids) {
       expect(spaceFields(id), id).toBeNull();
       expect(sliceOfId(id), id).toBeNull();
@@ -51,7 +55,7 @@ describe("Tighter and the boundary's new Dimensions (3D on 4D, 4D on 5D to 9D on
   it("deals no problem of the boundary space whatever the Dimension an id opens on the site", () => {
     // the site files each id of the space under a Dimension (dimension-table.ts); the game has no family for any of them
     const ids = boundaryDomain.sample(100000);
-    expect(ids).toHaveLength(152 + 4288);
+    expect(ids).toHaveLength(816 + 4288);
     for (const id of ids) {
       const where = DIMENSIONS.flatMap((d) => d.families.map((f) => ({ d, f }))).find(
         ({ f }) => f.space === "boundary" && f.scope!.values.includes(id.split("/")[1]),

@@ -115,12 +115,12 @@ describe("the Records page of one dimension", () => {
     expect(four4.find((p) => p.spec.key === "polytope")!.options.map((o) => o.value)).toHaveLength(6);
   });
 
-  it("counts a dimension's problems from the domain: 6,131 in all, 152 and 4,288 on the boundaries", () => {
+  it("counts a dimension's problems from the domain: 6,131 in all, 816 and 4,288 on the boundaries", () => {
     const per = [4, 5, 6, 7, 8, 9, 10].map((d) => scopedDomainCount(info("ndim"), scopeOf(`ndim-${d}`)));
     expect(per).toEqual([1911, 775, 1127, 684, 684, 475, 475]);
     expect(per.reduce((a, b) => a! + b!, 0)).toBe(6131);
     expect(scopedDomainCount(info("ndim"), null)).toBe(6131);
-    expect(scopedDomainCount(info("boundary"), scopeOf("boundary"))).toBe(152);
+    expect(scopedDomainCount(info("boundary"), scopeOf("boundary"))).toBe(816);
     const cubes = [5, 6, 7, 8, 9, 10].map((d) => scopedDomainCount(info("boundary"), scopeOf(`boundary-${d}cube`)));
     expect(cubes).toEqual([320, 768, 800, 800, 800, 800]);
     expect(cubes.reduce((a, b) => a! + b!, 0)).toBe(4288);

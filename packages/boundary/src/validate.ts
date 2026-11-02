@@ -79,6 +79,8 @@ export interface ValidateOptions {
   maxChains?: number;
   /** Stop collecting reasons after this many (default 20). */
   maxReasons?: number;
+  /** Platonic pieces: the most pairs of parts tested before the check is refused (default 400,000). */
+  maxPairs?: number;
   /** The d-cubes only (ncube/): the most search steps of one check (default NCUBE_MAX_WORK); maxChains is for the 4-polytopes. */
   maxWork?: number;
 }
@@ -431,7 +433,7 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
 }
 
 /** The rule for rotated polytope pieces (the cube included; on the tesseract the cube problems use it for their axis-aligned cubes). */
-function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number): string[] {
+function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number, maxPairs = 400000): string[] {
   const shape = pieceShape(piece as PolytopePieceName);
   const one = capital(piece);
   const many = capital(plural(piece));
@@ -467,6 +469,7 @@ function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: Bou
   // bounding box. A part's extent is at most the piece's diameter (the cube's sqrt 3 < 2) <= G, so two parts whose boxes
   // overlap have low corners within G of each other on every axis: neighbouring grid cells only.
   const G = Math.max(2, 2 * shape.circumradius + 1e-9);
+  let pairs = 0;
   const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
   shapes.forEach((list, cell) => {
     if (reasons.length >= maxReasons) return;
@@ -493,6 +496,11 @@ function validatePieces(poly: Polytope, piece: PieceName, s: number, pieces: Bou
               if (!(Math.min(A.sat.hi[0], B.sat.hi[0]) - Math.max(A.sat.lo[0], B.sat.lo[0]) > thr)) continue;
               if (!(Math.min(A.sat.hi[1], B.sat.hi[1]) - Math.max(A.sat.lo[1], B.sat.lo[1]) > thr)) continue;
               if (!(Math.min(A.sat.hi[2], B.sat.hi[2]) - Math.max(A.sat.lo[2], B.sat.lo[2]) > thr)) continue;
+              // the work cap: a check that needs more separating-axis tests than this is refused, never accepted
+              if (++pairs > maxPairs) {
+                push(`The check needs more than ${maxPairs} tests of pairs of parts; the configuration is too crowded for the server to check.`);
+                return reasons;
+              }
               // stops early once an axis shows an overlap <= thr; otherwise it is the full penetration depth
               const depth = satDepth(A.sat, B.sat, thr);
               if (depth <= thr) continue;
@@ -553,6 +561,6 @@ function run(problem: BoundaryProblem, config: unknown, opts: ValidateOptions, g
       score: null,
       reasons: [`${pieces.length} ${plural(problem.piece)} have a total volume of ${fmt(pieces.length * pieceVolume)}, more than the ${fmt(volume)} of the ${poly.name}'s boundary at s = ${fmt(s)}.`],
     };
-  const geo = problem.piece === "ball" ? validateBallsSite(poly, s, pieces, tol, maxChains, maxReasons) : validatePieces(poly, problem.piece, s, pieces, tol, maxChains, maxReasons);
+  const geo = problem.piece === "ball" ? validateBallsSite(poly, s, pieces, tol, maxChains, maxReasons) : validatePieces(poly, problem.piece, s, pieces, tol, maxChains, maxReasons, opts.maxPairs);
   return geo.length ? { ok: false, score: null, reasons: geo } : { ok: true, score: s, reasons: [] };
 }

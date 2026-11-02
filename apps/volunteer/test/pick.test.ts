@@ -125,12 +125,12 @@ describe("the problems of the other kinds", () => {
     }
   });
 
-  it("are, for boundary, its domain's 4,440 problems: the tesseract's 32 with records, 120 balls on the other 4-polytopes and 4,288 on the d-cubes", () => {
+  it("are, for boundary, its domain's 5,104 problems: the tesseract's 32 with records, 784 more on the 4-polytopes (balls and the Platonic solids) and 4,288 on the d-cubes", () => {
     const index = loadSpacesIndex(join(__dirname, "../../.."));
     const records = index.boundary!.problems.map((p) => p.id).sort();
     expect(Math.max(...index.boundary!.problems.map((p) => p.P))).toBe(BOUNDARY_CATALOGUE_MAX_P);
     const catalogue = SPACE_DOMAINS.boundary!.sample(100000).sort();
-    expect(catalogue).toHaveLength(152 + 2 * (160 + 384 + 4 * 400));
+    expect(catalogue).toHaveLength(816 + 2 * (160 + 384 + 4 * 400));
     expect(catalogue.filter((id) => records.includes(id))).toEqual(records);
     const k = spaceKind("boundary", null);
     expect(k.size).toBe(catalogue.length);
@@ -140,7 +140,7 @@ describe("the problems of the other kinds", () => {
       const d = k.draw(random);
       if (d) drawn.add(drawnKey(d));
     }
-    // every draw is a problem of the domain, and every container is drawn (60,000 draws do not reach all 4,440 problems)
+    // every draw is a problem of the domain, and every container is drawn (60,000 draws do not reach all 5,104 problems)
     expect([...drawn].every((id) => catalogue.includes(id))).toBe(true);
     for (const c of ["tesseract", "5cell", "600cell", "5cube", "10cube"])
       expect(

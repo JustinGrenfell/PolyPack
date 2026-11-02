@@ -477,7 +477,7 @@ def check_platonic(polytope, piece, P, config, strict):
 
     try:
         v = platonic.check_pieces(polytope, piece, P, config, to_fraction, strict=strict)
-    except (platonic.PlatonicError, general_errors()) as e:
+    except (platonic.PlatonicError, *general_errors()) as e:
         raise CertError(str(e)) from None
     v.platonic = True
     return v

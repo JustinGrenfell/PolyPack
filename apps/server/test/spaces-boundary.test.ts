@@ -83,13 +83,13 @@ const entry = (id: string, config: unknown, extra: object = {}) => ({
 });
 
 describe("the boundary space in the listing and its records", () => {
-  it("is listed last, with its title, viewer, notes, conventions and 4,440 problems", async () => {
+  it("is listed last, with its title, viewer, notes, conventions and 5,104 problems", async () => {
     const r = (await get("/api/spaces")).body as SpacesResponse;
     expect(r.spaces.map((s) => s.space)).toEqual([...SPACE_NAMES]);
     const b = r.spaces.find((s) => s.space === "boundary")!;
     expect(b).toMatchObject({
       title: "Polytope boundaries",
-      problems: 152 + 2 * (160 + 384 + 4 * 400),
+      problems: 816 + 2 * (160 + 384 + 4 * 400),
       viewer: "/spaces/boundary.html",
       docs: "https://github.com/sinkomr/PolyPack/blob/main/docs/spaces/BOUNDARY.md",
       problem_id: "boundary/<polytope>/<piece>/<P>",

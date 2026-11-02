@@ -36,6 +36,8 @@ export interface PieceShape {
   mirror: number[];
   /** Edges as vertex index pairs. */
   edges: [number, number][];
+  /** One unit direction per class of parallel edges (the separating-axis test's edge axes). */
+  edgeDirs: V3[];
 }
 
 /** Faces of the convex hull of `verts` (counter-clockwise from outside), found by planes through triples. */
@@ -147,6 +149,11 @@ function build(name: PolytopePieceName): PieceShape {
         }
       : hullFaces(vertices);
   const edges = edgesOf(hull.faces);
+  const edgeDirs: V3[] = [];
+  for (const [a, b] of edges) {
+    const d = unit3(sub3(vertices[b], vertices[a]));
+    if (!edgeDirs.some((e) => Math.hypot(...cross3(e, d)) < 1e-9)) edgeDirs.push(d);
+  }
   const inradius = dot3(hull.normals[0], vertices[hull.faces[0][0]]);
   const circumradius = name === "cube" ? Math.sqrt(3) / 2 : Math.hypot(...vertices[0]);
   const [ea, eb] = edges[0];
@@ -169,6 +176,7 @@ function build(name: PolytopePieceName): PieceShape {
     volume: vol,
     mirror: name === "tetrahedron" ? MIRROR_SWAP_XY : MIRROR_INVERSION,
     edges,
+    edgeDirs,
   };
 }
 

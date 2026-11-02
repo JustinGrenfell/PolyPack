@@ -157,13 +157,34 @@ export const BOUNDARY_BALL_MS: Record<PolytopeName, number> = {
   "120cell": 12,
 };
 
-/** Estimated milliseconds of the server's check of a configuration of P pieces. Cubes, which have parts instead of chains, cost 0.3 each. */
+/**
+ * Milliseconds of validation per Platonic piece (validateBoundary at tolerance 1e-9 with the server's 1024 chains, one machine core, [CALC]
+ * 2026-11-02): the worst measured, over the five solids, of (a) the cells tiling their container at s = 1 (every piece touches all its
+ * neighbours: 5-cell 3.8 ms, 16-cell 2.8, 24-cell 2.3, 120-cell dodecahedra 4.4, 600-cell 1.2 per piece) and (b) one piece alone at 1.02 to
+ * 4 times its smallest edge, in 12 random orientations (at most 2.2 ms, with single outliers of 6 ms on the tesseract and 3.8 ms on the
+ * 120-cell), rounded up. Loose random layouts of 24 pieces took 1.4 to 25 ms in all.
+ */
+export const BOUNDARY_SOLID_MS: Record<PolytopeName, number> = {
+  tesseract: 4,
+  "5cell": 4,
+  "16cell": 3,
+  "24cell": 3,
+  "120cell": 5,
+  "600cell": 2,
+};
+
+/**
+ * Estimated milliseconds of the server's check of a configuration of P pieces. A solid costs BOUNDARY_SOLID_MS each (the tesseract's aligned
+ * cubes, which have no chains to speak of, 0.3 each).
+ */
 export function boundaryCheckMs(problem: { polytope: ContainerName; piece: PieceName; P: number }): number {
   if (isNCubeName(problem.polytope)) return ncubeCheckMs(problem.polytope, problem.piece as "ball" | "cube", problem.P);
-  return problem.piece === "cube" ? 0.3 * problem.P : BOUNDARY_BALL_MS[problem.polytope] * problem.P;
+  if (problem.piece === "ball") return BOUNDARY_BALL_MS[problem.polytope] * problem.P;
+  if (problem.piece === "cube" && problem.polytope === "tesseract") return 0.3 * problem.P;
+  return BOUNDARY_SOLID_MS[problem.polytope] * problem.P;
 }
 
-/** A check of at least this many milliseconds waits its turn in the server's heavy queue (the 120-cell from P = 5, the 24-cell from P = 22). */
+/** A check of at least this many milliseconds waits its turn in the server's heavy queue (balls: the 120-cell from P = 5, the 24-cell from P = 22; solids: from P = 13 on the tesseract and 5-cell, 17 on the 16-cell and 24-cell, 10 on the 120-cell, never on the 600-cell). */
 export const BOUNDARY_HEAVY_MS = 50;
 
 export function boundaryIsHeavy(problem: { polytope: ContainerName; piece: PieceName; P: number }): boolean {
