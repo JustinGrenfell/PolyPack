@@ -9,6 +9,7 @@ const required = [
   "data/torus/records.json",
   "data/curved/records.json",
   "data/boundary/records.json",
+  "data/ndim/records.json",
   "data/corpus/N3-M3-P6.json",
   "python/polyhedra/fixtures/crosscheck.json",
 ];

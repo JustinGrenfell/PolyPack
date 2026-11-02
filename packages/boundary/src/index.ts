@@ -6,6 +6,10 @@ export type { Iso3, V3 } from "./linalg";
 export { convexHull } from "./hull";
 export type { HullFacet, HullRidge } from "./hull";
 export { boundaryVolume, buildPolytope, cellExcess, compareNormals, facetPlane, fromAmbient, getPolytope, isPolytopeName, tesseractVertices, toAmbient } from "./polytope";
+export { BOUNDARY_DOMAIN_MAX_P, BOUNDARY_PROBLEM_COUNT, boundaryDomain } from "./domain";
+export { BOUNDARY_BALL_MS, BOUNDARY_HEAVY_MS, CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds, boundaryCheckMs, boundaryIsHeavy, containerFacts } from "./bounds";
+export type { ContainerFacts } from "./bounds";
+export { RAW_EDGE, rawVertices, unitVertices } from "./containers";
 export { MAX_P, formatBoundaryId, isPieceCount, isPieceName, parseBoundaryId, standardPiece } from "./ids";
 export {
   ChainLimitError,
@@ -31,4 +35,23 @@ export { MAX_S, validateBoundary, validateOn } from "./validate";
 export type { ValidateOptions } from "./validate";
 export { TesseractWords, embed as tesseractEmbed, tesseractClearance } from "./tesseract";
 export * from "./search";
+export {
+  NCUBE_NAMES,
+  WordLimitError,
+  axesOf as ncubeAxes,
+  embedCell as ncubeEmbed,
+  isNCubeName,
+  ncubeClearance,
+  ncubeDim,
+  realisedWords as ncubeRealisedWords,
+  newBudget as ncubeBudget,
+} from "./ncube/lattice";
+export { NCUBE_MAX_P, NCUBE_TITLES, ncubeBound, ncubeCheckMs, ncubeProblemBound, unitBallVolume } from "./ncube/bounds";
+export { NCUBE_MAX_WORK, cubeParts as ncubeCubeParts, validateNCube } from "./ncube/validate";
+export type { NCubeProblem } from "./ncube/validate";
+export { NCUBE_SERVER_RULE, ncubeFormErrors, ncubeServerRule } from "./ncube/rule";
+export { ncubeKernel } from "./ncube/kernel";
+export { searchNCube } from "./ncube/search";
+export { cellLayout as ncubeCellLayout, ringLayout as ncubeRingLayout } from "./ncube/seeds";
+export { isContainerName } from "./polytope";
 export * from "./kernel";

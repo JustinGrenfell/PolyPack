@@ -1,0 +1,85 @@
+export {
+  BALL,
+  BALL_RADIUS,
+  MAX_DIM,
+  MIN_DIM,
+  problemErrors,
+  shapePolytope,
+  type NdConfig,
+  type NdProblem,
+} from "./problem";
+export {
+  LAZY_CODES,
+  POLYTOPE_CODES,
+  POLYTOPE_INFO,
+  getPolytope,
+  isLoaded,
+  loadPolytope,
+  polytopeInfo,
+  polytopesOfDimension,
+  type Polytope,
+  type PolytopeData,
+  type PolytopeInfo,
+} from "./polytope";
+export {
+  MAX_CAYLEY,
+  MAX_COORD,
+  MAX_SIZE,
+  cayleyMatrix,
+  cayleyOfMatrix,
+  nParams,
+  placeFacets,
+  placeVertices,
+  poseLength,
+  poseOfMatrix,
+  readPose,
+  type ReadPose,
+} from "./pose";
+export {
+  closestPoints,
+  gapAlong,
+  penetrationDepth,
+  signedSeparation,
+  type ClosestResult,
+  type PenetrationResult,
+  type Separation,
+  type SeparationOptions,
+} from "./gjk";
+export { maxMarginSeparation, type MarginOptions, type MarginResult } from "./margin";
+export {
+  HARD_MAX_BALL_PIECES,
+  HARD_MAX_PIECES,
+  HARD_MAX_VERTEX_WORK,
+  HARD_MAX_WALL_WORK,
+  MAX_BALL_PIECES,
+  MAX_PIECES_BY_DIM,
+  MAX_VERTEX_WORK,
+  MAX_WALL_WORK,
+  defaultLimits,
+  effectiveLimits,
+  sizeErrors,
+  type NdLimits,
+} from "./limits";
+export {
+  NDIM_TOL,
+  configErrors,
+  ndCheck,
+  pairSeparation,
+  pieceWallGap,
+  tightScale,
+  validateNd,
+  validateNdAsync,
+  type NdValidation,
+  type ValidateOptions,
+} from "./validate";
+export {
+  ballVolume,
+  inradiusBound,
+  lowerBound,
+  maxPiecesByVolume,
+  unitCircumradius,
+  unitInradius,
+  unitVolume,
+  volumeBound,
+} from "./bounds";
+export { ballFacetGap, ballInBallGap, ballPairGap, ballWallGap } from "./ball";

@@ -4,10 +4,10 @@
  * certified record. It is rebuilt here because this package does not depend on the spaces
  * registry; packages/spaces/test/boundary-kernel.test.ts compares the two, verdict, score and
  * reasons. In order:
- *  1. P is at most the space's largest, SPACE_MAX_P.boundary = 64 (the live server also caps it
- *     at its catalogue's, 16);
+ *  1. P is at most this kernel's cap of 64 for the tesseract and the other 4-polytopes (SPACE_MAX_P.boundary is 400, which
+ *     the d-cubes use under their own rule, ncube/; the live server also caps the 4-polytopes at the catalogue's, 16 or 24);
  *  2. the form, in the server's words (parseBoundary): s a finite number in (0, 1e4]; a list of
- *     P pieces {cell, u, q?}, cell an integer from 0 to 7, u three finite numbers of at most
+ *     P pieces {cell, u, q?}, cell an integer from 0 to C - 1 (C the polytope's cells: 8 for the tesseract, 5, 16, 24, 120, 600 for the others), u three finite numbers of at most
  *     SPACE_MAX_COORD = 1e4 in absolute value; a ball has no q, a cube's q is four such numbers of
  *     norm within 1e-9 of 1. A wrong number of pieces is an invalid packing, anything else here
  *     malformed input; either way the score is null;
@@ -19,7 +19,10 @@
  * needs the record. finish() gives configurations valid at tolerance 0, which pass it anyway.
  */
 import type { Validation } from "@polypack/methods";
-import type { BoundaryProblem, PieceName } from "./types";
+import { ncubeFormErrors, ncubeServerRule } from "./ncube/rule";
+import { isNCubeName } from "./ncube/lattice";
+import { getPolytope } from "./polytope";
+import type { BoundaryProblem, PieceName, PolytopeName } from "./types";
 import { MAX_S, validateBoundary } from "./validate";
 
 /** The server's constants (packages/spaces/src/info.ts and validate.ts). */
@@ -30,7 +33,7 @@ export const BOUNDARY_SERVER_RULE = {
   maxChains: 1024,
   /** MAX_REASONS */
   maxReasons: 20,
-  /** SPACE_MAX_P.boundary */
+  /** the 4-polytopes' cap (SPACE_MAX_P.boundary is 400, used by the d-cubes) */
   maxP: 64,
   /** SPACE_MAX_COORD */
   maxCoord: 1e4,
@@ -48,6 +51,8 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  */
 export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
   const R = BOUNDARY_SERVER_RULE;
+  if (isNCubeName(problem.polytope))
+    return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, raw);
   if (!isObject(raw)) return ["config must be an object"];
   const errors: string[] = [];
   const num = (v: unknown, path: string, max: number, positive = false): number => {
@@ -65,6 +70,7 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
   if (list.length !== problem.P)
     return [...errors, `expected ${problem.P} pieces for this problem, got ${list.length}`];
   const ball = problem.piece === "ball";
+  const cellCount = getPolytope(problem.polytope).cells.length;
   for (let i = 0; i < list.length; i++) {
     if (errors.length >= R.maxReasons) break;
     // the server maps over the list, which skips a hole; the validator then refuses it
@@ -74,8 +80,8 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
       errors.push(`pieces[${i}] must be an object {cell, u${ball ? "" : ", q?"}}`);
       continue;
     }
-    if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= 8)
-      errors.push(`pieces[${i}].cell must be an integer from 0 to 7`);
+    if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= cellCount)
+      errors.push(`pieces[${i}].cell must be an integer from 0 to ${cellCount - 1}`);
     if (!Array.isArray(p.u) || p.u.length !== 3) errors.push(`pieces[${i}].u must be [u0, u1, u2]`);
     else for (let k = 0; k < 3; k++) num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, R.maxCoord);
     if (p.q === undefined) continue;
@@ -97,6 +103,8 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
 /** The server's verdict on a configuration of the problem (header). */
 export function serverRule(problem: BoundaryProblem, config: unknown, bound: number): Validation {
   const R = BOUNDARY_SERVER_RULE;
+  if (isNCubeName(problem.polytope))
+    return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, config, bound);
   const fail = (reasons: string[], score: number | null = null): Validation => ({ valid: false, score, reasons });
   if (problem.P > R.maxP)
     return fail([`P = ${problem.P} is above the largest P of the boundary catalogue (${R.maxP})`]);

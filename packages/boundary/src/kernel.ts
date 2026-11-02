@@ -44,14 +44,17 @@
 import type { Finished, KernelCapability, KernelState, Rng, SpaceKernel, Validation } from "@polypack/methods";
 import { formatBoundaryId, isPieceCount, isPieceName } from "./ids";
 import { displacementTo } from "./kernel-pose";
-import { cellLayout } from "./kernel-seeds";
+import { cellLayout, generalLayout } from "./kernel-seeds";
 import { BOUNDARY_SERVER_RULE, boundaryBound, serverForm, serverRule } from "./kernel-validate";
+import { ballBounds } from "./bounds";
+import { ncubeKernel } from "./ncube/kernel";
+import { isNCubeName } from "./ncube/lattice";
 import { getPolytope, isPolytopeName } from "./polytope";
 import { type Charts, chartsOf, randomCellPoint } from "./search/chart";
 import type { PieceModel, State } from "./search/model";
 import { randInt } from "./search/random";
 import { finalizeState, modelOf } from "./search/search";
-import type { BoundaryConfig, BoundaryProblem, PieceName, PolytopeName } from "./types";
+import type { BoundaryConfig, BoundaryProblem, ContainerName, PieceName, PolytopeName } from "./types";
 import { BALL_RADIUS } from "./units";
 import { validateBoundary } from "./validate";
 
@@ -85,7 +88,10 @@ const MAX_WALK_EDGES = 64;
 /** Targets randomPose draws before it gives up and leaves the piece where it is. */
 const POSE_TRIES = 16;
 
-export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceName; P: number }): SpaceKernel {
+export function boundaryKernel(problem: { polytope: ContainerName; piece: PieceName; P: number }): SpaceKernel {
+  // the d-cubes (d = 5..10) have their own kernel (ncube/kernel.ts)
+  if (problem && isNCubeName(problem.polytope) && (problem.piece === "ball" || problem.piece === "cube"))
+    return ncubeKernel({ polytope: problem.polytope, piece: problem.piece, P: problem.P });
   if (!problem || !isPolytopeName(problem.polytope) || !isPieceName(problem.piece) || !isPieceCount(problem.P))
     throw new Error("boundaryKernel: invalid problem");
   // the server takes no larger P, so a method could never submit what such a kernel finds
@@ -93,7 +99,7 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
     throw new Error(`boundaryKernel: P = ${problem.P} is above the server's largest, ${BOUNDARY_SERVER_RULE.maxP}`);
   const prob: BoundaryProblem = { polytope: problem.polytope, piece: problem.piece, P: problem.P };
   const { P, piece } = prob;
-  const poly = getPolytope(prob.polytope);
+  const poly = getPolytope(prob.polytope as PolytopeName);
   const charts = chartsOf(poly);
   const model: PieceModel = modelOf(prob);
   const n = 3 * P;
@@ -113,7 +119,8 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
   const poseU = new Float64Array(3);
   const poseM = new Float64Array(9);
   // the problem's lower bound as the server applies it (cubes: turned ones included)
-  const serverBound = boundaryBound(piece, P);
+  const serverBound =
+    prob.polytope === "tesseract" ? boundaryBound(piece, P) : ballBounds(prob.polytope as PolytopeName, P).value;
 
   const anchorsOf = (s: KernelState) => s.aux as Anchors;
 
@@ -220,7 +227,7 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
       const cells = new Int32Array(P);
       const U = new Float64Array(n);
       for (let q = 0; q < P; q++) {
-        cells[q] = randInt(rng, 8);
+        cells[q] = randInt(rng, poly.cells.length);
         U.set(randomCellPoint(poly, cells[q], s, rng, 1 - 1 / s), 3 * q);
       }
       return stateOf({ cells, U }, s);
@@ -230,7 +237,10 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
       // a target as the search's hops draw one: any cell; balls kept off the edges (0.6 of the way
       // out), cubes anywhere. It becomes piece i's displacement from its anchor (kernel-pose.ts),
       // checked by walking it; a target the walk misses (within rounding of a hinge or a ridge) is
-      // drawn again, and after POSE_TRIES misses the piece stays where it is
+      // drawn again, and after POSE_TRIES misses the piece stays where it is. On the containers
+      // beyond the tesseract a far target can need more chains than POSE_CHAINS: then, after the
+      // uniform tries, the displacement is the end of a random geodesic instead (a direction uniform
+      // on the sphere, a length up to 2.5 edges with the density of a ball), tried the same way.
       const a = anchorsOf(s);
       const size = s.size;
       const k = size === a.s0 ? 1 : size / a.s0;
@@ -239,7 +249,7 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
       for (let t = 0; t < POSE_TRIES; t++) {
         const cell = randInt(rng, poly.cells.length);
         const u = randomCellPoint(poly, cell, size, rng, ball ? 0.6 : 1);
-        const v = displacementTo(a.cells[i], from, cell, u, size);
+        const v = displacementTo(a.cells[i], from, cell, u, size, poly);
         if (!v) continue;
         start.set(from);
         const c = walk(charts, a.cells[i], start, v[0], v[1], v[2], size, poseU, 0, poseM, 0, partM);
@@ -249,6 +259,28 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
         )
           continue;
         s.x.set(v, 3 * i);
+        return;
+      }
+      if (poly.name === "tesseract") return;
+      for (let t = 0; t < POSE_TRIES; t++) {
+        // a direction uniform on the sphere (rejection from the cube), a length 2.5 s U^(1/3)
+        let d0 = 0;
+        let d1 = 0;
+        let d2 = 0;
+        let r2 = 0;
+        do {
+          d0 = 2 * rng() - 1;
+          d1 = 2 * rng() - 1;
+          d2 = 2 * rng() - 1;
+          r2 = d0 * d0 + d1 * d1 + d2 * d2;
+        } while (r2 > 1 || r2 < 1e-6);
+        const L = (2.5 * size * Math.cbrt(rng())) / Math.sqrt(r2);
+        start.set(from);
+        // a walk that meets a hinge has no end point; the next try
+        if (walk(charts, a.cells[i], start, d0 * L, d1 * L, d2 * L, size, poseU, 0, poseM, 0, partM) < 0) continue;
+        s.x[3 * i] = d0 * L;
+        s.x[3 * i + 1] = d1 * L;
+        s.x[3 * i + 2] = d2 * L;
         return;
       }
     },
@@ -319,7 +351,12 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
       const out: KernelState[] = [];
       for (let t = 0; t < count; t++) {
         // cubes alternate the two rings (first) and the cell layout
-        const built = !ball && t % 2 === 0 ? model.constructedStart(rng) : cellLayout(piece, P, rng);
+        const built =
+          !ball && t % 2 === 0
+            ? model.constructedStart(rng)
+            : prob.polytope === "tesseract"
+              ? cellLayout(piece, P, rng)
+              : generalLayout(poly, P, rng);
         if (built) out.push(stateOf(built.st, built.s));
       }
       return out;

@@ -6,7 +6,7 @@ describe("problem ids", () => {
     expect(parseBoundaryId("boundary/tesseract/ball/9")).toEqual({ polytope: "tesseract", piece: "ball", P: 9 });
     expect(parseBoundaryId("boundary/tesseract/cube/9999")).toEqual({ polytope: "tesseract", piece: "cube", P: 9999 });
     for (const polytope of POLYTOPES)
-      for (const piece of PIECES)
+      for (const piece of PIECES.filter((q) => polytope === "tesseract" || q === "ball"))
         for (const P of [1, 7, 10, 123, 9999]) {
           const id = formatBoundaryId({ polytope, piece, P });
           expect(id).toBe(`boundary/${polytope}/${piece}/${P}`);
@@ -29,6 +29,8 @@ describe("problem ids", () => {
       "boundary/tesseract/Ball/1",
       "boundary/tesseract/sphere/1",
       "boundary/5-cell/ball/1",
+      "boundary/5cell/cube/1",
+      "boundary/600cell/cube/12",
       "Boundary/tesseract/ball/1",
       "boundary/tesseract/ball/1/",
       "/boundary/tesseract/ball/1",

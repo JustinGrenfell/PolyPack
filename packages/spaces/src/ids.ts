@@ -14,14 +14,17 @@
  *  - balls/<code>/<P>                  e.g. balls/ballinball/13, balls/ballinpkd/20 (code <piece>in<container>:
  *                                      the piece or the container ball, the other one of the polyhedra space's
  *                                      solid codes)
+ *  - ndim/<d>/<piece>/<container>/<P>  e.g. ndim/4/cube/ortho/12, ndim/8/421/ball/5 (d = 4 to 10; piece and container
+ *                                      a polytope of the dimension's catalogue or ball)
  *
  * An id is accepted only in its one written form (no leading zeros, no "+", K written as the
  * research records write it), so that every problem has exactly one id.
  */
-import { PIECES, POLYTOPES, parseBoundaryId } from "@polypack/boundary";
-import type { PieceName, PolytopeName } from "@polypack/boundary";
+import { CONTAINERS, PIECES, parseBoundaryId } from "@polypack/boundary";
+import type { ContainerName, PieceName } from "@polypack/boundary";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { BALLS_CODES_HINT, parseBallsId } from "@polypack/balls/catalogue";
+import { ND_ID_FORM, parseNdId } from "@polypack/ndspace/catalogue";
 import { SpaceName, isSpaceName } from "./types";
 
 /**
@@ -185,13 +188,13 @@ export const SURFACE_MODES = ["fold", "nofold"] as const;
 /** The lattice families of the torus space, in the order the catalogue lists them. */
 export const TORUS_FAMILIES = ["sq", "hex", "free"] as const;
 /** The polytopes and pieces of the boundary space, in the order the catalogue lists them. */
-export const BOUNDARY_POLYTOPES: readonly PolytopeName[] = POLYTOPES;
+export const BOUNDARY_POLYTOPES: readonly ContainerName[] = CONTAINERS;
 export const BOUNDARY_PIECES: readonly PieceName[] = PIECES;
 
 export interface ParsedSpaceId {
   space: SpaceName;
   id: string;
-  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P}; polyhedra and balls {code, piece, container, P} */
+  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P}; polyhedra and balls {code, piece, container, P}; ndim {d, piece, container, P} */
   fields: Record<string, string | number>;
   P: number;
 }
@@ -288,7 +291,7 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
       return { space, id, fields: { family, N, P }, P };
     }
     case "boundary": {
-      const pattern = `boundary/<polytope>/<piece>/<P>, polytope ${POLYTOPES.join(" or ")}, piece ${PIECES.join(" or ")}`;
+      const pattern = `boundary/<polytope>/<piece>/<P>, polytope ${CONTAINERS.join(" or ")}, piece ${PIECES.join(" or ")}`;
       const parsed = parseBoundaryId(id);
       // the package's sentence says which part is wrong, once the id has the right number of parts
       if (typeof parsed === "string") return parts.length === 4 ? `${bad(pattern)}. ${parsed}` : bad(pattern);
@@ -308,6 +311,16 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
       if (typeof parsed === "string") return bad(pattern);
       const { problem, P } = parsed;
       return { space, id, fields: { code: problem.code, piece: problem.piece, container: problem.container, P }, P };
+    }
+    case "ndim": {
+      const parsed = parseNdId(id);
+      if (typeof parsed === "string") return `"${id}" is not an ndim problem id: the form is ${ND_ID_FORM}`;
+      return {
+        space,
+        id,
+        fields: { d: parsed.d, piece: parsed.piece, container: parsed.container, P: parsed.P },
+        P: parsed.P,
+      };
     }
   }
 }
@@ -336,5 +349,7 @@ export function formatSpaceId(space: SpaceName, fields: Record<string, string | 
       return `polyhedra/${fields.code}/${fields.P}`;
     case "balls":
       return `balls/${fields.code}/${fields.P}`;
+    case "ndim":
+      return `ndim/${fields.d}/${fields.piece}/${fields.container}/${fields.P}`;
   }
 }

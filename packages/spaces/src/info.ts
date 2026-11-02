@@ -59,6 +59,8 @@ export const SPACE_RECORD_MARGIN: Record<SpaceName, number> = {
   boundary: SCORE_TIE,
   polyhedra: POLYHEDRA_RECORD_MARGIN,
   balls: SCORE_TIE,
+  // records keep the wiki's clearance of 1e-7 between pieces and from the walls (as polyhedra)
+  ndim: POLYHEDRA_RECORD_MARGIN,
 };
 
 /** Largest absolute value of a polyhedra quaternion component (only its direction matters; see the polyhedra package). */
@@ -178,28 +180,28 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "boundary",
     title: "Polytope boundaries",
     summary:
-      "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope, starting with the tesseract: its boundary is 8 solid cubes glued face to face, a closed 3D space. A piece may fold across the square faces where two cells meet, but no edge of the polytope may pass through it.",
+      "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope: the tesseract (balls and axis-aligned cubes) and, with balls, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, the regular 4-polytopes. The boundary is a closed 3D space made of solid cells (8 cubes for the tesseract) glued face to face. A piece may fold across the faces where two cells meet, but no edge of the polytope may pass through it. The same holds on the d-cubes, d = 5 to 10 (5cube to 10cube, 4D on 5D to 9D on 10D): balls and axis-aligned cubes of dimension d - 1 on the boundary of the d-cube, whose 2d cells are (d-1)-cubes, with no (d-3)-face through a piece.",
     score: "the edge length s of the polytope; smaller is better",
     problem_id: "boundary/<polytope>/<piece>/<P>",
     conventions: {
       polytope:
-        "the tesseract [-s/2, s/2]^4 of edge s; its boundary is 8 cubes (cells), every two of which share a square face unless they are opposite; edges and vertices may not lie inside a piece",
+        "polytope is tesseract, 5cell, 16cell, 24cell, 120cell or 600cell: the regular 4-polytope of edge s centred at its vertex centroid (the tesseract is [-s/2, s/2]^4); its boundary is 8 cubes, 5, 16 or 600 tetrahedra, 24 octahedra or 120 dodecahedra (cells), glued face to face; edges and vertices may not lie inside a piece. Around an edge the cells fill 270 (tesseract), 211.6 (5-cell), 282.1 (16-cell), 328.4 (24-cell), 349.7 (120-cell) or 352.6 (600-cell) degrees, short of a full turn. Balls fit all six; axis-aligned cubes only the tesseract. 5cube to 10cube are the d-cubes [-s/2, s/2]^d, d = 5 to 10: 2d cells that are (d-1)-cubes of edge s, 270 degrees round every (d-3)-face (the hinges, which may not lie inside a piece); balls and axis-aligned cubes fit them",
       cells:
-        "cell 2 i + (sigma > 0) is the cube x_i = sigma s/2, for i = 0..3 and sigma = -1 or +1: cell 0 is x_0 = -s/2, cell 1 is x_0 = +s/2, ..., cell 7 is x_3 = +s/2",
+        "cell 2 i + (sigma > 0) is the cube x_i = sigma s/2 of the tesseract, for i = 0..3 and sigma = -1 or +1: cell 0 is x_0 = -s/2, cell 1 is x_0 = +s/2, ..., cell 7 is x_3 = +s/2. The other polytopes' cells are their facets in the engine's order: sorted by outward unit normal, first by the axis of its largest component, then by the sign, then lexicographically (the tesseract's order is a case of it). On the d-cubes cell 2 i + (sigma > 0) is the facet x_i = sigma s/2, i = 0..d-1 (2d cells)",
       frame:
-        "a point of a cell has local coordinates u = its other three R^4 coordinates in increasing order of index, so the cell is the cube [-s/2, s/2]^3 centred at the origin (in cell 5, x_2 = +s/2, u = (x_0, x_1, x_3))",
+        "a point of a cell has local coordinates u = 3 numbers in the cell's frame, its centre at the origin. The frame is the standard basis of R^4 projected on the cell's hyperplane and orthonormalised in order (Gram-Schmidt, skipping the vector nearly parallel to the normal); on the tesseract u = the cell's other three R^4 coordinates in increasing order of index, so the cell is the cube [-s/2, s/2]^3 (in cell 5, x_2 = +s/2, u = (x_0, x_1, x_3)). The polytopes' vertices are listed in docs/spaces/BOUNDARY.md. On the d-cubes u is the cell's other d - 1 coordinates in increasing order, so the cell is [-s/2, s/2]^(d-1)",
       units:
         `balls have diameter 1 (radius ${BALL_RADIUS}), cubes edge 1 (the cube [-1/2, 1/2]^3 about its centre); lengths scale with s, the pieces do not`,
-      pose: `{cell, u, q?}: cell is the anchor cell, which holds the piece's centre; u = [u0, u1, u2] is the centre in that cell's local coordinates at s and must lie in the closed cell (each component at most ${SPACE_MAX_COORD} in absolute value); q = [w, x, y, z] is a unit quaternion (norm within 1e-9 of 1) that turns a cube in the anchor's frame, absent for an axis-aligned cube; balls have no q`,
-      fold: "a piece is laid out from its centre by straight segments that continue across the square faces into the next cells, unfolded flat; no point of the edges or vertices may lie inside a piece, and a piece may not overlap itself",
+      pose: `{cell, u, q?}: cell is the anchor cell, which holds the piece's centre (0 to 7 on the tesseract, 0 to 4, 15, 23, 119, 599 on the 5-, 16-, 24-, 120- and 600-cell); u = [u0, u1, u2] is the centre in that cell's local coordinates at s and must lie in the closed cell (each component at most ${SPACE_MAX_COORD} in absolute value); q = [w, x, y, z] is a unit quaternion (norm within 1e-9 of 1) that turns a cube in the anchor's frame, absent for an axis-aligned cube; balls have no q. On the d-cubes (5cube to 10cube) the cell is 0 to 2d - 1, u has d - 1 numbers and there is no q: cubes stay axis-aligned`,
+      fold: "a piece is laid out from its centre by straight segments that continue across the faces into the next cells, unfolded flat; no point of the edges or vertices may lie inside a piece, and a piece may not overlap itself",
       configuration: "{s, pieces: [{cell, u, q?}, ...]} with P pieces",
       score: "s, the edge of the polytope; smaller is better",
       validity: VALIDITY,
       scoring: SCORING,
       improvement: IMPROVEMENT,
       nofold:
-        "each problem's listing also gives its nofold value (every piece inside one cell, no folding) and the research record's gain over it, as `extra`",
-      work_limit: `s is at most ${BOUNDARY_MAX_S}; the check gives up with a reason when one piece crosses more than ${BOUNDARY_MAX_CHAINS} chains of cells (real packings need at most about 80); each component of u and q is at most ${SPACE_MAX_COORD} in absolute value`,
+        "the tesseract's problems also give their nofold value (every piece inside one cell, no folding) and the research record's gain over it, as `extra`",
+      work_limit: `s is at most ${BOUNDARY_MAX_S}; the check gives up with a reason when one piece crosses more than ${BOUNDARY_MAX_CHAINS} chains of cells (real packings need at most about 80 on the tesseract and 500 on the 120-cell); each component of u and q is at most ${SPACE_MAX_COORD} in absolute value; checks of balls on the 120-cell from P = 5 and on the 24-cell from P = 22 wait in the heavy queue. The d-cubes take P up to 160 (5cube), 384 (6cube) and 400 (7cube to 10cube), their check gives up with a reason after 4,000,000 search steps (a crowd of balls against the (d-3)-faces; real packings need a few thousand), and checks of 50 ms or more (10cube balls from P = 34) wait in the heavy queue`,
     },
     viewer: "/spaces/boundary.html",
     docs: spaceDocsUrl("BOUNDARY.md"),
@@ -255,6 +257,36 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     // no standalone viewer: the board draws every problem (#space=balls opens its first one)
     viewer: "/#space=balls",
     docs: spaceDocsUrl("BALLS.md"),
+  },
+  ndim: {
+    space: "ndim",
+    title: "nD in nD",
+    summary:
+      "4D to 10D: equal convex polytopes (the simplex, hypercube and orthoplex of each dimension, the demicube from 5D, the 24-, 120- and 600-cell in 4D, the Gosset polytopes 2_21 and 1_22 in 6D, 3_21 in 7D and 4_21 in 8D) or balls of diameter 1 packed in the smallest scaled copy of a container polytope or ball. The research records are the regular polytopes in 4D to 6D of polyhedrainpolyhedra.wiki's higher-polytope tab, re-certified; every other problem has none yet and takes its first valid entry.",
+    score:
+      "the container's size s: the scale of the container polytope (its edge when the container has unit edges), or the diameter of the container ball; smaller is better",
+    problem_id: "ndim/<d>/<piece>/<container>/<P>",
+    conventions: {
+      problems:
+        "d from 4 to 10; piece and container are a polytope of that dimension (simplex, cube, ortho, demi from 5D, 24cell, 120cell and 600cell in 4D, 221 and 122 in 6D, 321 in 7D, 421 in 8D) or ball, any ordered pair, e.g. ndim/4/cube/ortho/12 (hypercubes in an orthoplex) or ndim/6/ball/221/9; P from 2 to 40 in 4D, 32 in 5D, 24 in 6D and 20 from 7D (GET /api/spaces lists the ranges)",
+      units:
+        "polytopes have unit edges and are centred at their vertex centroid; balls have diameter 1 (radius 0.5); the catalogue is docs/spaces/NDIM.md section 2 (the generator proves each polytope in exact arithmetic)",
+      container:
+        "s times the catalogue polytope about the origin (the intersection of the half-spaces N_f . x <= s b_f, N_f the unit outward normal and b_f the offset of facet f), or the ball of diameter s about the origin",
+      pose: `a polytope piece is [t_1..t_d, k_1..k_m, flip] with m = d(d-1)/2 and the flip optional (0 when absent): the canonical piece turned by R = D (I - S)^-1 (I + S), S the skew matrix with S[i][j] = k (i < j, row by row) and D the diagonal matrix with -1 at the set bits of the flip (an even number of them), then centred at t; centre coordinates at most ${SPACE_MAX_COORD}, each k at most 32 in absolute value; a ball is its centre [t_1..t_d]`,
+      configuration: "{s, pieces: [pose, ...]} with P poses; s positive and at most 1e6",
+      score: "s; smaller is better",
+      validity:
+        VALIDITY +
+        "; two pieces overlap by their penetration depth (GJK and EPA on the Minkowski difference), a polytope sticks out by the largest N_f . x - s b_f over its vertices and facets, a ball piece by N_f . c + 0.5 - s b_f, and a ball container by the farthest point's distance minus s/2",
+      scoring: SCORING,
+      improvement: `an entry is kept only when its score is below the site leader's by more than a relative ${SCORE_TIE} and below the research record's s by more than a relative ${POLYHEDRA_RECORD_MARGIN.toExponential()}: the records keep the wiki's clearance of 1e-7 between pieces and from the walls, and removing it is not a better packing; an entry of a problem without a record, or one below the record, must also be valid with overlaps of at most ${SPACE_STRICT_TOL}`,
+      work_limit:
+        "a check is stopped, with a reason, after 8 s of processor time; checks of large containers (the 4_21 polytope has 19,440 facets) or many pieces share the server's queue of heavy checks, one at a time, and are refused with 503 when it is full",
+    },
+    // no standalone viewer: the board draws every problem (#space=ndim opens 4D in 4D; #space=ndim/<d>/... the dimension of its id)
+    viewer: "/#space=ndim",
+    docs: spaceDocsUrl("NDIM.md"),
   },
 };
 

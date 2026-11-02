@@ -1,14 +1,19 @@
-# 3D on 4D, tesseract boundary: balls (diameter 1) and cubes on the boundary of a tesseract
+# 3D on 4D, polytope boundaries: balls (diameter 1) and cubes on the boundary of a regular 4-polytope
 
 **Dimension.** Under Dimensions this is **3D on 4D**: solid 3D pieces packed on the 3-dimensional
 boundary of a 4D polytope, with no container around them. Problem ids and records use the space
 name `boundary`.
 
 P balls of diameter 1 (radius 1/2) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
-edge s. The score is the smallest s. Since 2026-10-27 balls have diameter 1; before, radius 1, and every ball score was twice as large (cube scores are unchanged). The sections below are stated in the site's units; the certifier and the ball code may work in radius-1 units internally (a factor of 2, exact) and convert at their edges. Every record is certified by an exact checker
+edge s. Since 2026-11-01 balls can also be packed on the boundary of the other five regular
+4-polytopes, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell (section 4A). Also since 2026-11-01 balls and
+axis-aligned cubes (of dimension d - 1) can be packed on the boundary of the d-cube, d = 5 to 10 (4D on 5D to 9D on 10D, section 4B). The score is the smallest s,
+the polytope's edge. Since 2026-10-27 balls have diameter 1; before, radius 1, and every ball score was twice as large (cube scores are unchanged). The sections below are stated in the site's units; the certifier and the ball code may work in radius-1 units internally (a factor of 2, exact) and convert at their edges. Every record is certified by an exact checker
 (`python/boundary/certify.py`, exact arithmetic only), so its validity is proven, not just
 tested. Records: `data/boundary/records.json`, from the PolyPack research prototype (2026-10-24),
-the PolyPack boundary search (2026-10-25) and exact constructions (section 4.6).
+the PolyPack boundary search (2026-10-25) and exact constructions (section 4.6). They are the tesseract's. The five other containers have
+problems and lower bounds but no records (section 4A.7); their test packings are certified by the
+general exact certifier (`python/boundary/general.py`, section 4A).
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -274,6 +279,395 @@ The builder (`python/boundary/build_records.py`) certifies every candidate (rese
 exact versions, P + 1 minus a piece, and the research note's constructions) with the rule of
 4.4 and keeps the one with the smallest score_cert (ties: exact, search, research, subset).
 
+## 4A. Balls on the other regular 4-polytopes
+
+Added 2026-11-01. The engine is general over convex 4-polytopes, so the same rule (sections 2 and 3) holds on the other five regular 4-polytopes.
+Only the tesseract's lattice words (4.1) are specific to it; for the others the developments are found by chains of cells, and the
+exact certifier is `python/boundary/general.py`. Only balls are covered here (4A.8 says what the Platonic pieces need).
+
+### 4A.1 The containers
+
+Each container has unit edge and is centred at its vertex centroid, as the contract says (`packages/boundary/src/types.ts`); the score is
+its edge s, and a ball has diameter 1. The vertex lists are generated in a fixed order (`packages/boundary/src/containers.ts`; the
+exact certifier repeats them in exact arithmetic) from the classical coordinates:
+
+| container | vertices | edges | cells | ridges | cell | cells at an edge | angle around an edge | exact field |
+|---|---|---|---|---|---|---|---|---|
+| 5-cell | 5 | 10 | 5 | 10 | tetrahedron | 3 | 211.586 | Q (simplex in R^5) |
+| tesseract | 16 | 32 | 8 | 24 | cube | 3 | 270 | Q (lattice words, 4.1; or chains) |
+| 16-cell | 8 | 24 | 16 | 32 | tetrahedron | 4 | 282.115 | Q |
+| 24-cell | 24 | 96 | 24 | 96 | octahedron | 3 | 328.414 | Q |
+| 120-cell | 600 | 1200 | 120 | 720 | dodecahedron | 3 | 349.695 | Q(sqrt 5) |
+| 600-cell | 120 | 720 | 600 | 1200 | tetrahedron | 5 | 352.644 | Q(sqrt 5) |
+
+The angle is in degrees: the cells' dihedral angles at an edge, added over the cells there [CALC; REPORT.md 2.5 of the research note]. All six
+are short of a full turn and above 180 degrees, so no angle condition is needed at an edge (section 3). The nearer to 360, the flatter the
+container: the 120-cell and 600-cell are nearly flat (deficits 10.3 and 7.4 degrees), the 5-cell and 16-cell sharp [SPEC: the nearly flat ones
+should behave like nofold packings until P is large].
+
+- **5-cell**: the simplex with vertices (1, 1, 1, -1/sqrt 5), (1, -1, -1, -1/sqrt 5), (-1, 1, -1, -1/sqrt 5), (-1, -1, 1, -1/sqrt 5),
+  (0, 0, 0, 4/sqrt 5) divided by sqrt 8. 16-cell: +-e_i / sqrt 2. 24-cell: the permutations of (+-1, +-1, 0, 0) / sqrt 2.
+  600-cell: (+-1, 0, 0, 0) and permutations, (+-1/2)^4 and the even permutations of (+-phi, +-1, +-1/phi, 0) / 2, times phi. 120-cell: Coxeter's
+  coordinates (the permutations of (0, 0, +-2, +-2), (+-1, +-1, +-1, +-sqrt 5), (+-phi^-2, +-phi, +-phi, +-phi), (+-phi^-1, +-phi^-1, +-phi^-1,
+  +-phi^2) and the even permutations of (0, +-phi^-2, +-1, +-phi^2), (0, +-phi^-1, +-phi, +-sqrt 5), (+-phi^-1, +-1, +-phi, +-2)) divided by 3 - sqrt 5.
+- **Cells, frames, ridges**: as section 2 and `polytope.ts` say: cells in the order of their outward unit normals (`compareNormals`), a cell's origin
+  at its centre, its frame the standard basis projected on its hyperplane and orthonormalised in order, the gluing across a ridge the rotation of
+  R^4 in the plane of the two normals that fixes the ridge. `buildPolytope` builds all six (the 120-cell, with 600 vertices, in about 0.4 s).
+- **Ids**: `boundary/<polytope>/ball/<P>` with polytope `5cell`, `16cell`, `24cell`, `120cell` or `600cell`, P = 1 to 24 (the tesseract keeps
+  its 32 problems, P = 1 to 16, ball and cube). A cube on any of the five is not a problem. 152 problems in all.
+
+### 4A.2 Chains, windows and completeness
+
+A ball is valid exactly when its centre is at distance at least 1/2 from the hinges, every two centres are at least 1 apart and every geodesic
+loop at a centre is at least 1 long (4.2; the proof is dimension-free and uses only Prop. 1.2 of Miller and Pak). What changes is how the
+shortest paths are found. On the tesseract every ridge is a right angle, so the unfolded cells form a lattice (4.1). In general the cells a
+straight path crosses unfold, one by one, into the hyperplane of the anchor cell (each gluing is an isometry that fixes its ridge), and the path
+becomes a straight segment of that development.
+
+**Chains and windows** [CALC; `packages/boundary/src/chains.ts` is the float twin]. From a centre u in its anchor cell, a *chain* is a sequence of
+ridges R_1, ..., R_k, each a ridge of the cell reached by the previous one, developed into the anchor's hyperplane. Its *gate* is G_k = R_k
+(developed) clipped by the *window* W_{k-1}, and the window is W_k = the cone from u over G_k (W_0 = everything). Lemma: a ray from u in the
+interior of W_k crosses R_1, ..., R_k in this order and runs inside each developed cell between consecutive crossings, because each developed
+cell lies on the far side of the plane of the ridge it was entered through and a ray crosses a plane once. A point y of the last developed cell
+is therefore joined to u by the segment of the development, a path of the boundary of length |y - u|, exactly when y lies in the closed W_k.
+
+**Completeness** [CALC]. *Every straight path from u that avoids the hinges and has length at most the reach L is realised by a kept chain,*
+where the enumerator keeps a chain exactly when
+1. u lies strictly on the inner side of the plane of the ridge (seen from the developed cell it leaves);
+2. the clipped gate has positive area;
+3. the gate is at distance at most L from u.
+
+Proof. Take such a path with endpoint y and let R_1, ..., R_k be the ridges it crosses (finitely many, at points p_1, ..., p_k of their relative
+interiors, since the path avoids the hinges, which are the ridges' edges). (1): the path leaves the anchor through R_1 at p_1; u lies on the inner
+side of the plane of R_1, not on it, unless u itself lies on R_1, in which case the path starts into the neighbouring cell and is found from that
+cell as its anchor (4A.3: a centre on a ridge is developed from both cells); likewise at every later ridge. (2): p_j lies in the interior of
+W_{j-1}: a ray in a face of W_{j-1} lies in a plane through u and an edge e of the gate G_{j-1}, so it meets the plane of G_{j-1} on the line
+of e, hence on e, since G_{j-1} is convex and e is one of its edges; e lies on a hinge or on a face of W_{j-2}, and by induction the ray meets
+a hinge, which it does not. So a neighbourhood of p_j in R_j lies in W_{j-1}, and G_j has positive area. (3): |p_j - u| <= length <= L, and the
+distance from u to G_j is at most |p_j - u|. So every prefix of the chain is kept and the path's endpoint lies in the closed window of the
+last node; y in that node's cell, as a point of the developed cell. Hence a pair of centres closer than 1 along the boundary shows as a kept
+chain whose window holds the image of the other centre at distance below 1: take L = 1, the ball's diameter. The same for loops (the image
+of u itself, at a positive distance) and for the hinges (a hinge point at distance below 1/2 lies in the closed window of a kept chain, as the
+segment from u to it, which meets no hinge before it, is such a path). *
+Ties are harmless: an image on the boundary of a window lies on a path through a hinge point, of length at least the sum of two
+clearances, at least 1 once both centres are 1/2 from the hinges.
+
+**The turn rule** [CALC]. A straight line that meets no edge sees an edge under exactly pi in the plane normal to it, so it can cross consecutive
+ridges around an edge only while the cells passed between them have dihedral angles at that edge adding up to less than pi (at most one cube of
+the tesseract, 90 degrees, two tetrahedra of the 5-cell, 70.5 each, etc.). The float enumerator cuts a branch by it. The exact enumerator does
+not need the rule: past pi around an edge the window, exactly computed, is empty (a ray cannot be on the far side of the edge), so the same
+chains are kept. The exact enumerator's node counts equal the float one's on 316 of the 317 balls of the cross-check (one differs by 1, a window the float code cut as
+thinner than MIN_WINDOW_ANGLE).
+
+**Finiteness** [SPEC]. That the enumeration stops for every input is not proved here. The open windows of the kept chains of one depth are
+pairwise disjoint (a ray that avoids the hinges follows one chain) and every gate is within L, which keeps the count small in practice: at
+most 399 chains per ball in the test packings (4A.7), at most 245 on the 5-cell, 16-cell, 24-cell and 600-cell. The enumeration is capped (200,000
+nodes in the exact enumerator, 4096 chains in the float validator, 1024 on the server) and a capped enumeration is refused, never accepted, so
+a failure of finiteness could cost time and never soundness.
+
+### 4A.3 The exact certifier
+
+`python/boundary/general.py` (called by `certify.py` for the five polytopes, and for the tesseract in its tests as a second, independent
+method). No floating point decides anything: every number is a Fraction, or an element a + b sqrt 5 of Q(sqrt 5) with rational a and b, with its
+sign decided exactly (`Q5`: integer arithmetic, one gcd per operation; the rational containers use b = 0). It shares no code with the
+TypeScript engine and repeats only its conventions (cell order, frames: the numbers that say what a configuration's (cell, u) means).
+
+**Field choices.**
+- The 16-cell and 24-cell (and the tesseract): coordinates in Z (the tesseract's in (1/2)Z), squared edge 2 (the 16-cell, 24-cell) or 1; the squared edge is rational.
+- The 5-cell: the simplex with vertices e_i - (1/5)(1, 1, 1, 1, 1) in R^5, squared edge 2. The 5-cell has no rational embedding in R^4 (its
+  coordinates there need sqrt 5 and sqrt 2), but its geometry is intrinsic: gluing rotations, windows and distances are affine and metric
+  statements about vectors of a 4-dimensional hyperplane and need only the Gram matrices, so a rational copy in R^5 serves. A configuration's
+  (cell, u) is read through four vertices of the cell (below), which is an affine map and needs no embedding.
+- The 120-cell and 600-cell: Q(sqrt 5)^4 with the coordinates of 4A.1 (not divided by the edge: the base polytope has squared edge
+  14 - 6 sqrt 5 and (3 - sqrt 5)/2).
+- *Base units.* All lengths are those of the base polytope of squared edge e0^2; a ball of diameter 1 on the polytope of edge s has diameter
+  e0/s there, so every test compares a squared base length with D2 = e0^2 / s^2, an exact number of the field (s is a binary64, a dyadic rational).
+  Nothing needs a square root. Reported margins are converted by s^2 / e0^2 and rounded down.
+
+**Reading a configuration.** The engine's (cell, u) means the ambient point s * origin + sum_k u_k frame_k (floats; the cell's frame is part of the
+engine's conventions). The certifier writes that point as an affine combination of four independent vertices of the cell with dyadic weights
+(rounded to 2^-60, summing to exactly 1), and the exact centre is the same combination of the exact vertices: a point of the cell's hyperplane,
+within 3.4e-16 s of the engine's on the 5-, 16- and 24-cell and within 2.9e-15 s on the 120- and 600-cell ([CALC] over the review's corpus of engine readings). The strict test therefore asks for room: a pair distance or a loop must exceed 1 by more than 2e-13 s, and a clearance must exceed 1/2 by more than 1e-13 s (`READING_SLACK` in `general.py`; the reach is widened to match), so that "strictly valid" binds the configuration as the engine reads it. A centre that falls outside its closed cell by less than 1e-12 of an edge is moved onto the facet planes it
+violates (as the engine's `clampToCell` does) before the exact test "the centre lies in its closed cell"; a larger violation is an error. The
+cells that contain a centre are those whose hyperplane holds it, decided exactly (a centre on a ridge lies in two).
+
+**Charts.** A cell's hyperplane has the affine chart x = O + lambda B (O a vertex, B three edge vectors of the cell, lambda in the field^3); the
+metric is the exact Gram matrix G = B B^T. The gluing across a ridge between cells with outward normals N, N' (equal norms a, k = N.N'/a) is
+the rotation
+    Rot x = x + (k - 1) [ (N.x) N / a + (E.x) E / ((1 - k^2) a) ] + [ (N.x) E - (E.x) N ] / a,   E = N' - k N,
+which takes N to N', fixes the orthogonal complement and has no square root (the tests check it is an exact isometry that fixes the ridge's
+vertices, for every container). A development is a composition of such maps in charts (3 x 3 matrices of the field).
+
+**Decisions** (all exact): the centre lies in its closed cell; for each ball and each cell containing it, the chains of 4A.2 are enumerated
+(Sutherland-Hodgman clipping of the gate by the window's faces, cones from cross products of chart vectors, distances from squared lengths
+with the Gram matrix); the clearance is the least squared distance from u to the part of each developed edge inside the window (the foot of the
+perpendicular, clamped to the window's interval); for every ball j after i and every cell containing j, the image of j in each chain node
+ending in that cell is tested against the closed window and its squared distance against D2; loops likewise for i with the trivial images (the
+root, and the centre itself seen across its own ridge) removed. Strict validity asks for more than 1/2, more than 1 and more than 1; plain
+validity for at least.
+
+**Cost.** Container construction 0.01 to 0.5 s (the 120-cell, 600-cell: 0.4 s, gluings on demand); a ball needs 80 to 400 kept chains;
+a test packing of 24 balls on the 24-cell takes about 4 s to certify, of 3 balls on the 120-cell about 7 s.
+
+### 4A.4 Lower bounds
+
+Both bounds of section 5 hold on every container [CALC]; each is stored as a binary64 rounded down by a relative 1e-15
+(`packages/boundary/src/bounds.ts`; the exact check is `general.exact_bounds`, which compares with enclosures of pi, sqrt 2 and sqrt 5 to 45 digits).
+
+- **Volume.** The developed balls have disjoint interiors, so P pi / 6 <= V s^3, V the volume of the boundary at unit edge, the cells' number times
+  the cell's volume: 5-cell 5 sqrt 2 / 12, 16-cell 4 sqrt 2 / 3, 24-cell 8 sqrt 2, 120-cell 450 + 210 sqrt 5, 600-cell 50 sqrt 2 (the
+  tesseract: 8).
+- **One ball.** The centre needs distance at least 1/2 from every hinge, and every point of a regular cell lies within rho of an edge of that cell,
+  rho the distance from the cell's centre to its edges (the cell's midradius: sqrt 2 / 4 for the tetrahedron, 1/2 for the octahedron,
+  sqrt 2 / 2 for the cube, phi^2 / 2 for the dodecahedron). Proof: a point p of the cell lies on a segment from the centre O to a point q of a
+  facet F of the cell; q lies within the inradius r_F of the regular polygon F of an edge e of F, since the farthest point of a regular polygon from its
+  boundary is its centre; the distance to the convex set e is convex, so d(p, e) <= (1 - t) d(O, e) + t d(q, e) <= max(rho, r_F) = rho,
+  because rho^2 = h^2 + r_F^2, h the distance from O to F's plane. So s >= 1 / (2 rho): sqrt 2 on the 5-cell, 16-cell and 600-cell, 1 on the
+  24-cell, 1/phi^2 = 0.381966 on the 120-cell (and 1 / sqrt 2 on the tesseract, as in section 5).
+
+Balls at the centres of two adjacent cells are 2 r s apart along the straight path across their common facet (r the cell's inradius, the path
+through the facet's centre; any other path is longer), so P <= (number of cells) balls, one at the centre of each of P cells, are valid from
+s0 = max(1 / (2 r), 1 / (2 rho)): sqrt 6 (5-cell, 16-cell, 600-cell), sqrt 6 / 2 (24-cell), 0.449028 (120-cell). The tests use these.
+They are not optimal, and nothing about optimality is claimed [SPEC].
+
+### 4A.5 Checks around the certifier
+
+- **The tesseract again.** `general.py` also builds the tesseract (balls only). On the research records for balls (P = 4, 8 and 13 in the test; P = 3, 5, 8, 9 and 14
+  by hand) it gives the clearance, the least distance and "valid" that the lattice-word certifier gives, to all digits: two
+  independent methods (windows and charts against lattice words) agree.
+- **Conventions.** `fixtures/containers.json` (written by `packages/boundary/scripts/gen-containers.ts`) holds the engine's vertex lists and, for
+  many cells of each container, their vertex ids, origin and frame; the test compares them with the certifier's own reading to 1e-14.
+- **Cross-check.** `fixtures/general_crosscheck.json` (`gen-general-crosscheck.ts`) holds 160 seeded random configurations of one to three balls (80
+  valid and 80 invalid at tolerance 1e-9, 20 + 20 on each of the 5-cell, 16-cell and 24-cell, 10 + 10 on the tesseract, 6 + 6 on the
+  600-cell and 4 + 4 on the 120-cell; the second ball placed at the end of a geodesic from the first, so that most pairs cross ridges) with the
+  engine's verdicts, geodesic distances, loops and clearances. All verdicts agree (those within 2e-8 of a threshold are not compared: they depend on
+  the engine's tolerance), and every distance, loop and clearance below the reach agrees to 1e-9.
+- **Adversarial cases.** A ball centred on an edge of each container; one ball 1e-9 above and below its container's one-ball bound; two balls
+  at the centres of adjacent cells at s0 (1 +- 1e-9) on every container (the valid side has its least distance within 3e-9 of 1); touching
+  variants (the 24-cell at s = 1 is valid but not strictly valid; eight balls in the tesseract at s = 1 likewise); a centre at the middle of a ridge (it lies in two cells, and is developed from both; a second ball 0.9 away across the ridge overlaps it); a centre close to an edge of
+  the 5-cell (cone angle 211.6 degrees) with a geodesic loop of length 0.0940692594805195, which the engine and the exact enumeration both find; a
+  centre outside its cell; malformed input.
+- **Completeness.** With 1.5 times the diameter as reach, instead of 1, the pairs, loops and clearances of length at most 1 are the same (exactly, on
+  four test packings and on an overlapping pair).
+
+### 4A.6 The problems, the server and the kernel
+
+- **Problems.** 152 in all: the tesseract's 32 (P = 1 to 16, ball and cube), and balls on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24 each
+  (120). A smaller range for a container was not needed: the 24-ball problem is the most expensive to check (about 0.3 s on the 120-cell),
+  and the range follows the research note's proposal (P = 1 to 24). The 120 new problems have no research record (status `no_record`): the first valid entry is kept, and an
+  entry on a problem without a record must be valid at the strict tolerance 1e-11 (section 12).
+- **Server.** The registry's boundary domain (`packages/boundary/src/domain.ts`, `packages/spaces/src/domain.ts`) gives each problem its lower bound
+  (4A.4). The rule of section 12 is unchanged but for the cells (0 to C - 1, C = 5, 8, 16, 24, 120 or 600) and P (at most 24 on the five new containers).
+  Checks of balls on the 120-cell from P = 5 and on the 24-cell from P = 22 (estimated 50 ms or more, `boundaryIsHeavy`) wait in the heavy-check
+  queue, one at a time server-wide, and are charged their estimated time. The work is bounded: at most 24 pieces, 1024 chains per piece, volume
+  and in-cell edge tests first. [CALC: the validator took 4 to 18 ms for 24 balls on the 5-, 16-, 24- and 600-cell and 91 ms on the 120-cell, loose
+  layouts; a tight one costs up to three times that.]
+- **Kernel** (section 14). `boundaryKernel` works on every container: the chain metric (`ChainMetric`) gives the energy, its exact gradient in the
+  displacements and in the size (checked against central differences), the weights, the focus on one piece and the piece's clearance; poses are
+  drawn by developing a uniformly random target through the chains from the piece's anchor at a growing reach (`kernel-pose.ts`; the shortest
+  geodesic, tested by walking it back to the target); the seeds are balls at the centres of P cells (valid from s0) or, with more balls than
+  cells, a sequential random layout; the bound is 4A.4's. The chain metric costs 0.12 (5-cell), 0.18 (16-cell), 0.25 (24-cell), 0.15 (600-cell) and 0.8 (120-cell) ms per ball for an
+  evaluation with its gradient (about 100 chains each, 2 to 7 microseconds a chain), against 0.5 microseconds for the tesseract's words, so searches
+  here are hundreds to a thousand times slower than on the tesseract. The board's rounds are sized to about two seconds of it (`boundaryRound`, apps/web).
+
+### 4A.7 Test packings
+
+No records: the new problems ship with lower bounds and test packings only (`python/boundary/fixtures/general_packings.json`, 25 packings; P = 1, 2, 3, 5,
+8, 12 on the 5-cell, 1, 2, 4, 6, 10, 16 on the 16-cell, 1, 2, 3, 6, 12, 24 on the 24-cell, 1, 2, 3, 5 on the 600-cell, 1, 2, 3 on the 120-cell). Each is a
+random sequential layout drawn in by the engine's `finish` until the balls touch (`gen-general-packings.ts`), then scaled as in 4.4
+(lam = 1 + k 1e-12; k = 1 to 3) to the first k at which `general.py` certifies them strictly valid with every margin (clearance over 1/2, distances and loops over 1) at least 1e-12: 1.0e-12 to 2.0e-12 in all 25. They are not good packings (no search ran) and no optimality is claimed.
+
+| container | P | s (score_cert) | lower bound | least centre distance | least clearance |
+|---|---|---|---|---|---|
+| 5cell | 1 | 1.469179 | 1.414214 (one ball) | more than 1 | 0.500000 |
+| 5cell | 2 | 1.809986 | 1.414214 (one ball) | 1.101234 | 0.500000 |
+| 5cell | 3 | 2.157183 | 1.414214 (one ball) | 1.000000 | 0.530271 |
+| 5cell | 5 | 2.486605 | 1.643949 (volume) | 1.000000 | 0.572142 |
+| 5cell | 8 | 3.084217 | 1.922774 (volume) | 1.000000 | 0.573311 |
+| 5cell | 12 | 3.535233 | 2.201027 (volume) | 1.000000 | 0.580173 |
+| 16cell | 1 | 1.549082 | 1.414214 (one ball) | more than 1 | 0.500000 |
+| 16cell | 2 | 1.591073 | 1.414214 (one ball) | 1.535322 | 0.500000 |
+| 16cell | 4 | 1.641365 | 1.414214 (one ball) | 1.031387 | 0.500000 |
+| 16cell | 6 | 1.930761 | 1.414214 (one ball) | 1.000000 | 0.585401 |
+| 16cell | 10 | 2.155838 | 1.414214 (one ball) | 1.000000 | 0.523211 |
+| 16cell | 16 | 2.826915 | 1.643949 (volume) | 1.000000 | 0.551189 |
+| 24cell | 1 | 1.034038 | 1.000000 (one ball) | more than 1 | 0.500000 |
+| 24cell | 2 | 1.177151 | 1.000000 (one ball) | more than 1 | 0.500000 |
+| 24cell | 3 | 1.166934 | 1.000000 (one ball) | 1.555277 | 0.500000 |
+| 24cell | 6 | 1.181813 | 1.000000 (one ball) | 1.000000 | 0.506162 |
+| 24cell | 12 | 1.265138 | 1.000000 (one ball) | 1.000000 | 0.512942 |
+| 24cell | 24 | 1.417640 | 1.035623 (volume) | 1.000000 | 0.511808 |
+| 600cell | 1 | 1.484763 | 1.414214 (one ball) | more than 1 | 0.500000 |
+| 600cell | 2 | 1.676617 | 1.414214 (one ball) | more than 1 | 0.500000 |
+| 600cell | 3 | 1.671674 | 1.414214 (one ball) | more than 1 | 0.500000 |
+| 600cell | 5 | 1.654522 | 1.414214 (one ball) | more than 1 | 0.500000 |
+| 120cell | 1 | 0.396759 | 0.381966 (one ball) | more than 1 | 0.500000 |
+| 120cell | 2 | 0.434681 | 0.381966 (one ball) | more than 1 | 0.500000 |
+| 120cell | 3 | 0.422123 | 0.381966 (one ball) | more than 1 | 0.500000 |
+
+### 4A.8 Limitations
+
+- **Platonic pieces are not built** (the tetrahedron, cube, octahedron, dodecahedron and icosahedron, rotated, on the six containers). What
+  remains, in the order it would be done: (1) the float validator's parts for these shapes (`parts.ts` knows the unit cube only; the clipping
+  and the separating-axis code of `polyhedron.ts` are general, and `validateCubes` would become a validator of polytope pieces, with the hinge
+  depth inside a piece taken over its faces instead of a cube's axes); (2) a penalty model for rotated polytope pieces in the search and the
+  kernel (today's cube model, `search/cubes.ts`, is axis-aligned: the state needs a rotation per piece carried across ridges by the gluings'
+  linear parts, the energy is the separating-axis depth of the pieces' parts in each cell, and the kernel's `dim` becomes 6 with a `swap`
+  for equal pieces); (3) the exact certifier's polytope-part test: the piece, turned by an exact rational rotation (a rational quaternion gives
+  one), intersected with each developed cell and window, and the parts of different pieces, and of one piece, compared in each cell by an exact
+  separating-axis test, with the hinges outside the piece's interior; (4) the field: in base units a piece has edge lambda = e0 / s times the
+  unit-edge solid's coordinates, which involve sqrt 2 (tetrahedron, octahedron) or sqrt 5 (dodecahedron, icosahedron); with e0 = sqrt 2
+  (5-cell, 16-cell, 24-cell) the tetrahedron and octahedron come out rational and the other three in Q(sqrt 2) or Q(sqrt 2, sqrt 5), and
+  on the 120-cell and 600-cell the tetrahedron and octahedron need Q(sqrt 2, sqrt 5), a field of degree 4; (5) test packings of each piece on
+  each container: the cells themselves (P = C pieces at s = 1 for the tetrahedra of the 5-cell and the dodecahedra of the 120-cell, the
+  tesseract's cubes) are exact ones. Nothing of this is in the code.
+- The vertex rule (section 3) is argued, not proved, on every container.
+- The ball centre is read through float frames (4A.3): the certified configuration is within 3.4e-16 s (5-, 16-, 24-cell) or 2.9e-15 s (120-, 600-cell) of the one the engine sees; the strict test keeps a slack of 1e-13 s to 2e-13 s for it (4A.3).
+- The 120-cell and 600-cell are nearly flat. Their problems are open, and their bounds are those of 4A.4; nothing is known about their optimal packings.
+
+## 4B. The d-cube: (d-1)D on dD, d = 5 to 10
+
+Added 2026-11-01. Under Dimensions these are **4D on 5D**, **5D on 6D**, ..., **9D on 10D**: balls of diameter 1 and axis-aligned unit (d-1)-cubes on the
+boundary of the d-cube [-s/2, s/2]^d. It generalises the tesseract (section 2 to 4) with 4 replaced by d, and nothing else: the d-cube is the one regular
+polytope whose every ridge is a right angle in every dimension, so the tesseract's lattice words carry over to Z^(d-1) [EST: research note 4.3; CALC: re-derived
+below]. The boundary has 2d facets (the cells), each a (d-1)-cube of edge s; the curvature sits on the (d-3)-faces (the hinges), around each of which
+three cells meet at right angles, 270 degrees, in every d. The score is the edge s. Ids are `boundary/<d>cube/ball/<P>` and `boundary/<d>cube/cube/<P>`
+(containers `5cube` to `10cube`). Code: `packages/boundary/src/ncube/`; exact certifier: `python/boundary/ncube.py`. Nothing is shown in Tighter, and
+the site's viewers do not draw these containers yet.
+
+### 4B.1 Conventions
+
+- **Cells.** Cell `2 i + (sigma > 0)` is the facet x_i = sigma h, h = s/2, i = 0..d-1, 2d cells. Its local coordinates u are the other d - 1 coordinates in
+  increasing order, so the cell is [-h, h]^n with n = d - 1 (the tesseract's convention for n = 3).
+- **Configuration.** `{s, pieces: [{cell, u}]}`, u of n numbers. There is no `q`: a cube is axis-aligned, and a rotation of a cube by one of its symmetries
+  changes nothing (the tesseract's engine accepts such a `q`; here it is refused as malformed, so there is one form of every packing). A rotation that is not
+  a symmetry of the cube is out of scope, as on the tesseract (4.3): the problems are about balls and aligned cubes.
+- **Units.** Balls have diameter 1, cubes edge 1; lengths scale with s except piece sizes.
+- **Problems and P.** Both pieces on each container, P = 1 to 160 (5cube), 384 (6cube) and 400 (7cube to 10cube): 4,288 problems. 160 and 384 are the first tilings that
+  need more than one cube per cell (P = 2d k^(d-1) cubes at s = k, k = 2), so the first two containers have the tilings for k = 1 and 2 inside their ranges (4B.5). The other
+  four stop at 400, below their second tiling (P = 896, 2,048, 4,608 and 10,240; the last is also above the id limit 9,999): a cap of 400 keeps the server's check under 20 ms and the kernel's quadratic pair stage small.
+  The larger tilings are still certified by the tests. All 4,288 problems have lower bounds and no records.
+
+### 4B.2 Lattice words in d - 1 axes
+
+Verbatim from 4.1, with Z^3 replaced by Z^n. Every ridge is a right angle, so the cells a straight path crosses unfold into the cubes of the lattice 2h Z^n with
+the anchor at the origin; the hinges are the lattice points with at least two coordinates that are odd multiples of h (their codimension in R^n is 2, as
+a (d-3)-face's in the boundary). A **word** is the ordered list of the planes y_k = (2m + 1) h that a straight path crosses; it has an end cell and an exact
+map x = A y + h b into R^d, A a signed permutation (stored per lattice axis k as a row r_k and a sign g_k, so that A e_k = g_k e_(r_k)) and b an integer vector.
+Crossing in direction tau a plane of axis k, from cell (i, sg) with r_k = j and t = tau g_k, enters cell (j, t) by the rotation R of the plane (e_i, e_j) about the
+ridge, R(sg e_i) = t e_j, R(t e_j) = -sg e_i; then A <- R A, b <- R (b - q) + q, q = sg e_i + t e_j.
+
+**Completeness for the reach used** [CALC]. *Every straight path of length L < 2s is realised by a word with at most two crossings per lattice axis, all in one
+direction.* Proof: three crossings of one axis are three consecutive planes, which are 4h = 2s apart in that coordinate (as in 4.1; the argument never used d).
+Balls need paths shorter than 1 (their diameter) and fit only from s = 1/sqrt 2 (4B.4), so 2s > 1; from s >= 1 only one crossing per axis is needed (the third plane level
+is at distance >= s from any centre). So the words with |m_k| <= 2 hold every path that can matter. Cubes need only one-crossing words (4B.5).
+
+| d | n = d-1 | words per cell, <= 2 per axis | <= 1 per axis |
+|---|---|---|---|
+| 5 | 4 | 109,601 | 633 |
+| 6 | 5 | 9,864,101 | 6,331 |
+| 7 | 6 | 1,302,061,345 | 75,973 |
+| 8 | 7 | 236,975,164,805 | 1,063,623 |
+| 9 | 8 | 56,874,039,553,217 | 17,017,969 |
+| 10 | 9 | 17,403,456,103,284,420 | 306,323,443 |
+
+[CALC] The counts are sum_k (2n)!/(2n-k)! (two crossings: the exponential generating function (1+x)^(2n)) and sum_k C(n,k) 2^k k! (one). The first two rows are the research
+note's 109,601, 9,864,101, 633 and 6,331; the tests enumerate d = 5 in full (109,601 words from three start cells), d = 6 in full (9,864,101, once) and the rest by formula. **The words are not listed**:
+they are found for one pair of points at a time, by reach.
+
+### 4B.3 The search by reach: the bounds, the loop lemma
+
+For a start u (cell c1) and a target point x2 (cell c2) the search looks for the realised words of length < 1. It first chooses the **support** m (the crossings per axis, m_k in
+{-2..2}, a path of length < 1 crosses axis k only up to the plane at distance < 1 from u), then the **orders** of the crossings, and tests each ordered word exactly as 4.1: the image
+y = A^T (x2 - h b) lies in the closed lattice cube m, and the segment u -> y crosses the word's planes at parameters 0 <= t_1 <= ... <= 1 (a plane holding both ends puts no constraint).
+Four exact facts prune it; each holds for every word of the support at hand, so the search finds every realised word of length < 1 (the Python tests compare it with a full enumeration, exact, d = 5 to 7).
+
+1. **Support bound.** length^2 >= sum over axes with m_k != 0 of delta_k^2 + sum over axes with m_k = 0 of (x2[r_k] - u_k)^2, delta_k = (2|m_k| - 1) h - sign(m_k) u_k, the distance from u to the last plane
+   crossed on axis k. The first sum: the segment crosses that plane, so |y_k - u_k| >= delta_k. The second: a column of A that is never crossed keeps its row r_k, and b keeps its value there, so y_k = x2[r_k].
+2. **Assignment bound.** y = 2h m + yhat, where yhat is a signed permutation of the target's local coordinates (a column of A is a signed unit vector), so with c = 2h m - u,
+   length^2 = sum (c_r + yhat_r)^2 >= sum (|c|_(r) - |u2|_(r))^2, both lists sorted ascending (the rearrangement inequality).
+3. **Image coordinates are known early.** *A crossing of axis k changes only column k of A and the entries of b along the old normal axis i and the old row j.* (R fixes e_l for l != i, j; the columns of A are
+   tangent to the cell, so only column k has a component along e_j, and none along e_i.) *No later crossing of another axis touches them:* a later crossing changes b along the then-normal axis and along a row
+   of another column, and neither is the row that column k now holds (the normal and the rows are all distinct). Hence y_k = g_k (x2[r_k] - h b[r_k]) is fixed from the last crossing of axis k, and during the
+   orders the search replaces delta_k by y_k - u_k in the sum, requires y_k in its lattice cube, and requires the crossing times known so far to lie in [0, 1] and to increase along the order.
+4. **The end cell.** *After any word the normal axis is the original row of a crossed axis, or the start's own normal axis* (a crossing swaps the normal with the row of the crossed column; induction). So unless an end cell has the
+   start's normal axis, the support must cross the axis whose original row is that end cell's normal axis.
+
+The search is capped by a **work budget** (steps of the support and order searches, 4,000,000 per check, `NCUBE_MAX_WORK`; 8,000 per pair in the kernel's energy): a search over its budget throws, and the
+check refuses the configuration with a plain reason. The cap makes the validator **sound but incomplete**: it never accepts an invalid configuration, and refuses a valid one only if
+the balls are so crowded against the (d-3)-faces that the search needs more than its budget. [CALC] The worst pair found (two balls at the minimum clearance 1/2 near a common corner, every slack 0.3536 on all n axes) cost, measured and approximate, about 129, 374 and 1,105 steps for d = 5 to 7 and 3,294, 9,601 and 26,470 for d = 8 to 10 (an earlier figure for d = 8 to 10, 3,230, 9,025 and 23,590, undershot; none of these is an upper bound); the cap holds about 150 such pairs at d = 10 and takes about 0.25 s to exhaust.
+
+**The loop lemma** [CALC]. *A nonempty word that ends in its start cell crosses at least two lattice axes twice.* Proof: write the frame (normal, A e_1, ..., A e_n) as the matrix F of a signed permutation;
+crossing axis k in direction tau is F <- F G with G the 90 degree rotation of the plane (0, k), by tau. Conjugating by the diagonal matrix of the directions tau_k (which fixes e_0), every crossing becomes the
+same rotation R_k: R_k e_0 = e_k, R_k e_k = -e_0, R_k e_l = e_l. The word returns to its start cell exactly when the product fixes e_0. Following e_0 through the product from the last crossing: it moves to e_k at a
+crossing of k, stays until the next crossing of the same k, where it becomes -e_0 (the sign flips); and so on. Returning to +e_0 needs an even number of such excursions, two at least, each using
+both crossings of one axis, and an axis crosses at most twice, so two different axes are crossed twice. [CALC: checked exhaustively for d = 5 and d = 6, all 109,601 and 9,864,101 words per cell.] So a geodesic loop is at least sqrt((3h - u_k)^2 + (3h - u_l)^2) >= sqrt 2 s
+long (the last plane of an axis crossed twice is 3h - u_k >= 2h = s away), which is >= 1 once a ball fits, and the loop check can never fire for s >= 1/sqrt 2 (the validator and the certifier keep it anyway; the kernel's energy leaves it out).
+
+### 4B.4 Balls
+
+The rule is 4.2 unchanged (its proof is dimension-free): a packing of balls of diameter 1 is valid exactly when every centre is >= 1/2 from the hinges, every two centres are >= 1 apart along every realised
+word, and every loop is >= 1.
+
+- **Clearance**, closed form: min over pairs of axes a < b of sqrt((h - |u_a|)^2 + (h - |u_b|)^2), the root of the two smallest squared slacks (the nearest lattice hinge is an edge-of-cell hinge of the anchor
+  cube; the Python tests check it against the lattice points). It is at most h sqrt 2, so a ball fits only from s = 1/sqrt 2 [CALC], and exactly there at the cell's centre.
+- **Pairs.** Only pairs whose centres are < 1 apart in R^d are searched (the geodesic is never shorter than the chord), found in a grid on four coordinates, so the work is linear in P; at most 20 reasons.
+- **No ridge snap.** Every gluing is an exact signed permutation, so no centre needs to be moved onto a facet (the chain validator of the 4-polytopes does). A centre on a ridge belongs to two cells: the search
+  accepts either as the target's end cell.
+- **Tolerance.** tol 1e-9 as the tesseract's (centres within tol of their cell, clearance >= 1/2 - tol, distances >= 1 - tol); the site's strict check for a problem without a record uses 1e-11.
+- **Cost** [CALC, Apple Silicon, one core]: the engine checked layouts of one to twenty balls per cell, tight at their edges, in 0.8, 0.9, 1.4, 2.8, 6.3 and 9.0 ms (d = 5 to 10, P = 2d) and 5.4, 12.9, 10.5, 10.3,
+  11.6 and 13.3 ms at P = 160, 384, 400, 400, 400, 400 (the test packings of the problem sets' largest P). The exact Python certifier takes 0.01 to 0.8 s for the P = 2d packings (d = 5 to 10).
+
+### 4B.5 Axis-aligned cubes
+
+4.3 with n axes. The cube centred at u is the box u +- 1/2 and crosses axis k when |u_k| + 1/2 > h. [CALC] *It is valid alone exactly when it crosses at most one axis* (two crossed axes k, l put the anchor's own hinge
+u_k = +-h, u_l = +-h, the other coordinates u_m, inside the open box; for s < 1 every axis is crossed, so a cube needs s >= 1 and, with one crossed axis, the slab beyond the face has depth <= 1/2 and stays in the
+neighbouring lattice cube). Its parts are the box clipped to the anchor and, beyond a crossed face, the slab mapped by the one-crossing word, a signed permutation, so again a box; parts of distinct cubes in a cell must
+not overlap by more than tol in all n axes. Strict mode counts a face touched from inside as crossed. A cube never overlaps itself (its two parts lie in different cells). The word search is not needed.
+
+**Tilings** [CALC]: P = 2d k^(d-1) cubes at s = k, k^(d-1) per cell on the grid of spacing 1, touching, so valid but not strictly valid; they are optimal for the cube problem by the volume bound (P <= 2d s^(d-1)),
+which they meet, so no packing of cubes of any orientation does better [CALC]. By the policy for proofs they stay best_known unless a published proof exists (none is cited; no records ship).
+
+### 4B.6 Lower bounds
+
+Stored as the largest binary64 value not above the exact one, decided in integer arithmetic (`ncubeBound`), and checked exactly in Python (`ncube.py exact_bounds`): the larger of
+- **volume**: P vol(piece) <= 2d s^(d-1) (the developments are injective on interiors, the interiors are disjoint); a ball has volume V_n 2^-n, V_n the unit n-ball's (pi replaced by its 60-digit truncation: a smaller, valid bound);
+- **one piece**: 1/sqrt 2 for a ball (4B.4), 1 for a cube (4B.5).
+For example P = 160 cubes on the 5-cube: exactly 2 (the tiling), and one ball: 0.7071067811865475 on every container.
+
+### 4B.7 The exact certifier
+
+`python/boundary/ncube.py`, reached through `certify.py` (`boundary/<d>cube/...` ids). Exact rationals only; shares no code with the engine. The same words, but a simpler search: the plane-distance part of bound 1 and bound 2, not the known image coordinates of fact 3 nor the end-cell fact 4 (and an unpruned mode, `prune=False`, that tries every word with
+|m_k| <= 2): so it also checks the engine's pruning. Strict validity needs > in every test. Checks:
+- the words (counts, every development an unfolding, the loop lemma), the pruned search against a full enumeration (exact, random pairs, d = 5 with two crossings and s from 0.75; d = 6 and 7 with one), the clearance against the lattice points;
+- 42 test packings (`fixtures/ncube_packings.json`, built by `build_ncube_packings.py`): per d one ball at the cell's centre at s = (1/sqrt 2)(1 + 1e-9), balls at the centres of the 2d cells, two per cell (4d balls, on a main diagonal of the inner cube),
+  one cube, 2d cubes, four cubes centred on the ridges of a ring of cells (each in two cells), and eight cubes round it, half a step off; each scaled by 1 + 1e-9 (4.4's argument) and certified strictly valid; their copies shrunk by 1e-6 fail;
+- the exact tilings (d = 5, 6, 7, 8, 10, k = 1 and 2: up to 896 cubes at s = 2 exactly), 160 and 384 balls on the 2^n grids of the cells at s = 2, touching;
+- the adversarial cases of both validators (`test_ncube.py`, `packages/boundary/test/ncube.test.ts`), d = 5 to 10: a ball over a (d-3)-face (clearance 0.509 valid, 0.495 not, on the hinge not), two balls across a ridge 1e-9 too close (the tolerance decides) and 1e-9 clear, two balls
+  that overlap only through the word that crosses two ridges round a hinge (clearance 0.6 each, 85 and 185 degrees round it, path 0.919, the other way 1.195), a cube over a hinge, two cubes whose parts overlap across a ridge by 0 and 1e-9, malformed input;
+- the engine's verdicts on 648 configurations (`fixtures/ncube_crosscheck.json`, `gen-ncube-crosscheck.ts`; the test packings scaled by 1.2, 1, 0.9999 and 0.97, and seeded random layouts, 325 valid): equal unless an exact margin lies within 1e-11 of its threshold.
+
+### 4B.8 Server, kernel, caps
+
+- **Rule** (`ncubeServerRule`): P at most the problem set's (160, 384, 400), the form (cell 0 to 2d - 1, u of n numbers at most 1e4 in absolute value, no `q`), s >= the bound less 1e-9 relative, then the validator at 1e-9 with 20 reasons.
+  The space's P limit rises from 64 to 400 for this; each container's own range is its domain's.
+- **Heavy checks.** `boundaryIsHeavy` uses 0.3, 0.35, 0.5, 0.6, 1 and 1.5 ms per ball (d = 5 to 10; three times the measured per-ball cost) and 0.02 ms per cube: a check of 50 ms or more waits in the server's heavy queue (one at a time) and is charged its estimate.
+- **Caps.** At most 400 pieces, the work budget above (a worst-case check takes about 0.25 s), 20 reasons, cell and coordinate ranges, no `q`; a configuration that exhausts the budget is refused, never slow.
+- **Kernel** (section 14): `boundaryKernel` returns `ncubeKernel` for these containers: n variables per piece, the exact energy of 4B.4 and 4B.5 with its analytic gradient in the displacements and in the size (the walk is `move.ts`, a signed permutation per crossing), weights, focus, a pair whose search exceeds
+  8,000 steps in the energy falls back to its chord in R^d; seeds are the cell layouts (balls: one per cell centred at s = 1, two on a diagonal at s = 1 + 1/sqrt n, then the grids of spacing 1 at s = k; cubes: the k^n grids) and the **ring cut** (the cells of two axes form a
+  flat strip of length 4s round the 2-axes' square, times a g^(d-2) grid across it, pieces at equal spacing from a random phase, some straddling ridges; a ball ring is kept only if the validator accepts it); finishing is the search's bisection plus the
+  validator at tolerance 0. The generic methods run on it; `searchBoundary` on a d-cube problem seeds and finishes (no optimiser: no records are searched).
+- **Tighter** must not see these containers: the game's slices and id patterns do not name `boundary` (`apps/web/test/tighter-boundary-excluded.test.ts` pins that for every d-cube id).
+
+### 4B.9 Limitations
+
+- **No records.** Test packings only. The cell layouts and the tilings are exact or nearly so; the others have no claim to being good (no search ran, as the tesseract's first two rounds would be); the optima for balls are open; a tesseract-like P = 2d layout below s = 1 would need the pair search at the worst corner (cost above).
+- **Aligned cubes only**, as on the tesseract: a turned cube might do better and would need parts and exact rotations in n dimensions (`parts.ts`, `polyhedron.ts` are 3-dimensional).
+- **The corner cap.** The validator refuses a configuration whose search needs more than 4,000,000 steps; the worst pair of the kind above costs about 26,000 at d = 10 (measured, not a bound), but a few hundred balls crowded at a common corner of d = 10 could reach it.
+- **The vertex rule** (section 3) is argued, not proved, in every d.
+- Not covered: the simplex, orthoplex and demicube boundaries for d >= 5, whose dihedral angles are not right angles; the chain code would need to go to R^(d-1) (phase C3 of the plan).
+
+
 ## 5. Lower bounds
 
 Only proven bounds are stored [CALC]. Each is stored as a binary64 value rounded down, and the
@@ -402,8 +796,8 @@ its field `previous`.
   the three cases that meet their bounds, and those stay `best_known`.
 - Cubes: only axis-aligned cubes were searched. Rotated cubes were tried only by random
   single-cube insertion in the research (no fit found). The certifier refuses rotated cubes.
-- Only the tesseract is covered. The engine is generic over convex 4-polytopes; the certifier's
-  lattice words are specific to the tesseract's right-angled 2-faces.
+- The tesseract is the only container with research records, and the only one with cubes. The five others take balls (section 4A); their
+  problems have lower bounds and test packings, and nothing better is known. Their Platonic pieces are not built (4A.8).
 - The cube nofold value 2 for P = 9..16 is taken from the wiki's table, not re-derived here.
 - The certifier's soundness rests on the arguments of section 4 and on Python's exact integers
   and fractions (and, for Q(sqrt 2, sqrt 3), on the sign rule of 4.6). Its records are also
@@ -422,14 +816,31 @@ its field `previous`.
   the engine cross-check.
 - `packages/boundary/scripts/check-records.ts`, `packages/boundary/scripts/gen-crosscheck.ts`,
   `packages/boundary/scripts/search-sources.ts`.
+- The other containers (section 4A): `python/boundary/general.py` (the general exact certifier), `python/boundary/test_general.py`
+  (its tests), `python/boundary/build_general_packings.py` (certifies the test packings), `packages/boundary/src/containers.ts` (the vertex lists),
+  `packages/boundary/src/bounds.ts` (facts, lower bounds, check-size estimates), `packages/boundary/src/domain.ts` (the 152 problems),
+  `packages/boundary/scripts/gen-containers.ts`, `gen-general-crosscheck.ts` and `gen-general-packings.ts` (the fixtures
+  `containers.json`, `general_crosscheck.json`, `general_packings_raw.json` of `python/boundary/fixtures`).
+- The d-cubes (section 4B): `packages/boundary/src/ncube/` (`lattice.ts` words and the reach search, `validate.ts`, `bounds.ts`, `move.ts`, `model.ts`, `kernel.ts`, `seeds.ts`, `rule.ts`, `search.ts`),
+  `python/boundary/ncube.py` (the exact certifier), `python/boundary/test_ncube.py` and `packages/boundary/test/ncube.test.ts` (tests), `python/boundary/build_ncube_packings.py` (the test packings),
+  `packages/boundary/scripts/gen-ncube-crosscheck.ts` and `gen-ncube-bounds.ts` (the fixtures `ncube_crosscheck.json`, `ncube_bounds.json`).
 
 ```
 python3 python/boundary/certify.py data/boundary/records.json
 python3 python/boundary/test_boundary.py
+python3 python/boundary/test_general.py
+python3 python/boundary/test_ncube.py
 npx tsx packages/boundary/scripts/search-sources.ts
 python3 python/boundary/build_records.py
 npx tsx packages/boundary/scripts/check-records.ts
 npx tsx packages/boundary/scripts/gen-crosscheck.ts
+npx tsx packages/boundary/scripts/gen-containers.ts
+npx tsx packages/boundary/scripts/gen-general-crosscheck.ts
+npx tsx packages/boundary/scripts/gen-general-packings.ts
+python3 python/boundary/build_general_packings.py
+python3 python/boundary/build_ncube_packings.py
+npx tsx packages/boundary/scripts/gen-ncube-crosscheck.ts
+npx tsx packages/boundary/scripts/gen-ncube-bounds.ts
 ```
 
 Timing (Apple Silicon, shared machine): the 11 searches about 2.5 minutes in all (the longest,
@@ -467,14 +878,16 @@ The server lists the space as `boundary` (title "Polytope boundaries", viewer
 `/spaces/boundary.html`) through the same routes as the other spaces; the API page, `/api`,
 describes them all. Everything below goes through the spaces registry, `packages/spaces`.
 
-- `GET /api/spaces`: the space with its conventions and its 32 problems.
-- `GET /api/spaces/boundary/records`: every problem with `fields` `{polytope, piece, P}`, the
+- `GET /api/spaces`: the space with its conventions and its 152 problems (its `domain`: polytope, piece, P; the pieces and the P range depend on the polytope).
+- `GET /api/spaces/boundary/records`: every problem with a research record (the tesseract's 32) with `fields` `{polytope, piece, P}`, the
   research record (`certified`: score_cert, display, status), the lower bound (`bound`), the site's
   best entry and `best_score`. Boundary problems also carry `extra`:
   `{nofold: {value, label}, fold_gain}`, the nofold value of section 6 with its source sentence, and
   the record's fold_gain = 1 - score_float / nofold (section 7). Other spaces send no `extra`.
 - `GET /api/spaces/boundary/problems/boundary/tesseract/ball/9`: one problem, with
-  `certified_config` (the record's configuration at s = score_cert) and `site_config`.
+  `certified_config` (the record's configuration at s = score_cert) and `site_config`. A problem of
+  the other containers, `.../problems/boundary/24cell/ball/5`, answers with `status: "no_record"`, its lower bound (4A.4), no
+  `certified` and no `certified_config`.
 - `GET /api/spaces/targets?spaces=boundary`, until it was removed with the volunteers' work list on
   2026-10-29: the open problems with room above their bound, 28 of the 32. Left out: P = 1, and the
   records that meet their bound (balls P = 2 at sqrt 2, cubes P = 8 at 1). The volunteer client now
@@ -484,10 +897,11 @@ describes them all. Everything below goes through the spaces registry, `packages
 
 **The server's rule** for a configuration:
 
-1. The id must be a catalogue problem's, in its one written form (no leading zeros). P is at most
-   64 for the space and at most the catalogue's largest P (16) for a submission.
+1. The id must be a problem of the domain, in its one written form (no leading zeros): balls and cubes on the tesseract, P = 1 to 16, balls on
+   the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24. P is at most 64 for the space and at most the
+   catalogue's largest P (24) for a submission.
 2. The configuration must be well formed, or the answer is 400 with what is wrong: s a finite
-   number in (0, 1e4]; `pieces` a list; each piece `{cell, u}` with `cell` an integer from 0 to 7
+   number in (0, 1e4]; `pieces` a list; each piece `{cell, u}` with `cell` an integer from 0 to C - 1 (C = 8 on the tesseract, 5, 16, 24, 120, 600 on the others)
    and `u` three finite numbers, each at most 1e4 in absolute value; a cube may have `q`, four finite
    numbers whose norm is within 1e-9 of 1; a ball has no `q`. Unknown fields are dropped.
 3. A wrong number of pieces, or an s below the problem's lower bound (less a relative 1e-9), is an
@@ -496,7 +910,8 @@ describes them all. Everything below goes through the spaces registry, `packages
    1024 chains of cells per piece: 422 with up to 20 reasons when it refuses.
 5. An entry below score_cert by more than a relative 1e-9 must also pass at tolerance 1e-11
    ("beats the research record only within the float tolerance" otherwise). Every record passes it
-   at its stored s.
+   at its stored s. On a problem without a record (the five new containers) every entry must pass it
+   (`SPACE_STRICT_NO_RECORD_REASON`).
 6. It is kept only when it beats the problem's best (record or site leader) by more than a relative
    1e-9, and it is stored as sent, with its known fields.
 
@@ -507,7 +922,9 @@ the only certified values (section 4).
 needs at most 79 chains per piece, so the cap of 1024 refuses no real packing. Checks of 64 pieces
 took 0.1 to 20 ms on an Apple Silicon laptop: the validator's volume bound and in-cell edge tests
 refuse most bad input before any chain is enumerated. The server keeps the 32 records in about
-55 kB of heap.
+55 kB of heap. On the other containers the test packings need at most 399 chains per piece (the 120-cell; 245 on the 5-cell and 600-cell),
+and a check of 24 balls took 4 to 18 ms (5-cell, 16-cell, 24-cell, 600-cell) and 91 ms (120-cell) on loose layouts; balls on the 120-cell from P = 5
+and on the 24-cell from P = 22 wait in the server's heavy-check queue (4A.6).
 
 **Searches.** The board and the volunteer client run the same job, `runSpaceJob` in
 `packages/spaces/src/search`, under the method name "boundary compression search": the boundary
@@ -631,3 +1048,10 @@ It reuses the boundary search's own parts, so a method sees the same model as se
   `finishCost = validateCost = 1000`.
 - **Records.** Every record converts, passes the server's rule, and finishes about 1e-12 below its
   score_cert. That gap is the certification's own scaling (section 4.4), not an improvement.
+- **The other containers** (balls only; 4A.6). The energy is the chain metric's (`ChainMetric`, chains of cells enumerated from each centre at
+  the ball's diameter), with the same exact gradient in x and in s, the weights and the focus; `dE/ds` holds the centres fixed and scales the
+  developments' translations and the nearest hinge points with s. `randomPose` develops a uniform target through the chains at a growing reach
+  (at most `POSE_CHAINS` = 1200 chains), and, for a target too far for that (almost always on the 600-cell), uses the end of a random geodesic of
+  up to 2.5 edges instead. The seeds are balls at the centres of P cells (valid from s0 of 4A.4), or a sequential random layout when P exceeds the
+  number of cells. The bound is 4A.4's, the form check takes cells 0 to C - 1, `finish` and `validate` are unchanged. [CALC] One energy evaluation
+  with its gradient costs 0.1 to 0.8 ms per ball (4A.6).

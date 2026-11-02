@@ -198,7 +198,9 @@ describe("a space with a domain", () => {
     expect(index.torus!.problems).toEqual([]);
     expect(index.torus!.domain).toBe(TORUS_TEST_DOMAIN);
     expect(logs).toContain("[spaces] torus: a domain of 2 problems, 0 with a record (no records file)");
-    expect(index.boundary).toBeUndefined();
+    // boundary has a domain too (balls on the six containers): it loads without a records file
+    expect(index.boundary!.problems).toEqual([]);
+    expect(index.boundary!.domain!.info.problems).toBe(152 + 2 * (160 + 384 + 4 * 400));
     expect(index.sphere!.domain).toBe(SPACE_DOMAINS.sphere);
   });
 });

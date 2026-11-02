@@ -18,6 +18,7 @@ import type { CertifiedStatus, SpaceConfig, SpaceName, SpaceProblemStatus } from
 import { SPACE_RECORD_MARGIN, improvesSpaceBest } from "@polypack/spaces";
 import { getProblem as getPolyhedraProblem, getSolid as getPolyhedraSolid } from "@polypack/polyhedra";
 import { ballsProblemOf } from "@polypack/balls/catalogue";
+import { ndIsHeavy } from "@polypack/ndspace";
 import {
   AUTO,
   AUTO_TEXT,
@@ -151,6 +152,20 @@ export const ruleOf = (p: LoadedSpaceProblem): SpaceRule => ({
   ...(p.status === "no_record" ? { noRecord: true } : {}),
 });
 
+/**
+ * True when the server queues the check of an entry of this problem (nD in nD: by the size of the check, as the server
+ * decides it; apps/server/src/spaces.ts). A queued check runs when its turn comes, one at a time, so the answer can take
+ * a few seconds; a full queue answers 503 and keeps nothing.
+ */
+export const isQueuedCheck = (p: SearchProblem): boolean =>
+  p.space === "ndim" && ndIsHeavy({ d: p.d, piece: p.piece, container: p.container, P: p.P });
+
+/** What the board says while an entry is on its way. */
+export const submittingText = (p: SearchProblem): string =>
+  isQueuedCheck(p)
+    ? "Submitting… The server checks large entries one at a time, so this one may wait for its turn."
+    : "Submitting…";
+
 /** The board's words for a problem without a research record or a site entry yet. */
 export const NO_RECORD_TEXT = "No record yet: run the optimizer or submit one.";
 
@@ -166,6 +181,12 @@ export function beatsBest(p: LoadedSpaceProblem, score: number): boolean {
 
 // ---------- what the panel shows ----------
 
+/** "tesseract" -> "Tesseract", "5cube" -> "5-cube" (the container in words, for the score label). */
+function boundaryName(polytope: string): string {
+  const w = polytope.replace(/^(\d+)/, "$1-");
+  return `${w.charAt(0).toUpperCase()}${w.slice(1)}`;
+}
+
 /** The name of a configuration's score in this problem. */
 export function scoreLabel(p: SearchProblem): string {
   switch (p.space) {
@@ -178,7 +199,7 @@ export function scoreLabel(p: SearchProblem): string {
     case "torus":
       return p.family === "free" ? "Cell √|det(b1, b2)|" : "Torus side L";
     case "boundary":
-      return `${p.polytope.charAt(0).toUpperCase()}${p.polytope.slice(1)} edge s`;
+      return `${boundaryName(p.polytope)} edge s`;
     case "polyhedra":
       return "Container scale s";
     case "balls":
@@ -191,6 +212,8 @@ export function scoreLabel(p: SearchProblem): string {
         default:
           return "Container scale s";
       }
+    case "ndim":
+      return p.container === "ball" ? "Container diameter d" : "Container scale s";
   }
 }
 
@@ -259,6 +282,7 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
   boundary: "one evaluation of the penalty energy (a check of a whole packing counts as 500)",
   polyhedra: "one simulator step or one evaluation of the polish",
   balls: "one evaluation of the penalty and its gradient",
+  ndim: "one evaluation of the penalty energy (overlap depths by GJK and EPA)",
 };
 
 /**
@@ -286,6 +310,8 @@ export function evalUnit(p: SearchProblem, method?: string): string {
  * (2026-10-26, a shared and loaded machine), for rounds of 1 to 3 s like the spaces' own rounds.
  */
 export const GENERIC_ROUND_K: Record<SpaceName, number> = {
+  // the nD spaces are not on the board yet; a placeholder in the polyhedra's range
+  ndim: 100_000,
   sphere: 3_300_000,
   boundary: 2_700_000,
   torus: 900_000,
@@ -393,6 +419,7 @@ export const ROUND_EVALS: Record<SearchKind, number> = {
   // polyhedra and balls rounds depend on P and the piece (polyhedraRound, ballsRound); these are no sizes of theirs
   polyhedra: 10000,
   balls: 10000,
+  ndim: 10000,
 };
 
 /** Pieces from which a fold round has 2 compressions instead of 4. */
@@ -414,6 +441,7 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
   boundary: BOUNDARY_FRESH,
   polyhedra: 10000,
   balls: 10000,
+  ndim: 10000,
 };
 
 /**
@@ -433,6 +461,7 @@ export const GROW_LIMIT: Record<SearchKind, number> = {
   boundary: 3,
   polyhedra: 2,
   balls: 2,
+  ndim: 2,
 };
 
 /**
@@ -562,9 +591,33 @@ export function ballsRound(P: number, code: string): { round: number; fresh: num
   return { round, fresh: round, evalUs };
 }
 
+/**
+ * Milliseconds of one evaluation of the penalty energy and its gradient per ball on the containers beyond the tesseract
+ * (the chain metric, packages/boundary/src/search/balls.ts ChainMetric; the tesseract's lattice words take 0.0005): [CALC]
+ * measured 2026-11-01 on an Apple Silicon laptop, on squeezed random starts of P = 4 and 12, the larger of the two.
+ */
+export const BOUNDARY_ENERGY_MS: Record<string, number> = {
+  "5cell": 0.12,
+  "16cell": 0.18,
+  "24cell": 0.25,
+  "600cell": 0.15,
+  "120cell": 0.8,
+};
+
+/**
+ * The evaluations of a 3D on 4D round: the tesseract's BOUNDARY_ROUND; on another container about two seconds of the chain
+ * metric (at least 200 evaluations, at most BOUNDARY_ROUND), so that a round there is as long as elsewhere.
+ */
+export function boundaryRound(polytope: string, P: number): number {
+  const ms = BOUNDARY_ENERGY_MS[polytope];
+  if (ms === undefined) return BOUNDARY_ROUND;
+  return Math.max(200, Math.min(BOUNDARY_ROUND, 100 * Math.floor(2000 / (ms * P) / 100)));
+}
+
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
+  if (p.space === "boundary") return boundaryRound(p.polytope, p.P);
   if (p.space === "polyhedra") return polyhedraRound(p.P, p.code).round;
   if (p.space === "balls") return ballsRound(p.P, p.code).round;
   if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
@@ -574,6 +627,7 @@ export function roundSize(p: SearchProblem, method?: string): number {
 /** The evaluations of a round of this problem with no start (a new arrangement). */
 export function freshSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
+  if (p.space === "boundary") return boundaryRound(p.polytope, p.P);
   if (p.space === "balls") return ballsRound(p.P, p.code).fresh;
   if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
   return p.space === "polyhedra" ? polyhedraRound(p.P, p.code).fresh : FRESH_EVALS[searchKind(p)];
@@ -604,13 +658,17 @@ export function defaultBudget(p: SearchProblem, method?: string): { time_s: numb
   }
   // ten rounds of about 2 to 3 s here, with room for a machine several times slower
   if (p.space === "balls") return { time_s: 60, evals: 10 * ballsRound(p.P, p.code).round };
+  if (p.space === "ndim") return { time_s: 60, evals: 30000 };
+  // ten rounds; the other containers' rounds are about two seconds each (boundaryRound), the tesseract's the usual 30 s and 3 million
+  if (p.space === "boundary" && p.polytope !== "tesseract")
+    return { time_s: 60, evals: 10 * boundaryRound(p.polytope, p.P) };
   return {
     nofold: { time_s: 15, evals: 30000 },
     curved: { time_s: 30, evals: 90 },
     sphere: { time_s: 15, evals: 20000 },
     torus: { time_s: 15, evals: 20000 },
     boundary: { time_s: 30, evals: BOUNDARY_BUDGET },
-  }[kind as Exclude<SearchKind, "surface" | "nofold-surface" | "polyhedra" | "balls">];
+  }[kind as Exclude<SearchKind, "surface" | "nofold-surface" | "polyhedra" | "balls" | "ndim">];
 }
 
 /**
@@ -631,6 +689,7 @@ export const EVALS_MAX: Record<SearchKind, number> = {
   polyhedra: 10_000_000,
   // [CALC] at 1 to 110 microseconds an evaluation (ballsRound), 10 million take 10 s to 20 minutes
   balls: 10_000_000,
+  ndim: 1_000_000,
 };
 
 /** The most evaluations the panel takes for a run of `method` on the problem. */

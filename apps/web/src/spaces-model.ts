@@ -1,4 +1,5 @@
 import { BALLS_CODES, ballsTitle } from "@polypack/balls/catalogue";
+import { ND_SHAPE_NAMES, ndShapeTitle } from "@polypack/ndspace/catalogue";
 import { JOHNSON_SOLIDS, PROBLEM_ORDER, problemTitle } from "@polypack/polyhedra/catalogue";
 import {
   SURFACE_ARCHIMEDEAN,
@@ -35,6 +36,21 @@ export function pieceName(N: string | number): string {
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** The boundary space's polytopes in words (tesseract; 5-cell, 16-cell, 24-cell, 120-cell, 600-cell: the regular 4-polytopes; 5-cube to 10-cube). */
+const BOUNDARY_TITLES: Record<string, string> = {
+  tesseract: "tesseract",
+  "5cell": "5-cell",
+  "16cell": "16-cell",
+  "24cell": "24-cell",
+  "120cell": "120-cell",
+  "600cell": "600-cell",
+  "5cube": "5-cube",
+  "6cube": "6-cube",
+  "7cube": "7-cube",
+  "8cube": "8-cube",
+  "9cube": "9-cube",
+  "10cube": "10-cube",
+};
 const plural = (s: string) => `${s}s`;
 /** A minus sign rather than a hyphen in front of a negative number. */
 export const minus = (s: string) => s.replace(/^-/, "−");
@@ -258,9 +274,22 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       key: "polytope",
       at: 1,
       label: "Polytope",
-      option: capital,
-      cell: (v) => v,
-      order: ["tesseract"],
+      option: (v) => capital(BOUNDARY_TITLES[v] ?? v),
+      cell: (v) => BOUNDARY_TITLES[v] ?? v,
+      order: [
+        "tesseract",
+        "5cell",
+        "16cell",
+        "24cell",
+        "120cell",
+        "600cell",
+        "5cube",
+        "6cube",
+        "7cube",
+        "8cube",
+        "9cube",
+        "10cube",
+      ],
       start: "tesseract",
     },
     {
@@ -296,6 +325,36 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       cell: ballsTitle,
       order: BALLS_CODES,
       start: "ballinball",
+    },
+  ],
+  // ndim/<d>/<piece>/<container>/<P>: 4D in 4D to 10D in 10D, one dimension per family (dimension-table.ts)
+  ndim: [
+    {
+      key: "d",
+      at: 1,
+      label: "Dimension",
+      option: (v) => `${v}D`,
+      cell: (v) => `${v}D`,
+      order: ["4", "5", "6", "7", "8", "9", "10"],
+      start: "4",
+    },
+    {
+      key: "piece",
+      at: 2,
+      label: "Piece",
+      option: ndShapeTitle,
+      cell: ndShapeTitle,
+      order: ND_SHAPE_NAMES,
+      start: "all",
+    },
+    {
+      key: "container",
+      at: 3,
+      label: "Container",
+      option: ndShapeTitle,
+      cell: ndShapeTitle,
+      order: ND_SHAPE_NAMES,
+      start: "all",
     },
   ],
 };

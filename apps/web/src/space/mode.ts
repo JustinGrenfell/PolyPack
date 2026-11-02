@@ -23,6 +23,7 @@ import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, hasLatti
 import { ParameterError, parameterForm, validityText } from "../solve-params";
 import { certifiedBy, downloadName } from "../spaces-model";
 import { renderNofoldNote } from "@polypack/surface/nofold-note";
+import { type FamilyScope, familyFilters, scopeHasId, whereIs } from "../dimension-table";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, loadNofoldMethods, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
@@ -44,6 +45,7 @@ import {
   problemFacts,
   scoreLabel,
   roundSize,
+  submittingText,
   searchKind,
   shownText,
 } from "./model";
@@ -168,7 +170,14 @@ const TURN_HELP: Record<SpaceName, string> = {
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
   balls:
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint: a ball with three great circles, or a solid by its edges. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+  // the board does not draw the nD spaces yet
+  ndim:
+    "4D in 4D is drawn as a 3D slice: choose the axis, then move the slider to cut the container and the pieces across it. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset). From 5D the drawing is a projection onto two axes you choose, with a table of the pieces under it.",
 };
+
+/** The help line under the drawing of the d-cube boundaries (4D on 5D to 9D on 10D), which are not drawn like the tesseract's. */
+const NCUBE_HELP =
+  "The chart shows the centres of the pieces projected onto two axes you choose, inside the projected d-cube, each facet in its own colour. The table lists every piece with its facet and centre.";
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
   evals: "Evaluation limit reached",
@@ -205,8 +214,13 @@ class SpaceMode {
   private records = new Map<SpaceName, SpaceProblemSummary[]>();
   /** The domains of the spaces whose problems are given by one (their picker is built from it); null for the others. */
   private domains = new Map<SpaceName, SpaceDomainInfo | null>();
-  /** The last problem shown in each space, so that the menu returns to it. */
-  private last = new Map<SpaceName, string>();
+  /** The last problem shown in each family (the menu's key, dimension-table.ts), so that the menu returns to it. */
+  private last = new Map<string, string>();
+  /** The family shown: its menu key, and the part of its space that it holds (an nD dimension, the d-cubes). */
+  private family = "";
+  private scope: FamilyScope | null = null;
+  /** The problem the family opens with when nothing else is asked for. */
+  private start = "";
   private handle: SpaceProblemHandle | null = null;
   private view: SpaceView | null = null;
   private shown: "best" | "result" = "best";
@@ -535,9 +549,10 @@ class SpaceMode {
 
   // ---------- entering and leaving ----------
 
-  async enter(space: BoardSpace, id: string | null): Promise<void> {
-    const wanted = id ?? this.last.get(space) ?? null;
-    if (space === this.space && this.handle && (wanted === null || wanted === this.handle.problem.id)) {
+  async enter(space: BoardSpace, id: string | null, family: string = space): Promise<void> {
+    const where = whereIs(family, id);
+    const wanted = id ?? this.last.get(family) ?? null;
+    if (family === this.family && space === this.space && this.handle && (wanted === null || wanted === this.handle.problem.id)) {
       // a drawing released on leaving is made again, showing what it showed
       if (!this.view) {
         this.view = this.handle.render($("space-view-host"));
@@ -547,12 +562,17 @@ class SpaceMode {
       return;
     }
     this.space = space;
-    $("space-summary").textContent = SPACE_INFO[space].summary;
-    $("space-turn-help").textContent = TURN_HELP[space];
+    this.family = family;
+    this.scope = where?.family.scope ?? null;
+    this.start = where?.family.start ?? DEFAULT_PROBLEM[space];
+    // a family that holds part of a space (an nD dimension) says what it is; the others use the API's text
+    $("space-summary").textContent = this.scope && where ? `${where.dimension.summary} ${where.family.summary}` : SPACE_INFO[space].summary;
+    $("space-turn-help").textContent =
+      space === "boundary" && this.scope?.values.every((v) => /^\d+cube$/.test(v)) ? NCUBE_HELP : TURN_HELP[space];
     $("space-values-note").textContent =
       `The certified value is proven valid with ${certifiedBy(space)}. The site best is an entry sent to this site and checked by the server in floating point.`;
     $<HTMLAnchorElement>("space-docs").href = SPACE_INFO[space].docs;
-    $<HTMLAnchorElement>("space-records").href = `/dimensions.html#space=${space}`;
+    $<HTMLAnchorElement>("space-records").href = `/dimensions.html#${new URLSearchParams({ space, ...(where ? familyFilters(where.family) : {}) })}`;
     await this.open(space, wanted);
   }
 
@@ -613,7 +633,7 @@ class SpaceMode {
       if (domain !== "error") this.domains.set(space, domain);
       else fallback = "The kinds' descriptions could not be read, so the menus offer the problems with records only.";
     }
-    const pick = this.pick(space, fieldsOfId(space, wanted ?? DEFAULT_PROBLEM[space]));
+    const pick = this.pick(space, fieldsOfId(space, wanted ?? (this.start || DEFAULT_PROBLEM[space])));
     this.renderPicker(space, pick.fields);
     if (!pick.id) {
       this.clearProblem();
@@ -632,12 +652,15 @@ class SpaceMode {
   /** The picker for a wish: from the space's domain when it has one, else from its listed problems. */
   private pick(space: SpaceName, wish: Record<string, string>): { fields: PickField[]; id: string | null } {
     const domain = this.domains.get(space);
-    return domain ? pickFromDomain(space, domain, wish) : pickProblem(space, this.records.get(space) ?? [], wish);
+    const scope = this.scope;
+    return domain
+      ? pickFromDomain(space, domain, wish, scope)
+      : pickProblem(space, (this.records.get(space) ?? []).filter((p) => !scope || scopeHasId(scope, p.id)), wish);
   }
 
   private renderPicker(space: SpaceName, fields: PickField[]): void {
     const box = $("space-fields");
-    const rows = fields.map((f) => {
+    const rows = fields.filter((f) => !f.hidden).map((f) => {
       const id = `space-f-${f.key}`;
       const select = h("select", { id });
       addOptions(select, f.options);
@@ -677,7 +700,7 @@ class SpaceMode {
     this.busy(null);
     const sameProblem = this.handle?.problem.id === p.id;
     this.handle = spaceProblemHandle(p);
-    this.last.set(space, id);
+    this.last.set(this.family || space, id);
     this.result = null;
     this.finished = null;
     this.shown = "best";
@@ -1267,7 +1290,7 @@ class SpaceMode {
     this.submitting = true;
     this.renderSubmit();
     out.className = "note";
-    out.textContent = "Submitting…";
+    out.textContent = submittingText(handle.problem.search);
     // the method with its settings, the seed and the start of the run that found it, as much as fits
     const named = handle.methodName(result.method);
     const settings = Object.keys(result.params).length ? `${named} ${JSON.stringify(result.params)}` : named;

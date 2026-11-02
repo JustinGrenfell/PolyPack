@@ -1,0 +1,14 @@
+{
+  "name": "@polypack/ndim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./info": "./src/data/info.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit"
+  }
+}

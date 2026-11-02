@@ -49,6 +49,7 @@ Usage:
 
 import json
 import math
+import os
 import re
 import sys
 from decimal import ROUND_HALF_EVEN, Decimal
@@ -64,10 +65,15 @@ MMAX = 2
 POLYTOPES = ("tesseract",)
 PIECES = ("ball", "cube")
 STATUSES = ("best_known", "proven")
-ID_RE = re.compile(r"^boundary/(tesseract)/(ball|cube)/([1-9][0-9]{0,3})$")
+GENERAL_POLYTOPES = ("5cell", "16cell", "24cell", "120cell", "600cell")  # general.py (chains), balls only
+NCUBE_POLYTOPES = ("5cube", "6cube", "7cube", "8cube", "9cube", "10cube")  # ncube.py (lattice words in d - 1 axes, pruned by reach)
+ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})\Z")
 # pi to 50 decimals, truncated: a rational lower bound and (adding 1e-50) an upper bound
 PI_LO = Fraction("3.14159265358979323846264338327950288419716939937510")
 PI_HI = PI_LO + Fraction(1, 10 ** 50)
+
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # general.py lies beside this file
 
 
 class CertError(Exception):
@@ -383,6 +389,18 @@ class Config:
         self.X = [embed(c, U, self.H) for c, U in zip(self.cells, self.U)]
 
 
+def problem_fields(problem):
+    """(polytope, piece, P) of an id or a dict {polytope, piece, P}; CertError for anything else."""
+    if isinstance(problem, str):
+        m = ID_RE.match(problem)
+        if not m:
+            raise CertError(f"{problem!r} is not of the form boundary/<polytope>/<ball|cube>/<P>")
+        return m.group(1), m.group(2), int(m.group(3))
+    if not isinstance(problem, dict):
+        raise CertError("the problem must be an id or an object with polytope, piece and P")
+    return problem.get("polytope"), problem.get("piece"), problem.get("P")
+
+
 def parse(problem, config):
     """problem: an id 'boundary/tesseract/<piece>/<P>' or a dict {polytope, piece, P}."""
     if isinstance(problem, str):
@@ -422,6 +440,11 @@ def _bad(value, limit, strict):
 def check(problem, config, strict=True):
     """Decides validity exactly. Returns a Verdict; raises CertError only for malformed input or a
     configuration outside the certifier's scope (rotated cubes)."""
+    polytope, piece, P = problem_fields(problem)
+    if polytope in GENERAL_POLYTOPES:
+        return check_general(polytope, piece, P, config, strict)
+    if polytope in NCUBE_POLYTOPES:
+        return check_ncube(polytope, piece, P, config, strict)
     cfg = parse(problem, config)
     v = Verdict(cfg, strict)
     H, D = cfg.H, cfg.D
@@ -434,6 +457,47 @@ def check(problem, config, strict=True):
         _check_balls(cfg, v)
     else:
         _check_cubes(cfg, v)
+    return v
+
+
+def check_general(polytope, piece, P, config, strict):
+    """The other four-dimensional regular polytopes (general.py): balls only; exact chains of cells."""
+    import general
+
+    if piece != "ball":
+        raise CertError(f"the {polytope} takes balls only, not {piece!r} (BOUNDARY.md section 4A)")
+    if isinstance(P, bool) or not isinstance(P, int) or not 1 <= P <= MAX_P:
+        raise CertError(f"P must be a whole number from 1 to {MAX_P}")
+    try:
+        cfg = general.parse_config(polytope, P, config, to_fraction)
+    except general.GeneralError as e:
+        raise CertError(str(e)) from None
+    # cheap first: the volume bound and the one-ball bound decide a tiny s at once (else the chain search runs to its node cap).
+    # check(x) says x is not above the bound. Strict, s equal to the bound is invalid; not strict it is valid, so test a hair above s.
+    sx = cfg["s"] if strict else cfg["s"] * (1 + Fraction(1, 10 ** 40))
+    for kind, text, below in general.exact_bounds(polytope, P):
+        if below(sx):
+            v = general.Verdict(strict)
+            v.fail(f"s is too small for {P} balls: it must be {'more than' if strict else 'at least'} the {kind} bound {text}")
+            v.polytope = polytope
+            return v
+    try:
+        v = general.check_balls(polytope, cfg, strict=strict)
+    except (general.GeneralError, general.ChainLimit) as e:
+        raise CertError(str(e)) from None
+    v.polytope = polytope
+    return v
+
+
+def check_ncube(polytope, piece, P, config, strict):
+    """The d-cubes, d = 5..10 (ncube.py): balls and axis-aligned cubes; lattice words in d - 1 axes found by reach."""
+    import ncube
+
+    try:
+        v = ncube.check(polytope, piece, P, config, to_fraction, strict=strict)
+    except ncube.NCubeError as e:
+        raise CertError(str(e)) from None
+    v.ncube = True
     return v
 
 
@@ -617,6 +681,14 @@ def certify(problem, config):
 def summary(v):
     """Readable margins of a verdict, rounded down (lengths) so that they are never overstated. Ball margins are in site
     units (the verdict's squared working lengths times Config.unit squared)."""
+    if hasattr(v, "polytope"):
+        import general
+
+        return general.summary(v)
+    if hasattr(v, "ncube"):
+        import ncube
+
+        return ncube.summary(v)
     out = {"checker": CHECKER, "version": VERSION, "strict": v.strict, "valid": v.ok}
     m = v.margins
     if v.cfg.piece == "ball":
@@ -777,9 +849,17 @@ def problem_P(problem):
 # ------------------------------------------------------------------ bounds
 
 
-def lower_bounds(piece, P):
+def lower_bounds(piece, P, polytope="tesseract"):
     """The proven lower bounds on s (BOUNDARY.md 5) as (kind, exact text, check), where check(x)
     decides exactly whether the rational x is <= the bound."""
+    if polytope in GENERAL_POLYTOPES:
+        import general
+
+        return general.exact_bounds(polytope, P)
+    if polytope in NCUBE_POLYTOPES:
+        import ncube
+
+        return ncube.exact_bounds(polytope, piece, P)
     if piece == "ball":
         return [
             ("volume", "(P pi/48)^(1/3)", lambda x: x ** 3 * 48 <= P * PI_LO),
@@ -836,7 +916,7 @@ def published_errors(rec):
             bv = Fraction(bound["value"])
             if bv > Fraction(sc):
                 errs.append("the lower bound exceeds score_cert")
-            kinds = {k: ok for k, _, ok in lower_bounds(m.group(2), int(m.group(3)))}
+            kinds = {k: ok for k, _, ok in lower_bounds(m.group(2), int(m.group(3)), m.group(1))}
             if bound.get("kind") not in kinds:
                 errs.append(f"unknown bound kind {bound.get('kind')!r}")
             elif not kinds[bound["kind"]](bv):

@@ -20,7 +20,7 @@ import { surfaceRenderer } from "./render/surface";
 import { torusRenderer } from "./render/torus";
 
 /** The problems drawn by a SpaceRenderer: the 2D kinds and 3D in 3D. */
-export type FlatDrawnProblem = Exclude<SearchProblem, { space: "boundary" }>;
+export type FlatDrawnProblem = Exclude<SearchProblem, { space: "boundary" } | { space: "ndim" }>;
 
 /** The renderer of a problem's space. */
 export function createRenderer(p: FlatDrawnProblem): SpaceRenderer {
@@ -56,11 +56,53 @@ export interface SpaceView {
 const STEP = (5 * Math.PI) / 180;
 
 /**
+ * 4D in 4D to 10D in 10D (render/ndim.ts): the drawing, its polytope tables and, for 4D, three.js load when the first such
+ * problem is drawn, so that the other kinds never load them. Until then the view says so; a configuration shown meanwhile
+ * is drawn when it is ready.
+ */
+function mountNdimLazy(host: HTMLElement, p: Extract<SearchProblem, { space: "ndim" }>, label: string): SpaceView {
+  const wait = document.createElement("div");
+  wait.className = "space-view space-view-nd";
+  const text = document.createElement("p");
+  text.className = "note nd-status";
+  text.setAttribute("role", "status");
+  text.textContent = "Loading the drawing…";
+  wait.append(text);
+  host.replaceChildren(wait);
+  let inner: SpaceView | null = null;
+  let gone = false;
+  let pending: SpaceConfig | null | undefined;
+  void import("./render/ndim").then(
+    (m) => {
+      if (gone) return;
+      inner = m.mountNdimView(host, p, label);
+      if (pending !== undefined) inner.show(pending);
+    },
+    () => {
+      text.textContent = "The drawing could not be loaded. The connection may have dropped.";
+    },
+  );
+  return {
+    show(c) {
+      if (inner) inner.show(c);
+      else pending = c;
+    },
+    canShow: (q) => q.space === "ndim" && q.d === p.d && q.piece === p.piece && q.container === p.container,
+    destroy() {
+      gone = true;
+      inner?.destroy();
+      wait.remove();
+    },
+  };
+}
+
+/**
  * Mounts a drawing of problem `p` into `host` (emptied first): a toolbar and the drawing below it.
  * `label` names the toolbar for screen readers.
  */
 export function mountSpaceView(host: HTMLElement, p: SearchProblem, label = "Drawing"): SpaceView {
   if (p.space === "boundary") return mountBoundaryView(host, p, label);
+  if (p.space === "ndim") return mountNdimLazy(host, p, label);
   const renderer = createRenderer(p);
   const root = document.createElement("div");
   root.className = "space-view";

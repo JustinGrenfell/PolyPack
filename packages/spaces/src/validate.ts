@@ -29,7 +29,15 @@ import { runSteps, runStepsAsync } from "@polypack/methods";
  *    before any chain is enumerated, and its pair stages bin the pieces in a grid, so their work is
  *    linear in P.
  */
-import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
+import {
+  BoundaryConfig,
+  ContainerName,
+  PieceName,
+  PolytopeName,
+  getPolytope,
+  ncubeDim,
+  validateBoundary,
+} from "@polypack/boundary";
 import { CurvedConfig, containerCircumradius, validationSteps as curvedSteps } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, pieceInradius } from "@polypack/geometry";
 import { SphereConfig, validationSteps as sphereSteps } from "@polypack/sphere";
@@ -59,6 +67,15 @@ import {
   validatePolyhedraAsync,
 } from "@polypack/polyhedra";
 import { type BallsConfig, getBallsProblem, ballsConfigErrors, validateBalls } from "@polypack/balls";
+import {
+  ND_MAX_P,
+  NDIM_MAX_REASONS,
+  loadNdProblem,
+  ndCheckSteps,
+  parseNdConfig,
+  type NdConfigShape,
+  type NdProblemId,
+} from "@polypack/ndspace";
 import { ParsedSpaceId, parseSpaceId } from "./ids";
 import {
   BOUNDARY_MAX_CHAINS,
@@ -90,10 +107,13 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   curved: 100,
   sphere: 100,
   torus: TORUS_MAX_P,
-  boundary: 64,
+  // 400 for the d-cubes (d = 5..10; the 4-polytopes' catalogue stops at 24, which their domain enforces)
+  boundary: 400,
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
   balls: 100,
+  // the largest P of any dimension (4D: 40); each dimension's own range is its domain's (the server refuses others)
+  ndim: ND_MAX_P,
 };
 /** Largest size (s, size, rho, L, lattice vector component) accepted. */
 export const SPACE_MAX_SIZE = 1e6;
@@ -300,26 +320,35 @@ const BOUNDARY_UNIT_SLACK = 1e-9;
 
 function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<BoundaryConfig> {
   const r = new Reader();
-  const C = getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  // the d-cubes (d = 5..10): 2d cells, d - 1 coordinates, no rotation; the 4-polytopes: their cells, 3 coordinates
+  const nc = ncubeDim(id.fields.polytope);
+  const C = nc ? 2 * nc : getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  const dimU = nc ? nc - 1 : 3;
   const ball = (id.fields.piece as PieceName) === "ball";
   const s = r.num(raw.s, "s", BOUNDARY_MAX_S, true);
   const list = piecesOf(raw, "pieces", id.P);
   if (!Array.isArray(list)) return r.failWith(list);
   const pieces = list.map((p, i): BoundaryConfig["pieces"][number] => {
-    const none = { cell: 0, u: [0, 0, 0] };
+    const none = { cell: 0, u: new Array<number>(dimU).fill(0) };
     if (r.full()) return none;
     if (!isObject(p)) {
-      r.errors.push(`pieces[${i}] must be an object {cell, u${ball ? "" : ", q?"}}`);
+      r.errors.push(`pieces[${i}] must be an object {cell, u${ball || nc ? "" : ", q?"}}`);
       return none;
     }
     if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= C)
       r.errors.push(`pieces[${i}].cell must be an integer from 0 to ${C - 1}`);
-    let u = [0, 0, 0];
+    let u = new Array<number>(dimU).fill(0);
     // read by index, so that a hole in a sparse array is seen
-    if (!Array.isArray(p.u) || p.u.length !== 3) r.errors.push(`pieces[${i}].u must be [u0, u1, u2]`);
-    else u = [0, 1, 2].map((k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
+    if (!Array.isArray(p.u) || p.u.length !== dimU)
+      r.errors.push(`pieces[${i}].u must be ${dimU === 3 ? "[u0, u1, u2]" : `${dimU} numbers`}`);
+    else
+      u = Array.from({ length: dimU }, (_, k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
     const piece: BoundaryConfig["pieces"][number] = { cell: p.cell as number, u };
     if (p.q === undefined) return piece;
+    if (nc) {
+      r.errors.push(`pieces[${i}] has no rotation q (pieces on the ${String(id.fields.polytope)} stay axis-aligned)`);
+      return piece;
+    }
     if (ball) {
       r.errors.push(`pieces[${i}] is a ball and has no rotation q`);
       return piece;
@@ -361,8 +390,20 @@ export function parseSpaceConfig(id: ParsedSpaceId, raw: unknown): Parsed<SpaceC
     }
     case "balls":
       return parseBalls(raw, id);
+    case "ndim": {
+      const r = parseNdConfig(ndId(id), raw);
+      return r.ok ? { ok: true, config: r.config as unknown as SpaceConfig, score: r.score } : r;
+    }
   }
 }
+
+/** The nD problem of a parsed id. */
+const ndId = (id: ParsedSpaceId): NdProblemId => ({
+  d: id.fields.d as number,
+  piece: id.fields.piece as string,
+  container: id.fields.container as string,
+  P: id.P,
+});
 
 /** A balls configuration: errors of form are malformed input, except a wrong number of pieces. */
 function parseBalls(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<SpaceConfig> {
@@ -467,7 +508,7 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
         );
     }
     case "boundary": {
-      const problem = { polytope: f.polytope as PolytopeName, piece: f.piece as PieceName, P: id.P };
+      const problem = { polytope: f.polytope as ContainerName, piece: f.piece as PieceName, P: id.P };
       // the validator's own volume bound and in-cell edge tests run before any chain is enumerated
       const v = validateBoundary(problem, config, { tol, maxReasons: MAX_REASONS, maxChains: BOUNDARY_MAX_CHAINS });
       return v.ok ? [] : reasonsOf(v.reasons, "not a valid packing");
@@ -484,6 +525,9 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
       const v = validateBalls(problem, config as unknown as BallsConfig, { tol, maxErrors: MAX_REASONS });
       return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
     }
+    case "ndim":
+      // sliced in steps, with a cap on the work (ndspace validate.ts); the polytopes must be loaded (loadNdProblem)
+      return yield* ndCheckSteps(ndId(id), config as unknown as NdConfigShape, tol, NDIM_MAX_REASONS);
   }
 }
 
@@ -550,8 +594,10 @@ export async function validateSpaceSubmissionAsync(
         ];
       }
     }
-    if (["curved", "sphere", "torus"].includes(prep.id.space)) {
+    if (["curved", "sphere", "torus", "ndim"].includes(prep.id.space)) {
       try {
+        // some polytopes of the ndim space are loaded on demand (once; a no-op afterwards): a failure to load is a clean reason
+        if (prep.id.space === "ndim") await loadNdProblem(ndId(prep.id));
         // Include preflights and geometry in the same timed slices as the synchronous check.
         const v = await runStepsAsync(
           (function* () {

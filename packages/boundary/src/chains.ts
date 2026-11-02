@@ -192,12 +192,29 @@ export function dedupePolygon(P: V3[], eps: number): V3[] {
 export function clipPolygonByPlane(P: V3[], N: V3, u: V3, eps: number): V3[] {
   const n = P.length;
   if (n === 0) return P;
-  const d = P.map((p) => N[0] * (p[0] - u[0]) + N[1] * (p[1] - u[1]) + N[2] * (p[2] - u[2]));
-  if (d.every((x) => x >= 0)) return P;
-  if (d.every((x) => x <= 0)) return [];
+  if (CLIP_D.length < n) CLIP_D = new Float64Array(2 * n);
+  const d = CLIP_D;
+  const ux = u[0];
+  const uy = u[1];
+  const uz = u[2];
+  const nx = N[0];
+  const ny = N[1];
+  const nz = N[2];
+  let neg = false;
+  let pos = false;
+  for (let i = 0; i < n; i++) {
+    const p = P[i];
+    const x = nx * (p[0] - ux) + ny * (p[1] - uy) + nz * (p[2] - uz);
+    d[i] = x;
+    // written so that a NaN counts as both, as `every` did
+    if (!(x >= 0)) neg = true;
+    if (!(x <= 0)) pos = true;
+  }
+  if (!neg) return P;
+  if (!pos) return [];
   const out: V3[] = [];
   for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
+    const j = i + 1 === n ? 0 : i + 1;
     if (d[i] >= 0) out.push(P[i]);
     if ((d[i] > 0 && d[j] < 0) || (d[i] < 0 && d[j] > 0)) {
       const [a, da, b, db] = d[i] > 0 ? [P[i], d[i], P[j], d[j]] : [P[j], d[j], P[i], d[i]];
@@ -207,6 +224,9 @@ export function clipPolygonByPlane(P: V3[], N: V3, u: V3, eps: number): V3[] {
   }
   return dedupePolygon(out, eps);
 }
+
+/** Scratch of clipPolygonByPlane: the signed distances of the polygon's vertices. */
+let CLIP_D = new Float64Array(32);
 
 /** Distance from u to a planar convex polygon P, counter-clockwise around the unit normal m. */
 export function polygonDistance(u: V3, P: readonly V3[], m: V3): number {
@@ -281,6 +301,9 @@ export function enumerateChains(poly: Polytope, s: number, anchor: number, u: re
       // rounding) means it lies on this facet: the half-space window below. Deeper, rule 1.
       const delta = pl.h * s - dot3(pl.n, uLoc);
       if (!isRoot && delta <= eta) continue;
+      // the gate lies in the ridge's plane, so it is at least the distance of u from that plane away (the development is an
+      // isometry): a ridge farther than the reach needs neither its polygon nor its clipping
+      if (delta > reach + slack) continue;
       let runEdge = -1;
       let runAngle = 0;
       if (!isRoot) {

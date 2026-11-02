@@ -11,7 +11,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { SPACE_VIEWERS } from "../apps/web/scripts/space-viewers";
 import { foldGain, gainText, plainNofoldLabel } from "../apps/web/src/boundary-model";
-import { DIMENSIONS, familyOfSpace } from "../apps/web/src/dimension-table";
+import { DIMENSIONS } from "../apps/web/src/dimension-table";
+import { scopedDomainCount } from "../apps/web/src/records-model";
 import { filterProblems, nofoldFaceProblem, settleFilters } from "../apps/web/src/spaces-model";
 
 // The dimensions page (formerly the spaces page) against the local stack (playwright.config.ts):
@@ -19,7 +20,7 @@ import { filterProblems, nofoldFaceProblem, settleFilters } from "../apps/web/sr
 // the viewers from packages/*/viz.
 
 const root = resolve(import.meta.dirname, "..");
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls", "ndim"];
 
 async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
   const r = await request.get(url);
@@ -47,7 +48,7 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
 
   // one section per dimension, its kinds in the order of the table; the ones to come say so
   const sections = page.locator("#dimension-groups > section");
-  await expect(sections.locator("h3")).toHaveText(["2D in 2D", "2D on 3D", "3D in 3D", "3D on 4D"]);
+  await expect(sections.locator("h3")).toHaveText(DIMENSIONS.map((d) => d.label));
   for (const d of DIMENSIONS) {
     const cards = page.locator(`#dimension-groups > section[data-dimension="${d.id}"] li.space-card`);
     await expect(cards.locator("h4")).toHaveText(d.families.map((f) => f.name));
@@ -58,19 +59,31 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
   await expect(flat.getByRole("link", { name: /^Records/ })).toHaveAttribute("href", "/browse.html");
   await expect(flat.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/");
 
-  for (const s of api.spaces) {
-    // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts);
-    // the balls space has none of its own: its viewer is the board
-    expect(s.viewer).toBe(s.space === "balls" ? "/#space=balls" : `/spaces/${s.space}.html`);
-    const card = page.locator(`#dimension-groups li[data-space="${s.space}"]`);
-    const { dimension, family } = familyOfSpace(s.space)!;
-    await expect(card.locator("xpath=ancestor::section[1]")).toHaveAttribute("data-dimension", dimension.id);
-    await expect(card.getByRole("heading", { name: family.name, exact: true })).toBeVisible();
-    await expect(card).toContainText(s.summary);
-    await expect(card).toContainText(s.problems.toLocaleString("en-US"));
-    await expect(card.getByRole("link", { name: /^Viewer/ })).toHaveAttribute("href", s.viewer);
-    await expect(card.getByRole("link", { name: /^Notes/ })).toHaveAttribute("href", s.docs);
-  }
+  // every family of every dimension has a card: a space that backs several dimensions (ndim, boundary) has one in each, with
+  // the family's own sentence and the number of its problems
+  for (const d of DIMENSIONS)
+    for (const f of d.families) {
+      if (f.space === "polygon") continue;
+      const s = api.spaces.find((x) => x.space === f.space)!;
+      // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts);
+      // the balls and nD in nD spaces have none of their own: their viewer is the board
+      expect(s.viewer).toBe(s.space === "balls" || s.space === "ndim" ? `/#space=${s.space}` : `/spaces/${s.space}.html`);
+      const card = page.locator(`#dimension-groups > section[data-dimension="${d.id}"] li[data-space="${s.space}"]`);
+      await expect(card).toHaveCount(1);
+      await expect(card.getByRole("heading", { name: f.name, exact: true })).toBeVisible();
+      await expect(card).toContainText(f.scope ? f.summary : s.summary);
+      await expect(card).toContainText(
+        (f.scope ? scopedDomainCount(s, f.scope)! : s.problems).toLocaleString("en-US"),
+      );
+      if (f.key) await expect(card.getByRole("link", { name: /^Viewer/ })).toHaveCount(0);
+      else await expect(card.getByRole("link", { name: /^Viewer/ })).toHaveAttribute("href", s.viewer);
+      await expect(card.getByRole("link", { name: /^Notes/ })).toHaveAttribute("href", s.docs);
+      // the board opens the family's own problem; the records open its own filters
+      await expect(card.getByRole("link", { name: /^Board/ })).toHaveAttribute(
+        "href",
+        f.key ? `/#space=${f.start}` : `/#space=${s.space}`,
+      );
+    }
   expect(api.exhibits.map((x) => x.viewer)).toContain("/spaces/sweep.html");
   for (const x of api.exhibits) {
     const card = page.locator(`#exhibit-cards > li[data-space="${x.name}"]`);
@@ -222,7 +235,9 @@ test("3D on 4D has its card with Records, Board, Viewer and Notes, and its recor
   const card = section.locator('li[data-space="boundary"]');
   await expect(card).not.toHaveClass(/soon/);
   await expect(card.getByRole("heading", { name: "Polytope boundaries" })).toBeVisible();
-  await expect(card).toContainText(String(data.problems.length));
+  // 3D on 4D holds 152 of the space's problems (the d-cubes are the dimensions 4D on 5D to 9D on 10D); 32 have a record
+  await expect(card).toContainText("152");
+  expect(data.problems.length).toBe(32);
   await expect(card.locator(".space-links a")).toHaveText([
     "Records: Polytope boundaries",
     "Board: Polytope boundaries",
@@ -396,8 +411,15 @@ test("without the server the dimensions page still lists each dimension and its 
   // the kinds the board can show are not drawn as coming soon, and still open on the board
   await expect(page.locator("#dimension-groups li.soon")).toHaveCount(0);
   await expect(
-    page.locator('#dimension-groups li[data-space="boundary"]').getByRole("link", { name: /^Board/ }),
+    page.locator('#dimension-groups li[data-space="boundary"]').first().getByRole("link", { name: /^Board/ }),
   ).toHaveAttribute("href", "/#space=boundary");
+  // a dimension of the nD spaces opens its own problem
+  await expect(
+    page.locator('#dimension-groups section[data-dimension="5-in-5"] li').getByRole("link", { name: /^Board/ }),
+  ).toHaveAttribute("href", "/#space=ndim/5/cube/cube/12");
+  await expect(
+    page.locator('#dimension-groups section[data-dimension="4-on-5"] li').getByRole("link", { name: /^Board/ }),
+  ).toHaveAttribute("href", "/#space=boundary/5cube/ball/9");
   await expect(
     page.locator('#dimension-groups li[data-space="torus"]').getByRole("link", { name: /^Board/ }),
   ).toHaveAttribute("href", "/#space=torus");

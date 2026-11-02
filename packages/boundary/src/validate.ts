@@ -60,6 +60,8 @@
  * Untrusted input: numbers are read by index (holes in sparse arrays read as undefined and are
  * rejected) and every rejecting comparison is written so that NaN rejects.
  */
+import { isNCubeName } from "./ncube/lattice";
+import { validateNCube } from "./ncube/validate";
 import { ChainLimitError, ChainNode, RIDGE_SNAP, clipSegmentToWindow, hingeDistanceOverChains, inWindow, ridgeSnap } from "./chains";
 import { MAX_P, isPieceName } from "./ids";
 import { V3, isoApply, isoInverse, isoLinearT, norm3, pointSegmentDistance3, quaternionToMatrix, sub3 } from "./linalg";
@@ -67,7 +69,7 @@ import { Development, PART_EPS, developPiece, partsOfDevelopment, pieceReach } f
 import { SatShape, polyhedronThickness, satDepth, satShape } from "./polyhedron";
 import { boundaryVolume, cellExcess, getPolytope, isPolytopeName, topo } from "./polytope";
 import { BALL_RADIUS, BALL_WORK } from "./units";
-import type { BoundaryPiece, BoundaryProblem, BoundaryVerdict, PieceName, Polytope } from "./types";
+import type { BoundaryPiece, BoundaryProblem, BoundaryVerdict, PieceName, Polytope, PolytopeName } from "./types";
 
 export interface ValidateOptions {
   /** Float tolerance (default 1e-9). */
@@ -76,6 +78,8 @@ export interface ValidateOptions {
   maxChains?: number;
   /** Stop collecting reasons after this many (default 20). */
   maxReasons?: number;
+  /** The d-cubes only (ncube/): the most search steps of one check (default NCUBE_MAX_WORK); maxChains is for the 4-polytopes. */
+  maxWork?: number;
 }
 
 /**
@@ -123,7 +127,7 @@ function checkShape(problem: BoundaryProblem, config: unknown, tol: number, reas
   if (!isPieceName(problem.piece)) push(`Unknown piece "${String(problem.piece)}".`);
   if (!(typeof problem.P === "number" && Number.isInteger(problem.P) && problem.P >= 1 && problem.P <= MAX_P)) push(`The problem's P must be a whole number from 1 to ${MAX_P}.`);
   if (reasons.length) return null;
-  const poly = given ?? getPolytope(problem.polytope);
+  const poly = given ?? getPolytope(problem.polytope as PolytopeName);
   const dim = poly.d - 1;
   if (!isObject(config)) {
     push("The configuration must be an object with s and pieces.");
@@ -459,6 +463,8 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
  * reasons it is invalid as plain sentences. Throws a RangeError on a bad tol (a caller's mistake).
  */
 export function validateBoundary(problem: BoundaryProblem, config: unknown, opts: ValidateOptions = {}): BoundaryVerdict {
+  // the d-cubes (d = 5..10) have their own validator, with the same rule (ncube/validate.ts)
+  if (problem && isNCubeName(problem.polytope)) return validateNCube({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, config, opts);
   return run(problem, config, opts);
 }
 

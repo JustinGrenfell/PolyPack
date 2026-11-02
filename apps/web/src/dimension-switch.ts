@@ -11,11 +11,12 @@
  * The board's <main> carries data-space while a space is shown (the CSS hides the polygon board's
  * parts) and data-dimension always, so that a dimension's mode can adapt the layout.
  */
-import { type FamilyTarget, menuGroups, whereIs } from "./dimension-table";
+import { familyKey, menuGroups, whereIs } from "./dimension-table";
 import { type BoardSpace, isBoardSpace, parseSpaceAddress } from "./space-address";
 
 interface SpaceModeApi {
-  enter(space: BoardSpace, id: string | null): Promise<void>;
+  /** `family` is the menu's key of the family (dimension-table.ts), which scopes the problems offered. */
+  enter(space: BoardSpace, id: string | null, family: string): Promise<void>;
   leave(): void;
   setPolygonHeld(held: boolean): void;
 }
@@ -42,6 +43,7 @@ export function initDimensionSwitch(
   const layout = select.closest("main") as HTMLElement;
   let mode: Promise<SpaceModeApi> | null = null;
   let current: BoardSpace | null = null;
+  let currentKey = "";
   let polygonShown = true;
   /** The polygon board's address (#p=..., #c=... or none) when a space was chosen, given back on return. */
   let polygonHash = "";
@@ -59,11 +61,11 @@ export function initDimensionSwitch(
     select.append(group);
   }
 
-  /** The menu names the family shown, and <main> its dimension. */
-  function showMenu(target: FamilyTarget): void {
-    const where = whereIs(target);
+  /** The menu names the family shown (its key), and <main> its dimension. */
+  function showMenu(target: string, id: string | null = null): void {
+    const where = whereIs(target, id);
     if (!where) return;
-    select.value = target;
+    select.value = familyKey(where.family);
     layout.dataset.dimension = where.dimension.id;
   }
 
@@ -90,24 +92,32 @@ export function initDimensionSwitch(
     layout.prepend(stage);
   }
 
-  async function toSpace(space: BoardSpace, id: string | null): Promise<void> {
+  /** The key of the family that shows a board address: by the id's scope, else the space's first family. */
+  const keyOf = (space: BoardSpace, id: string | null, wanted?: string): string => {
+    const where = whereIs(wanted ?? space, id);
+    return where ? familyKey(where.family) : space;
+  };
+
+  async function toSpace(space: BoardSpace, id: string | null, wanted?: string): Promise<void> {
+    const key = keyOf(space, id, wanted);
     if (current === null) {
       if (!parseSpaceAddress(location.hash)) polygonHash = location.hash;
       // the board's own search waits while it is hidden, so that two searches do not compete unseen
       held = run.hold();
     }
     current = space;
-    showMenu(space);
+    currentKey = key;
+    showMenu(key);
     layout.dataset.space = space;
     placeholder();
     try {
       const m = await load();
       m.setPolygonHeld(held);
-      if (current === space) await m.enter(space, id);
+      if (current === space && currentKey === key) await m.enter(space, id, key);
     } catch (error) {
       toPolygon(true);
       layout.querySelector(".space-placeholder")?.remove();
-      const name = whereIs(space)?.family.name ?? space;
+      const name = whereIs(key)?.family.name ?? space;
       say(`${name} could not be loaded: ${error instanceof Error ? error.message : String(error)}.`);
     }
   }
@@ -137,8 +147,10 @@ export function initDimensionSwitch(
 
   select.addEventListener("change", () => {
     // a family that is not available cannot be chosen; this keeps the menu right if one ever is
-    if (!whereIs(select.value)) return showMenu(current ?? "polygon");
-    if (isBoardSpace(select.value)) void toSpace(select.value, null);
+    const chosen = whereIs(select.value);
+    if (!chosen) return showMenu(current ? currentKey : "polygon");
+    const space = chosen.family.space;
+    if (isBoardSpace(space)) void toSpace(space, null, select.value);
     else toPolygon(true);
   });
   window.addEventListener("hashchange", () => {
