@@ -46,7 +46,10 @@ import {
   AdvancePlan,
   GameState,
   Leader,
-  PATIENCES,
+  DEFAULT_PATIENCE,
+  PATIENCE_MAX,
+  PATIENCE_MIN,
+  parsePatience,
   PastProblem,
   ProblemState,
   StepChange,
@@ -114,9 +117,11 @@ import {
   pause,
   recordSend,
 } from "./pacer";
-import { Offer, addRetake, offerFits } from "./picks";
+import { Offer, addRetake, expireOffers, offerFits, skipOffer } from "./picks";
+import { HolderReader, addRival, heldByTighter, heldKeys, removeRival } from "./rivals";
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
+import { GROUPS, SOURCES, income } from "./income";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { moreDetail } from "./detail";
@@ -132,8 +137,28 @@ import {
   passes,
   rankCandidates,
 } from "./rank";
-import { AUTO_LIMIT_WARNING, Speeds, autoHold, autoOverLimit, autoTarget } from "./scheduler";
-import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
+import {
+  AUTO_LIMIT_WARNING,
+  AUTO_METER_CARD,
+  AUTO_METER_NOTE,
+  AutoMeter,
+  Speeds,
+  autoHold,
+  autoOverLimit,
+  autoTarget,
+  laneSplit,
+  meterShare,
+} from "./scheduler";
+import {
+  RetiredRefund,
+  SAVE_FAILED_TEXT,
+  STORAGE_KEY,
+  tryWrite,
+  exportString,
+  fromJson,
+  importString,
+  toJson,
+} from "./save";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
 import {
@@ -185,6 +210,7 @@ import {
   Owned,
   RUN_BUDGET,
   UpgradeId,
+  AUTO_SLACK_SECONDS,
   autoCap,
   autoJobEvals,
   autoPerSecond,
@@ -400,12 +426,14 @@ function saveNow(): void {
   clearTimeout(saveTimer);
   saveTimer = 0;
   if (savesDisabled || !ownsGame) return;
-  try {
+  // storage full or unavailable: the game goes on in memory, and the player is told until a save works
+  const ok = tryWrite(() => {
     state.pacer = compactPacer(state.pacer, now());
     localStorage.setItem(STORAGE_KEY, toJson(state));
-  } catch {
-    // storage full or unavailable: the game goes on in memory
-  }
+  });
+  const warning = $("t-save-warning");
+  warning.textContent = ok ? "" : SAVE_FAILED_TEXT;
+  warning.hidden = ok;
 }
 /** Saves soon: clicks come many a second, so saves are spaced. */
 function persist(): void {
@@ -689,19 +717,25 @@ interface LaneView {
   current: Job | null;
   /** The open run's state during a long step (Compact's, or many evaluations a click). */
   progress: RunState | null;
+  /** Auto-eval's evaluations this lane may still take (its share of the rate, as accrued; below zero: owed). */
+  autoDue: number;
+  /** This lane's share of auto-eval's rate at the last accrual, evaluations a second (laneSplit). */
+  autoRate: number;
 }
 
 /** Most clicks a lane holds before it has caught up; more are not taken. */
 const MAX_QUEUED_CLICKS = 20;
 
 const lanes: LaneView[] = [];
+/** The lanes that run: those owned, or fewer where the player's "Lanes in use" setting says so. */
+const lanesWanted = (o: Owned) => Math.max(1, Math.min(laneCount(o), state.settings.lanesInUse ?? Infinity));
 /**
  * As many lanes as the player owns (up to the CPU's cores less one). A lane no longer owned (after a
  * reset) goes once it is idle: its run closes, its worker stops, and auto-eval's jobs it held are
  * due again.
  */
 function ensureLanes(): void {
-  const want = laneCount(owned());
+  const want = lanesWanted(owned());
   while (lanes.length > want) {
     const lv = lanes[lanes.length - 1];
     if (lv.pumping || lv.current) break;
@@ -717,6 +751,8 @@ function ensureLanes(): void {
       pumping: false,
       current: null,
       progress: null,
+      autoDue: 0,
+      autoRate: 0,
     };
     lv.lane.onProgress = (s) => {
       // a space run reports at its steps only: its live progress is not drawn yet
@@ -928,6 +964,7 @@ async function pump(lv: LaneView): Promise<void> {
       if (!ran && !job.click) {
         // a job that could not run is due again, and the next tick tries again
         state.autoDue += job.evals;
+        lv.autoDue += job.evals;
         break;
       }
     }
@@ -955,7 +992,7 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, ev
   const r = lv.run && lv.lane.open && lv.run.key === p.key ? lv.run : null;
   const owns = o.has("lattice");
   const ruleOk = ruleAllowsMethod(state.standing, "seed");
-  if (latticeDue(p, { owns, ruleOk, stall: stallAfter(state), evals, building: r?.mode === "lattice" }))
+  if (latticeDue(p, { owns, ruleOk, stall: stallAfter(state, p), evals, building: r?.mode === "lattice" }))
     return { method: "seed", level: 0, mode: "lattice" };
   const tune = o.has("autoTune") && state.runplan.auto;
   const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
@@ -1219,6 +1256,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
     observeSpeed(run, p, done, t.ms);
+    if (!job.click) autoMeter.addRan(now(), done);
     track(run, t.state);
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
@@ -1248,7 +1286,7 @@ async function endStalledRun(lv: LaneView, p: ProblemState, run: OpenRunView): P
   const smaller = smallerText(sideWord(p), run.startScore, run.runBest);
   event(
     `The run on ${title} made no progress in ${evals(limit)}, so the game ended it.` +
-      `${smaller ? ` ${smaller}` : ""} A new run starts from the best board${nextStageText(p)}.`,
+      `${smaller ? ` ${smaller}` : ""} ${title} stays in the queue. Its next run starts from the best board${nextStageText(p)}, when a lane or a click next works on it.`,
     p.key === state.focus,
   );
   persist();
@@ -1420,12 +1458,77 @@ let autoRan = false;
 function accrueAuto(): void {
   const o = owned();
   const runs = autoRuns(o);
+  const t = now();
+  const elapsed = Math.max(0, t - state.autoAt) / 1000;
   // the rate is all lanes' together: they share it
-  accrue(state, now(), runs && autoRan ? (autoPerSecond(o) ?? 0) : 0, autoCap(o));
+  accrue(state, t, runs && autoRan ? (autoPerSecond(o) ?? 0) : 0, autoCap(o));
+  if (runs && autoRan) accrueLanes(o, t, elapsed);
   autoRan = runs;
   // a Compact's debt stays: switching auto-eval off and on does not cancel it
-  if (!runs) state.autoDue = Math.min(0, state.autoDue);
+  if (!runs) {
+    state.autoDue = Math.min(0, state.autoDue);
+    for (const lv of lanes) lv.autoDue = Math.min(0, lv.autoDue);
+  }
 }
+
+/** What auto-eval ran and was due over the last 30 s, while it had work and was not held. */
+const autoMeter = new AutoMeter();
+
+/** The target a lane's next auto-eval job would take, or null (no work for it). */
+function laneAutoTarget(lv: LaneView, o: Owned) {
+  const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
+  return autoTarget({
+    lane: lanes.indexOf(lv),
+    queue: state.queue,
+    focus: state.focus,
+    busy,
+    owned: o,
+    // with Auto-advance a lane keeps to its run's problem until that problem stalls
+    current: lv.run?.key ?? null,
+    stall: stallAfter(state),
+  });
+}
+
+/** The expected ms of one evaluation of the lane's auto-eval work (0 when it has none). */
+function laneWorkMs(lv: LaneView, o: Owned): number {
+  const target = laneAutoTarget(lv, o);
+  const tp = target ? problem(state, target.key) : undefined;
+  if (!target || !tp) return 0;
+  const key =
+    target.action === "compact"
+      ? runSpeedKey(tp, "mc_compress", isPolygon(tp) ? tuningLevel(o, "mc_compress") : 0)
+      : jobSpeedKey(lv, tp, o);
+  return speeds.msEach(key, tableMsOf(tp));
+}
+
+/**
+ * Splits auto-eval's rate over the lanes that have work (scheduler.ts laneSplit: about equal solving
+ * time each, at least a quarter of an equal share) and adds `elapsed` seconds of each lane's share to
+ * its due evaluations. With no lane working, the lanes share it equally, as they did before. Also
+ * counts the time for the measured rate while some lane has auto-eval's work and no click is running.
+ */
+function accrueLanes(o: Owned, t: number, elapsed: number): void {
+  const R = autoPerSecond(o) ?? 0;
+  const ms = lanes.map((lv) => laneWorkMs(lv, o));
+  const working = lanes.map((_, i) => i).filter((i) => ms[i] > 0);
+  const idx = working.length ? working : lanes.map((_, i) => i);
+  const shares = laneSplit(
+    idx.map((i) => (ms[i] > 0 ? ms[i] : 1)),
+    R,
+  );
+  lanes.forEach((lv, i) => {
+    const k = idx.indexOf(i);
+    lv.autoRate = k < 0 ? 0 : shares[k];
+    const cap = Math.max(COMPACT_EVALS, lv.autoRate * AUTO_SLACK_SECONDS);
+    lv.autoDue =
+      k < 0 ? Math.min(0, lv.autoDue) : Math.min(Math.max(cap, lv.autoDue), lv.autoDue + elapsed * lv.autoRate);
+  });
+  const clicking = lanes.some((lv) => lv.jobs.length || lv.current?.click);
+  if (working.length && !clicking) autoMeter.addDue(t, R, Math.min(elapsed, 5));
+}
+
+/** The share of auto-eval's evaluations that ran over the last 30 s (null: too little to tell). */
+const measuredShare = () => meterShare(autoMeter.summary(now()));
 
 /**
  * How many times slower than the machine of rank.ts's cost table this device runs an evaluation, for
@@ -1461,6 +1564,9 @@ function jobSpeedKey(lv: LaneView, p: ProblemState, o: Owned): string | null {
 function overComputerLimit(o: Owned): boolean {
   const rate = autoPerSecond(o);
   const p = focused();
+  const share = measuredShare();
+  // what auto-eval really ran, when it had work for long enough to tell (a margin keeps it from flickering)
+  if (share !== null) return share < AUTO_METER_CARD;
   if (rate === null || !p || !speeds.measured) return false;
   const msEach = speeds.msEach(lanes[0] ? jobSpeedKey(lanes[0], p, o) : null, tableMsOf(p));
   return autoOverLimit(rate, laneCount(o), msEach);
@@ -1481,19 +1587,13 @@ let autoTurn = 0;
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
-  const n = autoJobEvals(o, state.autoDue, laneCount(o));
+  // the lane takes from its own share (laneSplit), and from the total, which stays at the rate
+  const due = Math.min(state.autoDue, lv.autoDue);
+  const laneRate = lv.autoRate > 0 ? lv.autoRate : undefined;
+  const n = autoJobEvals(o, due, lanes.length, 0, laneRate);
   if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || n < 1) return null;
-  const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
-  const target = autoTarget({
-    lane: lanes.indexOf(lv),
-    queue: state.queue,
-    focus: state.focus,
-    busy,
-    owned: o,
-    // with Auto-advance a lane keeps to its run's problem until that problem stalls
-    current: lv.run?.key ?? null,
-    stall: stallAfter(state),
-  });
+  if (lanes.indexOf(lv) >= lanesWanted(o)) return null;
+  const target = laneAutoTarget(lv, o);
   if (!target) return null;
   autoTurn = lanes.indexOf(lv) + 1;
   if (target.action === "compact") {
@@ -1501,13 +1601,15 @@ function autoJob(lv: LaneView): Job | null {
     // owed (autoDue below zero), repaid before any lane's next job: waiting for 100 due at once never
     // ended while another lane took each job as it came due, so new problems sat uncompacted.
     state.autoDue -= COMPACT_EVALS;
+    lv.autoDue -= COMPACT_EVALS;
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
   const tp = problem(state, target.key);
   // at most a quarter second of this device's time on that problem, with that run's method
   const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), tableMsOf(tp)) : 0;
-  const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msEach) : n;
+  const evals = tp ? autoJobEvals(o, due, lanes.length, msEach, laneRate) : n;
   state.autoDue -= evals;
+  lv.autoDue -= evals;
   return { key: target.key, evals, click: false, compact: false };
 }
 
@@ -1701,6 +1803,8 @@ async function submit(p: ProblemState): Promise<void> {
           (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : "") +
           (a.points ? ` Your board still beats it, and pays +${fmtRP(a.points.total)} RP.` : ""),
       );
+      // the answer does not say whose entry it was: the record's holder is read, and becomes a rival
+      if (isPolygon(p)) void readRival(p);
       break;
     case "closed":
       event(
@@ -1720,6 +1824,15 @@ async function submit(p: ProblemState): Promise<void> {
 const LOST_ANSWER_MS = 120_000;
 let lostChecking = false;
 let lostCheckAfter = 0;
+
+/** Reads the record's holder after a "behind" answer, to learn the name of the entry that was first. */
+async function readRival(p: ProblemState): Promise<void> {
+  const { answer: info } = await within(SEND_TIMEOUT_MS, readLeader(p), null);
+  if (!info || !ownsGame) return;
+  noteRival(p.key, info.leader);
+  persist();
+  render();
+}
 
 /** Reads the record of the oldest send left without an answer, once it is LOST_ANSWER_MS old. */
 async function settleLost(): Promise<void> {
@@ -1895,7 +2008,14 @@ async function contestedCandidate(io: DealIo, d: DealerState, exclude: Set<strin
   if (!pair) return null;
   const records = await pairRecords(io, pair.N, pair.M);
   if (!records) return null;
-  const list = contestedCandidates(records, { ringMin: ringMin(o), tiers: contestedTiers(o), exclude, allow: allowed });
+  const heldBy = f?.tighter ? (e: { name: string; agent_note?: string }) => heldByTighter(e, state.name) : undefined;
+  const list = contestedCandidates(records, {
+    ringMin: ringMin(o),
+    tiers: contestedTiers(o),
+    exclude,
+    allow: allowed,
+    heldBy,
+  });
   if (!list.length) return null;
   const c = list[Math.floor(nextRandom(d) * list.length)];
   const info = await problemInfo(io, c);
@@ -1904,6 +2024,60 @@ async function contestedCandidate(io: DealIo, d: DealerState, exclude: Set<strin
   // the pair's records changed since they were read
   recordsCache.delete(`${pair.N}/${pair.M}`);
   exclude.add(keyOf(c));
+  return null;
+}
+
+/** Reads of what the rivals hold (GET /api/holder): each name at most once in 15 minutes, a few requests a minute in all. */
+const holderReader = new HolderReader(api.getHolder, now);
+
+/**
+ * A record held by one of the player's rivals (the filter Records held by my rivals): a rival is drawn
+ * at random, the problems it holds come from GET /api/holder, and one of them is checked with GET just
+ * before it counts. It is dealt as a site record of its tier. Null when no rival holds a problem that fits.
+ */
+async function rivalCandidate(io: DealIo, d: DealerState, exclude: Set<string>): Promise<Candidate | null> {
+  const o = owned();
+  const f = dealerFilters();
+  const rivals = state.picks.rivals;
+  if (!rivals.length) return null;
+  const tiers = contestedTiers(o);
+  const start = Math.floor(nextRandom(d) * rivals.length);
+  for (let i = 0; i < rivals.length && !spentIo(io); i++) {
+    const rival = rivals[(start + i) % rivals.length].name;
+    const held = await holderReader.get(rival);
+    if (!held) continue;
+    const fits = heldKeys(held).filter((key) => {
+      const k = parseKey(key);
+      if (!k || !isPolygon(k) || exclude.has(key) || problem(state, key)) return false;
+      return passes(f, k) && ruleOk(k) && k.N + k.M + k.P >= ringMin(o);
+    });
+    if (!fits.length) continue;
+    const k = needPolygon(parseKey(fits[Math.floor(nextRandom(d) * fits.length)])!, "Rivals");
+    const info = await problemInfo(io, k);
+    if (!info) return null;
+    const lead = info.site_best;
+    exclude.add(keyOf(k));
+    // still theirs, open, and not awaiting review
+    if (!info.accepts_submissions || !lead || lead.verification === "pending") continue;
+    if (sanitizeName(lead.name) !== rival) continue;
+    const records = k.N <= 20 && k.M <= 20 ? await pairRecords(io, k.N, k.M) : null;
+    if (f?.tighter) {
+      const e = records?.site.find((x) => x.P === k.P);
+      if (!e || !heldByTighter(e, state.name)) continue;
+    }
+    const lit = info.literature?.status === "best_known" ? info.literature : null;
+    const tier = lit ? "published" : retakeTier(k.N, k.M, k.P, records);
+    if (!tiers.has(tier) || !allowed({ ...k, tier })) continue;
+    return {
+      ...k,
+      tier,
+      weakness: null,
+      leader: { score: lead.score, name: lead.name, id: lead.id },
+      target: lit ? publishedTarget(lit) : null,
+      source: lit ? `${lit.display} (${lit.source_name})` : null,
+      retake: false,
+    };
+  }
   return null;
 }
 
@@ -2175,7 +2349,9 @@ async function gatherCandidates(
       source === "space"
         ? await spaceCandidate(io, d, exclude)
         : source === "contested"
-          ? await contestedCandidate(io, d, exclude)
+          ? dealerFilters()?.rivals
+            ? await rivalCandidate(io, d, exclude)
+            : await contestedCandidate(io, d, exclude)
           : await openCandidate(io, d, exclude),
     );
   }
@@ -2317,6 +2493,8 @@ async function dealTick(): Promise<void> {
   const o = owned();
   const move = plan(o);
   if (picking(o)) {
+    // an offer older than 30 minutes leaves; its place is filled at the next deal
+    if (expireOffers(state.picks, now()) > 0) persist();
     if (state.picks.offers.some((x) => !offerAllowed(o, x)))
       state.picks.offers = state.picks.offers.filter((x) => offerAllowed(o, x));
     const out = move?.replace ?? null;
@@ -2527,6 +2705,18 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
   if (!out) say(auto ? `Auto-advance took ${title}, the best offer.` : `You took ${title}.`);
 }
 
+/** Skip: the offer leaves and its problem is not offered again this session. */
+function onSkipOffer(key: string): void {
+  if (!ownsGame) return;
+  const x = skipOffer(state.picks, key);
+  if (!x) return;
+  skipped.add(keyOf(x));
+  event(`Skipped the offer of ${problemTitle(x)}.`, false);
+  persist();
+  render();
+  void dealTick();
+}
+
 async function onTakeOffer(key: string): Promise<void> {
   const x = state.picks.offers.find((y) => keyOf(y) === key);
   if (!x || dealing || !ownsGame) return;
@@ -2553,6 +2743,17 @@ function workText(clicks: number, more = true): string {
 
 // ---------- records held: live leader changes ----------
 
+/** Counted already: a rival's taking of one record (problem and entry), so that an answer and a later read do not both count it. */
+const rivalCounted = new Set<string>();
+
+/** A name took a record from the player: it goes to the front of the rivals (once for each entry). */
+function noteRival(key: string, leader: Leader | null): void {
+  if (!leader || leader.id === null) return;
+  const mark = `${key}#${leader.id}`;
+  if (rivalCounted.has(mark)) return;
+  if (addRival(state.picks.rivals, leader.name, state.name)) rivalCounted.add(mark);
+}
+
 /**
  * A leader read from the server: settles a send whose answer was lost (its points confirmed, as its
  * answer would have) and tells the player when a record of theirs was beaten.
@@ -2569,6 +2770,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     // Retake: a record lost after it left the queue is offered again first
     const retake = inUse(owned(), "retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
+    noteRival(p.key, leader);
     event(
       `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
         (retake ? " It will be the first problem offered to you again (Retake)." : ""),
@@ -3031,9 +3233,38 @@ function renderName(): void {
   text("t-name-note", `Your records are sent to PolyPack as “${state.name}”.`);
 }
 
+/** The income table as last drawn, so that the page is touched only when it changes. */
+let incomeShown = "";
+/** Record points of the last hour by problem group and source (income.ts), shown with the totals. */
+function renderIncome(): void {
+  const on = revealed(state, "points");
+  show("t-income", on);
+  if (!on) return;
+  const sums = income.sums(now());
+  const num = (n: number | undefined) => (n ? fmtInt(n) : "0");
+  const note =
+    sums.total > 0
+      ? `Record points earned in the last hour, counted since this page opened. Rent counts when a payday pays it.`
+      : "No record points yet in the last hour. Improvements and rent paydays appear here as they pay.";
+  const rows = GROUPS.filter((g) => sums.byGroup[g.id]).map(
+    (g) =>
+      `<tr><th scope="row">${g.label}</th>${SOURCES.map((s) => `<td>${num(sums.cells[`${g.id}/${s.id}`])}</td>`).join("")}<td>${num(sums.byGroup[g.id])}</td></tr>`,
+  );
+  const html =
+    `<thead><tr><th scope="col">Last hour</th>${SOURCES.map((s) => `<th scope="col">${s.label}</th>`).join("")}<th scope="col">Total</th></tr></thead>` +
+    `<tbody>${rows.join("")}</tbody>` +
+    `<tfoot><tr><th scope="row">All</th>${SOURCES.map((s) => `<td>${num(sums.bySource[s.id])}</td>`).join("")}<td>${num(sums.total)}</td></tr></tfoot>`;
+  const shown = note + html;
+  if (shown === incomeShown) return;
+  incomeShown = shown;
+  text("t-income-note", note);
+  $("t-income-table").innerHTML = html;
+}
+
 /** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 function renderPoints(): void {
   show("t-points-help", revealed(state, "points"));
+  renderIncome();
   // the clicks: in the evaluations' tooltip
   const evals = $("t-bar-evals-box");
   const tip = `Evaluations run in all, by your clicks and by auto-eval. Clicks so far: ${fmtInt(state.stats.clicks)}.`;
@@ -3141,7 +3372,7 @@ function panesOpen(): Record<Pane, boolean> {
     board: true,
     tree: !$("t-views").hidden,
     queue: any("t-queue", "t-lanes", "t-runs"),
-    points: any("t-points-help", "t-standing", "t-records"),
+    points: any("t-points-help", "t-income", "t-standing", "t-records"),
   };
 }
 
@@ -3228,6 +3459,7 @@ function onSwitch(id: UpgradeId): void {
 }
 
 let queueSig = "";
+/** The problem's rows under the pointer must not move or be replaced while lanes improve them: the rows are built only when the problems or their order change. */
 function renderQueue(o: ReadonlySet<UpgradeId>): void {
   show("t-queue", revealed(state, "queue"));
   if (!revealed(state, "queue")) return;
@@ -3235,82 +3467,158 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   text("t-queue-heading", `Queue · ${slots} ${slots === 1 ? "slot" : "slots"}`);
   text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
-  const sig = state.queue
-    .map((p) => `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${p.key === state.focus}`)
-    .join(";");
+  // a problem that is leaving (dropped, its best still to be sent) is no row: one line under the list counts them
+  const rows = slotted(state);
+  const sig = rows.map((p) => p.key).join(";");
   if (sig !== queueSig) {
     queueSig = sig;
+    // keyboard focus on a button survives the rebuild
+    const active =
+      document.activeElement instanceof HTMLElement && list.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+    const refocus = active ? { key: active.closest("li")?.dataset.key, cls: active.dataset.act } : null;
     list.replaceChildren(
-      ...state.queue.map((p) => {
+      ...rows.map((p) => {
         const li = document.createElement("li");
-        if (p.key === state.focus) li.className = "focus";
-        const gap = p.best !== null && p.phase !== "bare" ? ` · gap ${fmtPct(gapTo(p, p.best))}` : "";
-        const status = p.leaving
-          ? " · leaving"
-          : p.ourId !== null
-            ? " · yours"
-            : p.tier === "published"
-              ? " · published value"
-              : p.tier !== "open"
-                ? p.leader?.id === null && !isPolygon(p)
-                  ? " · research record to beat"
-                  : ` · ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
-                : p.phase === "bare"
-                  ? " · no record yet"
-                  : "";
         li.dataset.key = p.key;
-        li.append(`${problemTitle(p)}${gap}${status}`);
-        const actions = document.createElement("span");
-        actions.className = "t-q-actions";
-        if (p.key !== state.focus && !p.leaving) {
-          const showBtn = document.createElement("button");
-          showBtn.textContent = "Show";
-          showBtn.setAttribute("aria-label", `Show ${problemTitle(p)} on the board`);
-          showBtn.addEventListener("click", () => {
-            state.focus = p.key;
+        const title = document.createElement("span");
+        title.className = "t-q-title";
+        const status = document.createElement("span");
+        status.className = "t-q-status";
+        const count = document.createElement("span");
+        count.className = "t-q-count";
+        const side = document.createElement("div");
+        side.className = "t-q-actions";
+        const live = document.createElement("span");
+        live.className = "t-q-live";
+        live.textContent = "Working";
+        const button = (act: string, label: string, click: () => void) => {
+          const b = document.createElement("button");
+          b.dataset.act = act;
+          b.textContent = label;
+          b.addEventListener("click", click);
+          return b;
+        };
+        const key = p.key;
+        side.append(
+          button("show", "Show", () => {
+            state.focus = key;
             persist();
             showFocus();
             render();
-          });
-          actions.append(showBtn);
-        }
-        if (!p.leaving) {
-          const dropBtn = document.createElement("button");
-          dropBtn.textContent = "Drop";
-          dropBtn.setAttribute("aria-label", `Drop ${problemTitle(p)} from the queue`);
-          dropBtn.addEventListener("click", () => onDrop(p.key));
-          actions.append(dropBtn);
-        }
-        const count = document.createElement("span");
-        count.className = "t-q-count";
-        li.append(actions, count);
+          }),
+          button("keep", "Keep", () => {
+            const q = problem(state, key);
+            if (!q) return;
+            q.kept = !q.kept;
+            persist();
+            render();
+          }),
+          button("drop", "Drop", () => onDrop(key)),
+        );
+        li.append(title, side, status, live, count);
         return li;
       }),
     );
+    if (refocus)
+      list
+        .querySelector<HTMLElement>(`li[data-key="${CSS.escape(refocus.key ?? "")}"] [data-act="${refocus.cls}"]`)
+        ?.focus();
   }
-  // the counters change with every step: they are written in place, so the rows (and their buttons
-  // under the pointer) are rebuilt only when the signature above changes
+  // everything that changes while lanes work is written in place: no row, button or mark is replaced or moves
   const busy = new Set(lanes.flatMap(workingKeys));
+  const t = now();
+  sampleRp(t);
   for (const li of list.children as HTMLCollectionOf<HTMLElement>) {
     const p = problem(state, li.dataset.key ?? null);
-    // the "Working" mark is text as well as a dot, so it reads without colour; it is added and
-    // removed in place, so the buttons beside it never move
-    const mark = li.querySelector(".t-q-live");
-    const working = busy.has(li.dataset.key ?? "");
-    if (working && !mark) {
-      const live = document.createElement("span");
-      live.className = "t-q-live";
-      live.textContent = "Working";
-      li.querySelector(".t-q-actions")?.before(live);
-    } else if (!working && mark) mark.remove();
-    const count = li.querySelector(".t-q-count");
-    const value = p ? countText(p) : "";
-    if (count && count.textContent !== value) count.textContent = value;
+    if (!p) continue;
+    const gap = p.best !== null && p.phase !== "bare" ? `gap ${fmtPct(gapTo(p, p.best))}` : "";
+    const status =
+      p.ourId !== null
+        ? "yours"
+        : p.tier === "published"
+          ? "published value"
+          : p.tier !== "open"
+            ? p.leader?.id === null && !isPolygon(p)
+              ? "research record to beat"
+              : `${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
+            : p.phase === "bare"
+              ? "no record yet"
+              : "";
+    const focus = p.key === state.focus;
+    li.classList.toggle("focus", focus);
+    setText(li.querySelector(".t-q-title"), problemTitle(p));
+    setText(li.querySelector(".t-q-status"), [gap, status].filter(Boolean).join(" · "));
+    setText(li.querySelector(".t-q-count"), countText(p));
+    // the "Working" mark is text as well as a dot, so it reads without colour; its slot is always there
+    li.querySelector(".t-q-live")?.classList.toggle("on", busy.has(p.key));
+    const showBtn = li.querySelector<HTMLButtonElement>('[data-act="show"]')!;
+    showBtn.style.visibility = focus ? "hidden" : "";
+    showBtn.disabled = focus;
+    showBtn.setAttribute("aria-label", `Show ${problemTitle(p)} on the board`);
+    const keep = li.querySelector<HTMLButtonElement>('[data-act="keep"]')!;
+    setText(keep, p.kept ? "Kept" : "Keep");
+    keep.setAttribute("aria-pressed", String(p.kept));
+    keep.setAttribute(
+      "aria-label",
+      p.kept
+        ? `Kept ${problemTitle(p)}, Auto-advance will not drop it`
+        : `Keep ${problemTitle(p)}, so that Auto-advance does not drop it`,
+    );
+    li.querySelector('[data-act="drop"]')?.setAttribute("aria-label", `Drop ${problemTitle(p)} from the queue`);
   }
+  const leaving = state.queue.filter((p) => p.leaving).length;
+  const note = $("t-queue-leaving");
+  note.hidden = leaving === 0;
+  setText(
+    note,
+    leaving === 1
+      ? "1 problem is leaving. It goes once its best is sent."
+      : `${leaving} problems are leaving. They go once their best is sent.`,
+  );
   text("t-deal", dealText(o));
   renderAdvance(o);
   renderOffers(o);
   renderFilters(o);
+}
+
+/** Sets an element's text only when it differs, so that an unchanged line is not touched. */
+function setText(el: Element | null, value: string): void {
+  if (el && el.textContent !== value) el.textContent = value;
+  // a cut line shows in full as the tooltip
+  if (el instanceof HTMLElement && el.classList.contains("t-q-status") && el.title !== value) el.title = value;
+}
+
+/** What each problem in the queue has paid, sampled while the page runs: [time, RP] (nothing is saved). */
+const RP_WINDOW_MS = 10 * 60_000;
+const rpSamples = new Map<string, [number, number][]>();
+function sampleRp(t: number): void {
+  for (const k of [...rpSamples.keys()]) if (!state.queue.some((p) => p.key === k)) rpSamples.delete(k);
+  for (const p of state.queue) {
+    let s = rpSamples.get(p.key);
+    if (!s) {
+      // a problem dealt within the window started at 0 RP when it arrived
+      s = t - p.dealtAt < RP_WINDOW_MS && p.dealtAt <= t ? [[p.dealtAt, 0]] : [];
+      rpSamples.set(p.key, s);
+    }
+    if (!s.length || t - s[s.length - 1][0] >= 5000) s.push([t, p.rp]);
+    // keep one sample from before the window, so that the rate covers all of it
+    while (s.length > 1 && s[1][0] <= t - RP_WINDOW_MS) s.shift();
+  }
+}
+
+/** RP a minute the problem paid over the last 10 minutes it was in the queue (since it arrived if less); null before 30 seconds of history. */
+function rpPerMinute(p: ProblemState): number | null {
+  const s = rpSamples.get(p.key);
+  if (!s?.length) return null;
+  const t = now();
+  // the latest sample at or before the window's start, else the first one (the problem's arrival)
+  let base = s[0];
+  for (const x of s) if (x[0] <= t - RP_WINDOW_MS) base = x;
+  const span = t - base[0];
+  if (!(span >= 30_000)) return null;
+  return Math.max(0, p.rp - base[1]) / (span / 60_000);
 }
 
 /** One plain sentence on which problem clicks work on, and which problems auto-eval works on. */
@@ -3334,10 +3642,11 @@ function stepping(p: ProblemState): number {
   return lv?.progress && lv.run ? Math.max(0, lv.progress.evaluations - lv.run.evaluations) : 0;
 }
 
-/** A problem's counters, live: "12,345 evaluations · 830 since progress". */
+/** A problem's counters, live: "12,345 evaluations · 830 since progress · 1,240 RP a minute". */
 function countText(p: ProblemState): string {
   const going = stepping(p);
-  return `${evals(p.evaluations + going)} · ${fmtInt(p.sinceGain + going)} since progress`;
+  const rate = rpPerMinute(p);
+  return `${evals(p.evaluations + going)} · ${fmtInt(p.sinceGain + going)} since progress${rate === null ? "" : ` · ${fmtInt(rate)} RP a minute`}`;
 }
 
 /** The queue's dealing line: when the next problem comes, and with Auto-advance which one leaves next. */
@@ -3378,21 +3687,32 @@ const fmtTolerance = (t: number) => `${(t * 100).toFixed(Math.max(0, Math.round(
 function renderAdvance(o: Owned): void {
   show("t-advance", o.has("advance"));
   if (!o.has("advance")) return;
-  const { tolerance, patience } = state.settings;
+  const { tolerance, patience, leadPatience } = state.settings;
   const tol = $<HTMLSelectElement>("t-tolerance");
-  const pat = $<HTMLSelectElement>("t-patience");
   const tv = `1e${Math.round(Math.log10(tolerance))}`;
-  const pv = patience === null ? "never" : String(patience);
   if (tol.value !== tv) tol.value = tv;
-  if (pat.value !== pv) pat.value = pv;
+  patienceFields("t-patience", patience);
+  patienceFields("t-patience-lead", leadPatience);
+  const when = (n: number | null, who: string) =>
+    n === null
+      ? `With ${who}, Auto-advance does not drop a problem.`
+      : `With ${who}, it drops a problem after ${evals(n)} without progress, once a new one can take its slot.`;
   text(
     "t-advance-note",
     `A problem makes progress when its best gets at least ${fmtTolerance(tolerance)} smaller than at its last progress. ` +
-      (patience === null
-        ? "Auto-advance keeps every problem in the queue. The lanes go first to problems that are making progress."
-        : `After ${evals(patience)} without progress, Auto-advance drops the problem once a new one can take its slot.`) +
+      `${when(patience, "a record that is not yours")} ${when(leadPatience, "your entry leading")} ` +
+      "A problem you keep with Keep is never dropped this way." +
       (state.settings.auto ? "" : " Auto-advance works only while auto-eval is on."),
   );
+}
+
+/** One patience's number field and Never box, written from the setting (the field being typed in is left alone). */
+function patienceFields(id: string, value: number | null): void {
+  const input = $<HTMLInputElement>(id);
+  const never = $<HTMLInputElement>(`${id}-never`);
+  never.checked = value === null;
+  input.disabled = value === null;
+  if (value !== null && document.activeElement !== input && input.value !== String(value)) input.value = String(value);
 }
 
 let offersSig = "";
@@ -3426,11 +3746,21 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
         `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · pays ×${CONTEST[x.tier]}` +
         ` · about ${tableMsOf(x).toFixed(1)} ms an evaluation`;
       const btn = document.createElement("button");
+      btn.className = "t-take";
       btn.textContent = "Take";
       btn.disabled = !due || dealing;
       btn.setAttribute("aria-label", `Take ${title}`);
       btn.addEventListener("click", () => void onTakeOffer(keyOf(x)));
-      li.append(h, meta, btn);
+      const skip = document.createElement("button");
+      skip.className = "t-skip";
+      skip.textContent = "Skip";
+      skip.disabled = dealing;
+      skip.setAttribute("aria-label", `Skip ${title}`);
+      skip.addEventListener("click", () => onSkipOffer(keyOf(x)));
+      const btns = document.createElement("div");
+      btns.className = "t-offer-btns";
+      btns.append(btn, skip);
+      li.append(h, meta, btns);
       return li;
     }),
   );
@@ -3442,9 +3772,32 @@ function renderFilters(o: Owned): void {
   show("t-filters", inUse(o, "filters"));
   if (!inUse(o, "filters")) return;
   const f = state.picks.filters;
-  const sig = JSON.stringify(f);
+  const sig = JSON.stringify([f, state.picks.rivals]);
   if (sig === filtersShown) return;
   filtersShown = sig;
+  $<HTMLInputElement>("t-f-tighter").checked = !!f?.tighter;
+  $<HTMLInputElement>("t-f-rivals").checked = !!f?.rivals;
+  const rivalList = $("t-rivals");
+  rivalList.replaceChildren(
+    ...(state.picks.rivals.length
+      ? state.picks.rivals.map((r) => {
+          const li = document.createElement("li");
+          const label = document.createElement("span");
+          label.textContent = `${r.name}, ${r.took} ${r.took === 1 ? "record" : "records"} taken`;
+          const rm = document.createElement("button");
+          rm.type = "button";
+          rm.textContent = "Remove";
+          rm.setAttribute("aria-label", `Remove ${r.name} from my rivals`);
+          rm.addEventListener("click", () => {
+            removeRival(state.picks.rivals, r.name);
+            persist();
+            render();
+          });
+          li.append(label, rm);
+          return li;
+        })
+      : [Object.assign(document.createElement("li"), { textContent: "No rivals yet." })]),
+  );
   $<HTMLInputElement>("t-f-pieces").value = formatShapes(f?.pieces ?? null);
   $<HTMLInputElement>("t-f-containers").value = formatShapes(f?.containers ?? null);
   $<HTMLInputElement>("t-f-minp").value = String(f?.minP ?? 1);
@@ -3475,14 +3828,19 @@ function onSaveFilters(e: Event): void {
     text("t-filter-note", "Keep at least one tier ticked.");
     return;
   }
-  const filters = {
+  const tighter = $<HTMLInputElement>("t-f-tighter").checked;
+  const rivals = $<HTMLInputElement>("t-f-rivals").checked;
+  const filters: Filters = {
     pieces: pieces as number[] | null,
     containers: containers as number[] | null,
     minP,
     maxP,
     tiers: tiers.length === TIERS.length ? null : tiers,
+    ...(tighter ? { tighter: true } : {}),
+    ...(rivals ? { rivals: true } : {}),
   };
-  const none = !filters.pieces && !filters.containers && minP === 1 && maxP === 500 && !filters.tiers;
+  const none =
+    !filters.pieces && !filters.containers && minP === 1 && maxP === 500 && !filters.tiers && !tighter && !rivals;
   state.picks.filters = none ? null : filters;
   // offers drawn under the old filters make way for new ones
   state.picks.offers = state.picks.offers.filter((x) => passes(state.picks.filters, x));
@@ -3518,6 +3876,10 @@ function noMatchText(f: Filters | null, o: ReadonlySet<UpgradeId>): string {
       `Problems with 20 sides or fewer are contested problems, which need the upgrade ${upgrade("reach2").name}.`,
     );
   else why.push("Your shapes, piece counts and tiers match no contested problem you can be dealt.");
+  if (f?.rivals)
+    why.push(
+      `${state.picks.rivals.length ? "None of your rivals holds a record that fits." : "You have no rivals yet."}`,
+    );
   why.push(outside);
   return why.join(" ");
 }
@@ -3604,19 +3966,37 @@ function renderLanes(o: Owned): void {
         `run at ${runAt(lv.run, lv.progress?.evaluations ?? lv.run.evaluations)}${note}`;
       if (lv.jobs.length) msg += ` · ${lv.jobs.length} click${lv.jobs.length === 1 ? "" : "s"} waiting`;
     } else msg = `Lane ${i + 1}: no open run`;
+    if (lanes.length > 1 && lv.autoRate > 0 && autoPerSecond(o) !== null && state.settings.auto)
+      msg += ` · auto-eval gets ${autoRateText(lv.autoRate)}`;
     if (line.textContent !== msg) line.textContent = msg;
   });
-  // the lanes share auto-eval's rate
+  // "Lanes in use": 1 to the lanes owned
+  const owns = laneCount(o);
+  show("t-lanes-use-box", owns > 1);
+  const use = $<HTMLInputElement>("t-lanes-use");
+  use.max = String(owns);
+  if (document.activeElement !== use) use.value = String(Math.min(owns, state.settings.lanesInUse ?? owns));
+  // the lanes share auto-eval's rate by solving time
   const rate = autoPerSecond(o);
   show("t-lanes-note", rate !== null);
-  if (rate !== null)
+  if (rate !== null) {
+    const sum = autoMeter.summary(now());
+    const share = meterShare(sum);
+    const ran = share !== null && share < AUTO_METER_NOTE;
     text(
       "t-lanes-note",
       (lanes.length > 1
-        ? `The ${lanes.length} lanes share auto-eval's ${fmtRate(rate)}. Each runs ${fmtRate(rate / lanes.length)}.`
-        : `Auto-eval runs ${fmtRate(rate)} in this lane.`) + (overComputerLimit(o) ? ` ${AUTO_LIMIT_WARNING}` : ""),
+        ? `The ${lanes.length} lanes share auto-eval's ${fmtRate(rate)}. Each lane that has work gets about the same solving time, so a lane on a large problem runs fewer evaluations a second.`
+        : `Auto-eval runs ${fmtRate(rate)} in this lane.`) +
+        (ran
+          ? ` Auto-eval ran ${fmtCount(sum.ran / sum.seconds)} of its ${fmtCount(sum.due / sum.seconds)} evaluations a second in the last 30 s. Your computer is the limit.`
+          : ""),
     );
+  }
 }
+
+/** A rate of evaluations as a number for a sentence: whole above 10, else one decimal. */
+const fmtCount = (r: number) => (r >= 10 ? Math.round(r).toLocaleString("en-US") : String(Math.round(r * 10) / 10));
 
 function renderRuns(o: Owned): void {
   const p = focused();
@@ -3963,6 +4343,8 @@ $("t-f-clear").addEventListener("click", () => {
   $<HTMLInputElement>("t-f-minp").value = "1";
   $<HTMLInputElement>("t-f-maxp").value = "500";
   for (const t of TIERS) $<HTMLInputElement>(`t-f-tier-${t}`).checked = true;
+  $<HTMLInputElement>("t-f-tighter").checked = false;
+  $<HTMLInputElement>("t-f-rivals").checked = false;
   $<HTMLFormElement>("t-filter-form").requestSubmit();
 });
 $("t-evolve").addEventListener("click", () => press());
@@ -4002,15 +4384,31 @@ $("t-tolerance").addEventListener("change", () => {
   persist();
   render();
 });
-$("t-patience").addEventListener("change", () => {
-  const v = $<HTMLSelectElement>("t-patience").value;
-  const w = v === "never" ? null : Number(v);
-  if (!PATIENCES.includes(w)) return;
-  state.settings.patience = w;
-  persist();
-  render();
-  void dealTick();
-});
+/** The number field and the Never box of one patience (the saved setting `which`). */
+function bindPatience(id: string, which: "patience" | "leadPatience"): void {
+  const input = $<HTMLInputElement>(id);
+  const never = $<HTMLInputElement>(`${id}-never`);
+  const set = (v: number | null) => {
+    state.settings[which] = v;
+    persist();
+    render();
+    void dealTick();
+  };
+  input.addEventListener("change", () => {
+    const v = parsePatience(input.value);
+    if (typeof v === "number") return set(v);
+    // not a whole number from the minimum to the maximum: the field shows the setting again
+    input.value = String(state.settings[which] ?? DEFAULT_PATIENCE);
+    say(`A patience is a whole number from ${fmtInt(PATIENCE_MIN)} to ${fmtInt(PATIENCE_MAX)}.`);
+  });
+  never.addEventListener("change", () => {
+    if (never.checked) return set(null);
+    const v = parsePatience(input.value);
+    set(typeof v === "number" ? v : DEFAULT_PATIENCE);
+  });
+}
+bindPatience("t-patience", "patience");
+bindPatience("t-patience-lead", "leadPatience");
 $("t-next").addEventListener("click", () => {
   const p = focused();
   if (!p || clicksToDeal() > 0) return;
@@ -4020,6 +4418,16 @@ $("t-bg").addEventListener("change", () => {
   state.settings.background = $<HTMLInputElement>("t-bg").checked;
   persist();
   applyHold();
+});
+$("t-lanes-use").addEventListener("change", () => {
+  const owns = laneCount(owned());
+  const n = Math.floor(Number($<HTMLInputElement>("t-lanes-use").value));
+  // all lanes is the default, kept as null
+  state.settings.lanesInUse = !Number.isFinite(n) || n >= owns ? null : Math.max(1, n);
+  persist();
+  ensureLanes();
+  kickLanes();
+  render();
 });
 $("t-battery").addEventListener("change", () => {
   state.settings.battery = $<HTMLInputElement>("t-battery").checked;

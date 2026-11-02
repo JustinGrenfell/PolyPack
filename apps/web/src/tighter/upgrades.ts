@@ -642,6 +642,7 @@ function pickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
       text: [
         `When a slot is free and a deal is earned, the dealer shows you up to ${n} problems, best first (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks your choice with the server as you take it, and it removes any offer that your upgrades, filters or the cycle rule no longer allow.`,
         "With Auto-advance and auto-eval on, a stalled problem is replaced by the best offer, and the game also takes the top offer for you whenever a lane has no problem to work on.",
+        "An offer that is 30 minutes old leaves, and its place is filled at the next deal. An offer for a retake does not leave. Skip removes an offer, and the game does not offer that problem again until you reload the page.",
       ],
       note: "Each offer is a separate draw, so the dealer's best-of choice does not apply to offers. The first problem of a game is always dealt for you.",
     },
@@ -719,18 +720,18 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
   const e = sym("e");
   return {
     text: [
-      "You set two values in the Queue panel. The tolerance is the smallest improvement that counts as progress. The patience is how many evaluations a problem may run without progress before it is replaced." +
+      "You set the tolerance and two patiences in the Queue panel. The tolerance is the smallest improvement that counts as progress. A patience is how many evaluations a problem may run without progress before it is replaced. One patience is for problems where the record is not yours, and the other is for problems where your entry leads." +
         " Each problem in the queue counts the evaluations it has run since its last progress. The queue shows the count, as in “830 since progress”." +
         (warm.length
           ? ` ${firsts.charAt(0).toUpperCase()}${firsts.slice(1)} ${warm.length === 1 ? "are its" : "are their"} warm-up, and they do not add to the count.`
           : ""),
-      `While auto-eval is on, a problem that reaches the patience is replaced as soon as a deal is earned. Each slot earns a deal every ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The old problem leaves as if you had pressed Drop, and its best record is sent first. The new problem takes its slot, so the queue never shrinks. Until then the lanes work on the other problems.`,
+      `While auto-eval is on, a problem that reaches its patience is replaced as soon as a deal is earned. A problem you keep with the Keep button is never replaced this way, and Drop still removes it. Each slot earns a deal every ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The old problem leaves as if you had pressed Drop, and its best record is sent first. The new problem takes its slot, so the queue never shrinks. Until then the lanes work on the other problems.`,
       "Auto-eval compacts new problems first (100 evaluations of mc_compress, the same as your first click). After that, a lane stays on its problem while it makes progress. Otherwise it takes the problem that is still improving and has run the fewest evaluations since progress.",
     ],
     math: [
       `${sym("s")} &lt; ${sym("s", "ref")} × (1 − ${sym("τ")}) ⇒ ${sym("s", "ref")} ← ${sym("s")}, ${n} ← 0`,
       warm.length ? `otherwise ${n} ← ${n} + ${e} − ${sym("e", "warm")}` : `otherwise ${n} ← ${n} + ${e}`,
-      `replaced once ${n} ≥ ${sym("W")} and a deal is earned`,
+      `replaced once ${n} ≥ ${sym("W")} and a deal is earned, unless it is kept`,
     ],
     vars: [
       [sym("s"), "the problem's best side now"],
@@ -741,9 +742,9 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
       ...(warm.length
         ? [[sym("e", "warm"), `the evaluations among e in a run's warm-up, ${firsts} (0 for other runs)`] as const]
         : []),
-      [sym("W"), "the patience, 250 to 20,000 evaluations or Never (1,000 at first)"],
+      [sym("W"), "the patience that applies to it, 100 to 10,000,000 evaluations or Never (1,000 at first)"],
     ],
-    note: "With Your pick, the new problem is the best offer. With the patience at Never, nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself. The tolerance goes from 10⁻⁹ to 10⁻³ (10⁻⁶ at first). The patience goes from 250 to 20,000 evaluations (1,000 at first).",
+    note: "With Your pick, the new problem is the best offer. With the patience at Never, that kind of problem does not leave, and the lanes count it as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself. The tolerance goes from 10⁻⁹ to 10⁻³ (10⁻⁶ at first). Each patience is any whole number from 100 to 10,000,000 evaluations (1,000 at first).",
   };
 }
 
@@ -1093,6 +1094,7 @@ export const UPGRADES: readonly Upgrade[] = [
         "The Queue panel gets a Filters section, where you can allow only some piece shapes, container shapes, piece counts and tiers. A tier is a kind of problem, which is open, loose record, site record or published value.",
         "You write shapes as numbers and ranges, such as 0, 3-6, 21-100, where 0 means the circle. An empty list allows everything.",
         "The dealer deals or offers a problem only if it passes every filter. Open problems have sides of 21 to 100 and 40 to 500 pieces. Problems with fewer sides or pieces are contested problems, which need Reach: site records.",
+        "Two more choices limit the dealer to site records that other players hold. One keeps only records held by other Tighter players. The other keeps only records held by your rivals. A rival is a name that took a record from you. The game keeps the latest 20, with the number of records each took, and you can remove any of them. It asks the server what a rival holds at most once every 15 minutes for each name, and at most 3 times a minute in all.",
         "When you save filters that no problem you can be dealt fits, the note under them says why. If your queue is empty and nothing fits, the dealer deals one problem outside your filters. A free slot in a queue that is not empty waits for a problem that fits.",
       ],
     },
@@ -1336,7 +1338,7 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Each level makes auto-eval faster, by 1 evaluation a second at first and more later, with no last level.",
     how: {
       text: [
-        `Each level raises auto-eval's rate by a few evaluations a second: ${AUTO_STEP_TEXT}. The rate is for all your lanes together, and the lanes share it.`,
+        `Each level raises auto-eval's rate by a few evaluations a second: ${AUTO_STEP_TEXT}. The rate is for all your lanes together, and the lanes share it. Each lane that has work gets about the same solving time.`,
         `You can buy as many levels as you like. Each extra evaluation a second costs a little more than the one before, so the price of a level grows slowly. At some point your computer is the limit, and levels past that run no faster. The card and the Lanes panel tell you when auto-eval asks for more than this computer can run.`,
       ],
       math: [
@@ -1712,15 +1714,15 @@ export const AUTO_JOB_SECONDS = 0.25;
 
 /**
  * The evaluations of auto-eval's next job in a lane, from the evaluations due (all lanes'): what is due,
- * at most AUTO_JOB_SECONDS of a lane's share of the rate (the rate over `lanes`) and at least 1, or 0
+ * at most AUTO_JOB_SECONDS of a lane's share of the rate (`laneRate`, else the rate over `lanes`) and at least 1, or 0
  * while less than one is due. With `msEach`, the expected ms of one evaluation on the job's problem,
  * also at most AUTO_JOB_SECONDS of the solver's time: where the CPU cannot keep up with the share, a
  * job that size would keep a click waiting for seconds.
  */
-export function autoJobEvals(o: Owned, due: number, lanes = 1, msEach = 0): number {
+export function autoJobEvals(o: Owned, due: number, lanes = 1, msEach = 0, laneRate?: number): number {
   // a hair either way, so that a rounding error (a share a hair over a whole number of evaluations a
   // quarter second, or a sum of fractions just short of 1 due) does not change a job's size
-  const share = Math.ceil(((autoPerSecond(o) ?? 0) / Math.max(1, lanes)) * AUTO_JOB_SECONDS - 1e-9);
+  const share = Math.ceil((laneRate ?? (autoPerSecond(o) ?? 0) / Math.max(1, lanes)) * AUTO_JOB_SECONDS - 1e-9);
   const timed = msEach > 0 ? Math.floor((AUTO_JOB_SECONDS * 1000) / msEach + 1e-9) : Infinity;
   const most = Math.max(1, Math.min(share, timed));
   return Math.max(0, Math.min(most, Math.floor(due + 1e-9)));

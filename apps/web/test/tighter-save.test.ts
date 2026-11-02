@@ -109,6 +109,8 @@ function played(): GameState {
   s.economy.rentPaid = 12.5;
   s.picks.bandit.open = { n: 3, mean: 0.25, m2: 0.01 };
   s.picks.retake.push("21/21/40");
+  s.picks.rivals.push({ name: "Ada Lovelace", took: 3 }, { name: "Bob", took: 1 });
+  s.picks.filters = { pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null, tighter: true, rivals: true };
   s.runplan.bandit["open|mc_compress"] = { n: 1, mean: 2, m2: 0 };
   s.pacer = recordSend(s.pacer, p.key, T0 + 3500);
   s.autoDue = 12.75;
@@ -134,6 +136,18 @@ function played(): GameState {
 }
 
 describe("Tighter saves", () => {
+  it("load a save made before rivals and the held-by filters, with none of them", () => {
+    const s = played();
+    const o = JSON.parse(toJson(s));
+    delete o.picks.rivals;
+    o.picks.filters = { pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null };
+    const r = fromJson(JSON.stringify(o), T0 + 5000);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.picks.rivals).toEqual([]);
+    expect(r.state.picks.filters).toEqual({ pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null });
+  });
+
   it("round-trip through JSON with every value kept to the last bit", () => {
     const s = played();
     const r = fromJson(toJson(s), T0 + 5000);
@@ -462,8 +476,10 @@ describe("Tighter saves", () => {
       method: "mc_compress",
       background: false,
       battery: false,
+      lanesInUse: null,
       tolerance: 1e-6,
       patience: 1000,
+      leadPatience: 1000,
       off: [],
     });
     expect(s.stats).toEqual({
@@ -518,7 +534,7 @@ describe("Tighter saves", () => {
     const r = fromJson(toJson(normalize(raw, T0)), T0);
     expect(r.ok && r.state.settings.patience).toBeNull();
     raw.settings.tolerance = 0.5;
-    raw.settings.patience = 1234;
+    raw.settings.patience = 0.5;
     expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
     raw.settings.tolerance = "1e-3";
     raw.settings.patience = "never";
@@ -527,6 +543,33 @@ describe("Tighter saves", () => {
     delete raw.settings.tolerance;
     delete raw.settings.patience;
     expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
+  });
+
+  it("keep any whole-number patience from 100 to 10,000,000 for each of the two, Never included, and a kept problem", () => {
+    const raw = JSON.parse(toJson(played()));
+    raw.settings.patience = 1234;
+    raw.settings.leadPatience = 10_000_000;
+    raw.queue[0].kept = true;
+    const back = fromJson(JSON.stringify(raw), T0);
+    expect(back.ok && back.state.settings).toMatchObject({ patience: 1234, leadPatience: 10_000_000 });
+    expect(back.ok && back.state.queue.map((p) => p.kept)).toEqual(raw.queue.map((_: unknown, i: number) => i === 0));
+    raw.settings.patience = null;
+    raw.settings.leadPatience = 100;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: null, leadPatience: 100 });
+    const again = fromJson(toJson(normalize(raw, T0)), T0);
+    expect(again.ok && again.state.settings).toMatchObject({ patience: null, leadPatience: 100 });
+    // out of range or not whole: the default, and the lead patience copies the other when it is missing (an older save)
+    raw.settings.patience = 99;
+    raw.settings.leadPatience = 10_000_001;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: 1000, leadPatience: 1000 });
+    raw.settings.patience = 5000;
+    delete raw.settings.leadPatience;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: 5000, leadPatience: 5000 });
+    raw.settings.patience = null;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: null, leadPatience: null });
+    // a save without the flag has no kept problem
+    delete raw.queue[0].kept;
+    expect(normalize(raw, T0).queue[0].kept).toBe(false);
   });
 
   it("keep the dealer's switches turned off, in their order, and drop anything that is not a switch", () => {
@@ -1188,5 +1231,20 @@ describe("Faster auto-eval's price ladder, C2 to C3 (version 10)", () => {
       "`Faster auto-eval is cheaper now. You got back ${fmtInt(rp)} RP, the difference for the levels you own.`",
     );
     expect(main.match(/c3Note\(r\.c3\.rp\)/g)).toHaveLength(2);
+  });
+});
+
+describe("tryWrite", () => {
+  it("says whether a write worked and never retries", async () => {
+    const { tryWrite } = await import("../src/tighter/save");
+    let calls = 0;
+    expect(tryWrite(() => void calls++)).toBe(true);
+    expect(
+      tryWrite(() => {
+        calls++;
+        throw new DOMException("full", "QuotaExceededError");
+      }),
+    ).toBe(false);
+    expect(calls).toBe(2);
   });
 });
