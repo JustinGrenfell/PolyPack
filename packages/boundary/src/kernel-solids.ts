@@ -47,7 +47,7 @@ const POSE_TRIES = 16;
 /**
  * Energy evaluations one finish() and one validate() cost, in energy() calls with their gradients. [CALC] Process CPU time on an Apple Silicon
  * laptop, on squeezed random starts of 4 and 12 solids of the five kinds on the six containers: a finish (a validator call and 20 to 45 evaluations
- * of the model's rule) took 12 to 55 energy() calls, a validator call 0.1 to 10 (a crowd of touching solids costs most).
+ * of the model's rule) took 12 to 55 energy() calls, a validator call 0.1 to 1 on random states and up to about 15 on a crowd of touching solids.
  */
 export const SOLID_FINISH_COST = 60;
 export const SOLID_VALIDATE_COST = 15;

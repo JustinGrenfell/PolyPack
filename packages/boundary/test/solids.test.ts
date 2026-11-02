@@ -3,6 +3,7 @@
  * known distances, the work caps (a check that cannot finish is refused), pose round trips, bounds, and the adversarial cases where the float
  * validator must never accept what the exact certifier (python/boundary/test_platonic.py) refuses.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { BoundaryConfig, PolytopeName, PolytopePieceName } from "../src/index";
 import {
@@ -15,6 +16,7 @@ import {
   getPolytope,
   isoFromAffine,
   matrixToQuaternion,
+  parseBoundaryId,
   partMesh,
   pieceBounds,
   pieceParts,
@@ -321,6 +323,27 @@ describe("orientations of the search's model", () => {
       const verts = (M: number[]) => sh.vertices.map((v) => [M[0] * v[0] + M[1] * v[1] + M[2] * v[2], M[3] * v[0] + M[4] * v[1] + M[5] * v[2], M[6] * v[0] + M[7] * v[1] + M[8] * v[2]]);
       const want = verts(flipped);
       for (const w of verts(Rq)) expect(want.some((u) => Math.hypot(u[0] - w[0], u[1] - w[1], u[2] - w[2]) < 1e-9)).toBe(true);
+    }
+  });
+});
+
+describe("the cross-check fixture", () => {
+  it("still holds: the engine reproduces every verdict recorded for the exact certifier's test, and every lower bound", () => {
+    const data = JSON.parse(readFileSync(new URL("../../../python/boundary/fixtures/platonic_crosscheck.json", import.meta.url), "utf8")) as {
+      entries: { polytope: PolytopeName; piece: PolytopePieceName; P: number; tol: number; cases: { sign: number; config: BoundaryConfig; engine: boolean }[] }[];
+      bounds: Record<string, number>;
+    };
+    expect(data.entries.length).toBeGreaterThan(50);
+    for (const e of data.entries)
+      for (const c of e.cases) {
+        const v = validateBoundary({ polytope: e.polytope, piece: e.piece, P: e.P }, c.config, { tol: e.tol, maxChains: 4096 });
+        expect(v.ok, `${e.polytope} ${e.piece} ${c.sign}: ${v.reasons[0]}`).toBe(c.engine);
+        expect(c.engine).toBe(c.sign > 0);
+      }
+    expect(Object.keys(data.bounds)).toHaveLength(664);
+    for (const [id, value] of Object.entries(data.bounds)) {
+      const p = parseBoundaryId(id) as { polytope: PolytopeName; piece: PolytopePieceName; P: number };
+      expect(pieceBounds(p.polytope, p.piece, p.P).value, id).toBe(value);
     }
   });
 });

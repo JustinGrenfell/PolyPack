@@ -723,8 +723,9 @@ and so the pieces' field beyond the container's own (Q for the tesseract, 5-cell
 | 120-cell | Q(sqrt 2, sqrt 5) | Q(sqrt 5) | Q(sqrt 2, sqrt 5) | Q(sqrt 5) | Q(sqrt 5) |
 | 600-cell | Q(sqrt 5) | Q(sqrt 2, sqrt 5) | Q(sqrt 5) | Q(sqrt 2, sqrt 5) | Q(sqrt 2, sqrt 5) |
 
-The cells' own frames matter: the 4A.8 plan counted the tetrahedron and octahedron on the 120-cell and 600-cell among the degree-4 cases for every frame; the circumscribed-cube frame of a tetrahedral
-cell has norm 2 e0^2, which makes them Q(sqrt 5) on the 600-cell. [CALC: `Frames` in `test_platonic.py` checks every frame exactly.]
+The cells' own frames matter. The plan of 4A.8 (written before this) took the tetrahedron and octahedron to need the degree-4 field on both the 120-cell and the 600-cell. It holds for the 120-cell (the frame of a
+dodecahedral cell has squared length phi^2 e0^2, so 1/sqrt 2 stays in the coefficients). The 600-cell's tetrahedral cells have the circumscribed-cube frame of squared length 2 e0^2, and kappa = 1/sqrt 2 cancels the 1/(2 sqrt 2) of the
+tetrahedron's and the 1/sqrt 2 of the octahedron's coordinates: Q(sqrt 5) there, and Q on the 5-cell, 16-cell and 24-cell. [CALC: `Frames` in `test_platonic.py` checks every frame exactly; the table is read off the vertices.]
 
 *Reading a configuration* (the engine's floats). The centre is read as in 4A.3 (dyadic weights of four vertices, an exact point of the cell's hyperplane, moved onto the facet planes it exceeds by less than
 1e-12 of an edge). The rotation: the engine's frame F_e and the exact frame F_x (scaled to unit length, in the engine's float coordinates by the affine map that takes the cell's exact vertices to the engine's
@@ -736,8 +737,8 @@ a ridge is developed from every closed cell that contains it (the runs' parts ar
 vertex of the exact pose and the engine's own float computation of it is **2.74e-15 s** (120-cell cube), 1.2 to 2.3e-15 s on the others; for balls 4A.3 found 2.9e-15 s. Strict validity is decided on the
 pieces **inflated about their centres by the factor 1 + EPS_STRICT, EPS_STRICT = 2^-40 = 9.1e-13**: if the inflated solids are valid (interiors disjoint, no edge through an interior, embedded), the closed solids are
 strictly valid, each at distance at least EPS_STRICT times its inradius from the others and from every edge, which is 1.9e-13 for the tetrahedron (the smallest) against a reading error of 2.74e-15 s: a factor 70 at s = 1 and 7 at
-s = 10. The certifier refuses (with that reason, never accepts) a strict check with s READING_BOUND > EPS_STRICT r_in, READING_BOUND = 1e-14 (3.6 times the measured error): s above 18 for the tetrahedron, 22
-for the cube, 34 for the icosahedron, 50 for the dodecahedron. The reach of the chain enumeration is the inflated circumradius.
+s = 10. The certifier refuses (with that reason, never accepts) a strict check with s READING_BOUND > EPS_STRICT r_in, READING_BOUND = 1e-14 (3.6 times the measured error): s above 18 for the tetrahedron, 37 for the
+octahedron, 45 for the cube, 68 for the icosahedron, 101 for the dodecahedron. The reach of the chain enumeration is the inflated circumradius.
 
 *Decisions* (exact): the lower bounds first (4C.4; strict: s equal to the bound is invalid); the centre in its closed cell; then for each piece and run the chains within the circumradius (at most 40,000 per piece and run,
 refused with a reason beyond), and in each node (1) every hinge of the node's cell clipped to the closed window against the open interior of the piece (an interval test per face), (2) the part: the piece's vertices
@@ -780,7 +781,7 @@ published proof (section 5), so they stay unrecorded here: these problems have n
   second family at the centres of two adjacent cells; the engine's validator finds the critical scale k* of the whole configuration (bisection on validity, monotone in the scale), and the configuration is emitted at k* (1 +- d), d = 1e-5
   everywhere and 1e-9 for the tolerance-0 entries of every fourth pair. 58 entries, 136 configurations: 11 with a centre on a ridge, 29 at adjacent centres; the refused side's reason is an edge through a solid in 44 and
   an overlap in 24. **The exact verdict (plain validity) is the engine's on all 136** (tolerance 0, or 1e-9 for the entries with a centre on a ridge, whose float coordinates can be a rounding unit outside their cell), and the
-  strict verdict on the 1e-5 side agrees too. So the float validator never accepts what the exact certifier refuses, and the reverse, outside a margin of 1e-9 of s.
+  strict verdict on the 1e-5 side of every fourth entry agrees too. So the float validator never accepts what the exact certifier refuses, and the reverse, outside a margin of 1e-9 of s.
 - **Frames and field.** Every frame is orthogonal, of equal length m, with kappa^2 m = e0^2; its image in the engine's coordinates is orthonormal and orthogonal to the engine's normal (every cell of the 5-, 16- and 24-cell and the tesseract,
   six of the 120-cell and 600-cell); the field's signs against enclosures; the rational rotations exactly orthogonal; the tesseract's cubes by this path against the lattice words of 4.3 (s = 1 +- 1e-6 and exactly 1, plain and strict).
 - **Adversarial tests** (`test_platonic.py`, `packages/boundary/test/solids.test.ts`): a tetrahedron filling its cell pushed through a face; the octahedra of the 24-cell at s = 1 + 1e-6, 1 + 1e-9 (valid, strictly valid) and 1 - 1e-6 (an edge through
@@ -795,8 +796,8 @@ penetration depths: (1) for each pair of pieces and each chain of cells from i's
 (centre T u_j, orientation M R_j) against i (a copy of a piece along a non-trivial chain is a loop and counts alike); (2) for each edge of the polytope, its deepest hit inside a piece over the chains. It is the validator's rule with
 rigid copies instead of clipped parts, equal where the development is flat; the final scale and nudge (`finalizeState`) are decided by the validator, so a difference costs quality, never validity. Gradients are analytic in the
 centres, in the rotation increments theta (R' = exp(theta) R, theta in the anchor's frame) and in s at fixed centres, by the contact feature that sets the depth (a face against a vertex, an edge against an edge, the active
-face(s) of a hinge hit). [CALC] They agree with central differences to 1e-9 on all six containers and five solids (`solids-search.test.ts`). Cost of an energy evaluation with its gradient per piece: 0.1 to 0.9 ms
-(tesseract 0.7, 5-cell 0.4, 16-cell 0.35, 24-cell 1, 600-cell 0.3, 120-cell 4 at worst; `BOUNDARY_SOLID_ENERGY_MS`).
+face(s) of a hinge hit). [CALC] They agree with central differences on all six containers and five solids (to 1e-9 in the checks run; `solids-search.test.ts` asks 1e-6). Cost of an energy evaluation with its gradient per piece, the
+worst of the five solids on squeezed random starts: 0.2 to 0.9 ms on the tesseract, 5-cell, 16-cell, 24-cell and 600-cell, 3.4 ms on the 120-cell (`BOUNDARY_SOLID_ENERGY_MS` rounds these up: 0.7, 0.4, 0.35, 1, 0.3 and 4).
 
 *Driver.* `searchBoundary` adds three rotation variables per piece after the 3P displacements: a displacement is moved through the charts, the orientation after it is M exp(omega) R, and the gradient in omega is
 Jl(omega)^T det(M) M^T times the model's gradient in theta (Jl the left Jacobian of the exponential, det M = -1 when a gluing reverses handedness). Starts: the cells themselves when the solid is the container's cell and P <= C
@@ -1022,7 +1023,7 @@ npx tsx packages/boundary/scripts/gen-ncube-bounds.ts
 
 Timing (Apple Silicon, shared machine): the 11 searches about 2.5 minutes in all (the longest,
 balls P = 13 and 15, 44 and 49 s); building the records file 3 s; certifying all 32 records with
-their exact constructions 2.3 s; the Python tests about 26 s; the engine check 0.3 s for 64
+their exact constructions 2.3 s; the Python tests about 26 s (`test_general.py` 90 s, `test_platonic.py` 100 s); the engine check 0.3 s for 64
 validations.
 
 ## 11. Sources
@@ -1238,4 +1239,4 @@ It reuses the boundary search's own parts, so a method sees the same model as se
   M the linear part of the gluings crossed (a piece whose path meets an edge keeps its rotation), and the gradient in w is Jl(w)^T det(M) M^T times the model's gradient in the rotation increment. A typical step is the solid's inradius and
   inradius / circumradius radians. `swap` gives each of two pieces the other's orientation; every Platonic solid is mirror-symmetric, so an orientation of the wrong handedness for the walk is replaced by its mirror image. `seeds`: the cells
   themselves when the solid is the container's cell and P is at most the cell count, else a sequential random layout accepted piece by piece by the model; no `shape`. `finishCost` is 60 and `validateCost` 15 energy evaluations
-  [CALC: a finish took 12 to 55, a validator call 0.1 to 10]. `bound` is 4C.4's. The tesseract's `cube` keeps the aligned-cube kernel above.
+  [CALC: a finish took 12 to 55 energy evaluations, a validator call 0.1 to 1 on random states and up to about 15 on a crowd of touching solids]. `bound` is 4C.4's. The tesseract's `cube` keeps the aligned-cube kernel above.

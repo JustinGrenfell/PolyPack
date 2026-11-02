@@ -383,7 +383,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       (space === "sphere" && Number(parsedId.fields.N) >= 20) ||
       // nD in nD: by the size of the check (vertices of the pieces times facets of the container, pairs), not by P alone
       (space === "ndim" && ndIsHeavy(ndProblem(parsedId))) ||
-      // 3D on 4D: balls on the 120-cell (600 vertices, 120 cells) from P = 5 and on the 24-cell from P = 22 (boundaryIsHeavy)
+      // 3D on 4D: balls on the 120-cell (600 vertices, 120 cells) from P = 5 and on the 24-cell from P = 22, and the Platonic solids from P = 10 to 17 by container (boundaryIsHeavy)
       (space === "boundary" && boundaryIsHeavy(boundaryProblem(parsedId)));
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
