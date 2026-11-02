@@ -150,7 +150,8 @@ test("another solid is drawn in the view last used; the dimensions page counts t
   const row = page.locator("#rec-rows tr").filter({ hasText: "2.137616" });
   await expect(row).toHaveCount(1);
   await expect(row.locator("td").first()).toHaveText("2");
-  await page.goto("/records.html#space=boundary&polytope=24cell&piece=octahedron");
+  // a family no test enters (the short run above makes the first entry on the 24-cell's octahedra)
+  await page.goto("/records.html#space=boundary&polytope=120cell&piece=dodecahedron");
   await expect(page.locator("#table-note")).toContainText("No problem of this family has a record or an entry yet");
   expect(errors).toEqual([]);
 });
