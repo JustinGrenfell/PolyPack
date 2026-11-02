@@ -22,7 +22,7 @@ import type { BoardSpace } from "./space-address";
 export type FamilyTarget = BoardSpace | "polygon";
 
 /**
- * One API space can back several dimensions (ndim: 4D in 4D to 10D in 10D; boundary: 3D on 4D and the d-cubes). A family
+ * One API space can back several dimensions (ndim: 4D in 4D to 10D in 10D; boundary: 3D on 4D and the boundaries of the d-simplex, d-cube, d-orthoplex and d-demicube). A family
  * with a scope shows only the problems whose id has one of `values` at position `at` ("ndim/5/..." has "5" at 1;
  * "boundary/5cube/..." has "5cube" at 1). A family without one shows all of its space.
  */
@@ -32,6 +32,11 @@ export interface FamilyScope {
   /** Its position in the problem id. */
   at: number;
   values: readonly string[];
+  /**
+   * For a scope of several values, the one whose filter opens the family's records ("5cube" for 4D on 5D, whose scope also holds the
+   * 5-simplex, 5-orthoplex and 5-demicube): the address the dimension's tab has always had. Absent: no single filter opens the family.
+   */
+  open?: string;
 }
 
 interface FamilyText {
@@ -103,24 +108,28 @@ function ndimDimension(d: number): Dimension {
   };
 }
 
-/** The d-cubes' P ranges (docs/spaces/BOUNDARY.md 4B). */
+/** The d-cubes' P ranges (docs/spaces/BOUNDARY.md 4B); the simplex, orthoplex and demicube take up to 24 balls (4D). */
 const NCUBE_MAX_P: Record<number, number> = { 5: 160, 6: 384, 7: 400, 8: 400, 9: 400, 10: 400 };
 
-/** "4D on 5D" to "9D on 10D": balls and unit cubes on the boundary of the d-cube, d = 5 to 10 (the API space boundary). */
-function ncubeDimension(d: number): Dimension {
+/**
+ * "4D on 5D" to "9D on 10D": pieces of dimension d - 1 on the boundary of the d-simplex, d-cube, d-orthoplex or d-demicube, d = 5 to 10 (the
+ * API space boundary). One family per dimension holds all four containers; its key is the d-cube's, as before the others joined, so that
+ * links to the d-cubes (the key, or a problem id) keep working.
+ */
+function highBoundaryDimension(d: number): Dimension {
   return {
     id: `${d - 1}-on-${d}`,
     label: `${d - 1}D on ${d}D`,
-    summary: `Balls of diameter 1 or unit ${d - 1}-cubes on the boundary of the ${d}-cube, with no container. The boundary is a closed ${d - 1}D space made of ${2 * d} cells, each a ${d - 1}-cube, glued face to face.`,
+    summary: `Pieces of dimension ${d - 1} on the boundary of a ${d}D polytope, with no container. The boundary is a closed ${d - 1}D space made of cells, each a ${d - 1}D polytope, glued face to face.`,
     families: [
       {
         key: `boundary-${d}cube`,
         space: "boundary",
-        scope: { field: "polytope", at: 1, values: [`${d}cube`] },
+        scope: { field: "polytope", at: 1, values: [`${d}simplex`, `${d}cube`, `${d}orthoplex`, `${d}demicube`], open: `${d}cube` },
         start: `boundary/${d}cube/ball/9`,
-        name: `${d}-cube boundary`,
-        short: `${d}-cube`,
-        summary: `Balls or axis-aligned unit cubes on the boundary of the ${d}-cube of edge s, up to ${NCUBE_MAX_P[d]} pieces. The score is s.`,
+        name: "Polytope boundaries",
+        short: "Boundaries",
+        summary: `Balls of diameter 1 on the boundary of the ${d}-simplex, ${d}-cube, ${d}-orthoplex or ${d}-demicube of edge s, up to 24 balls, and on the ${d}-cube also axis-aligned unit ${d - 1}-cubes, up to ${NCUBE_MAX_P[d]} pieces. The score is s.`,
         available: true,
       },
     ],
@@ -221,7 +230,7 @@ const BASE_DIMENSIONS: readonly Dimension[] = [
         name: "Polytope boundaries",
         short: "Boundaries",
         summary:
-          "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope: the tesseract, the 4D cube, whose boundary is eight cubes glued face to face, with balls and cubes, and with balls the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell.",
+          "Balls of diameter 1 or the Platonic solids of edge 1 on the boundary of a 4D polytope: the tesseract, the 4D cube, whose boundary is eight cubes glued face to face, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell.",
         available: true,
       },
     ],
@@ -234,7 +243,7 @@ const BASE_DIMENSIONS: readonly Dimension[] = [
  */
 export const DIMENSIONS: readonly Dimension[] = [
   ...BASE_DIMENSIONS,
-  ...[4, 5, 6, 7, 8, 9, 10].flatMap((d) => (d === 10 ? [ndimDimension(d)] : [ndimDimension(d), ncubeDimension(d + 1)])),
+  ...[4, 5, 6, 7, 8, 9, 10].flatMap((d) => (d === 10 ? [ndimDimension(d)] : [ndimDimension(d), highBoundaryDimension(d + 1)])),
 ];
 
 /** One group of the board's Problem set menu: a dimension, and an option per family. */
@@ -322,9 +331,13 @@ export function familyOfFilters(space: string, filters: Record<string, string>) 
   return first;
 }
 
-/** The table filters that open a family's records: its scope's field fixed to the one value, none for a scope of several. */
+/** The table filters that open a family's records: its scope's field fixed to the one value (or the scope's `open` value), none for a scope of several. */
 export const familyFilters = (f: Family): Record<string, string> =>
-  f.scope && f.scope.values.length === 1 ? { [f.scope.field]: f.scope.values[0] } : {};
+  f.scope && f.scope.open !== undefined
+    ? { [f.scope.field]: f.scope.open }
+    : f.scope && f.scope.values.length === 1
+      ? { [f.scope.field]: f.scope.values[0] }
+      : {};
 
 /** "2D on 3D, Sphere": a family with its dimension, for sentences. */
 export function familyTitle(target: string, id?: string | null): string {

@@ -514,9 +514,10 @@ class Adversarial(unittest.TestCase):
         self.assertTrue(valid(pid("cube", 1), same, strict=True))
         withq = copy.deepcopy(base)
         withq["pieces"][0]["q"] = [1.0, 0.0, 0.0, 0.0]
+        # the tesseract's other solids (tetrahedron, octahedron, ...) are certified by platonic.py now (test_platonic.py); its cube stays here
         bad = [
             (pid("ball", 2), base), (pid("ball", 1), withq), ("boundary/tesseract/ball/01", base),
-            ("boundary/24-cell/ball/1", base), ("boundary/tesseract/octahedron/1", base),
+            ("boundary/24-cell/ball/1", base), ("boundary/tesseract/sphere/1", base),
             (pid("ball", 1), {"s": float("nan"), "pieces": base["pieces"]}), (pid("ball", 1), {"s": 0.0, "pieces": base["pieces"]}),
             (pid("ball", 1), {"s": 2e6, "pieces": base["pieces"]}), (pid("ball", 1), {"s": True, "pieces": base["pieces"]}),
             (pid("ball", 1), {"s": 2.0, "pieces": [{"cell": 8, "u": [0, 0, 0]}]}),

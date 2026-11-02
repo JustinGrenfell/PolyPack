@@ -93,6 +93,8 @@ class Q5:
         return Q5(_raw=(n1, n2, d))
 
     def __add__(self, o):
+        if not isinstance(o, (Q5, int, Fraction)):
+            return NotImplemented
         if isinstance(o, Q5):
             return Q5._mk(self.n1 * o.d + o.n1 * self.d, self.n2 * o.d + o.n2 * self.d, self.d * o.d)
         if isinstance(o, int):
@@ -105,6 +107,8 @@ class Q5:
         return Q5(_raw=(-self.n1, -self.n2, self.d))
 
     def __sub__(self, o):
+        if not isinstance(o, (Q5, int, Fraction)):
+            return NotImplemented
         if isinstance(o, Q5):
             return Q5._mk(self.n1 * o.d - o.n1 * self.d, self.n2 * o.d - o.n2 * self.d, self.d * o.d)
         if isinstance(o, int):
@@ -112,9 +116,13 @@ class Q5:
         return Q5._mk(self.n1 * o.denominator - o.numerator * self.d, self.n2 * o.denominator, self.d * o.denominator)
 
     def __rsub__(self, o):
+        if not isinstance(o, (Q5, int, Fraction)):
+            return NotImplemented
         return (-self) + o
 
     def __mul__(self, o):
+        if not isinstance(o, (Q5, int, Fraction)):
+            return NotImplemented
         if isinstance(o, Q5):
             return Q5._mk(self.n1 * o.n1 + 5 * self.n2 * o.n2, self.n1 * o.n2 + self.n2 * o.n1, self.d * o.d)
         if isinstance(o, int):
@@ -133,6 +141,8 @@ class Q5:
         return Q5._mk(self.d * self.n1, -self.d * self.n2, n)
 
     def __truediv__(self, o):
+        if not isinstance(o, (Q5, int, Fraction)):
+            return NotImplemented
         if isinstance(o, Q5):
             return self * o.inv()
         if isinstance(o, int):
@@ -152,6 +162,8 @@ class Q5:
         return sa if self.n1 * self.n1 > 5 * self.n2 * self.n2 else sb
 
     def __eq__(self, o):
+        if not isinstance(o, (Q5, int, Fraction)):
+            return NotImplemented
         if isinstance(o, Q5):
             return self.n1 == o.n1 and self.n2 == o.n2 and self.d == o.d
         if isinstance(o, int):
@@ -588,9 +600,9 @@ class Container:
                 B = [vsub(V[i], c.O) for i in tri]
                 G = [[vdot(B[i], B[j]) for j in range(3)] for i in range(3)]
                 if sgn(det3(G)) != 0:
-                    best = (B, G)
+                    best = (B, G, tri)
                     break
-            c.B, c.G = best
+            c.B, c.G, c.tri = best
             c.Ginv = inv3(c.G)
             c.chart_v = {i: self.chart(c, V[i]) for i in c.ids}
             cen = [zero] * 3

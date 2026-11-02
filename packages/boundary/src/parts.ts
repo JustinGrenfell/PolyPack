@@ -26,6 +26,7 @@ import {
   quaternionToMatrix,
 } from "./linalg";
 import { Polyhedron, clipPolyhedron, polyhedronFrom, polyhedronThickness, polyhedronVertices } from "./polyhedron";
+import { PieceShape, isPolytopePiece, pieceShape } from "./pieces";
 import { topo } from "./polytope";
 import { BALL_RADIUS } from "./units";
 import type { BoundaryConfig, BoundaryPiece, HalfSpace, PieceName, PiecePart, Polytope } from "./types";
@@ -44,11 +45,12 @@ export const CUBE_FACES: number[][] = [
 
 /** The piece's circumradius: the reach of its development from its centre (a ball's radius 1/2, site units). */
 export function pieceReach(piece: PieceName): number {
-  return piece === "ball" ? BALL_RADIUS : Math.sqrt(3) / 2;
+  return piece === "ball" ? BALL_RADIUS : pieceShape(piece).circumradius;
 }
 
 /** Piece-local -> anchor-local coordinates: y = R(q) p + u (no rotation for balls or an absent q). */
 export function piecePose(piece: PieceName, p: BoundaryPiece): Iso3 {
+  if (piece !== "ball" && !isPolytopePiece(piece)) throw new Error(`piecePose: unknown piece ${String(piece)}`);
   const m = piece !== "ball" && p.q ? quaternionToMatrix(p.q) : [1, 0, 0, 0, 1, 0, 0, 0, 1];
   return { m, t: [p.u[0], p.u[1], p.u[2]] };
 }
@@ -91,13 +93,13 @@ export function windowInCell(node: ChainNode, u: V3): HalfSpace[] {
  * Vertices within PART_CLIP_EPS (piece units, independent of s) of a plane count as on it. The
  * result is translated back by c.
  */
-export function partPolyhedron(poly: Polytope, cell: number, place: Iso3, clip: readonly HalfSpace[], s: number): Polyhedron {
+export function partPolyhedron(poly: Polytope, cell: number, place: Iso3, clip: readonly HalfSpace[], s: number, shape: PieceShape = pieceShape("cube")): Polyhedron {
   const c = place.t;
   const rel: Iso3 = { m: place.m, t: [0, 0, 0] };
-  const verts = CUBE_VERTICES.map((v) => isoApply(rel, v));
-  let P = polyhedronFrom(verts, CUBE_FACES);
-  // the faces' normals are exact images of the cube's axes (an orientation-reversing place keeps them outward)
-  P = { faces: P.faces.map((f, i) => ({ verts: f.verts, n: isoLinear(place, CUBE_NORMALS[i]) })) };
+  const verts = shape.vertices.map((v) => isoApply(rel, v));
+  let P = polyhedronFrom(verts, shape.faces);
+  // the faces' normals are exact images of the piece's face normals (an orientation-reversing place keeps them outward)
+  P = { faces: P.faces.map((f, i) => ({ verts: f.verts, n: isoLinear(place, shape.normals[i]) })) };
   if (isoDet3(place) < 0) P = { faces: P.faces.map((f) => ({ verts: f.verts.slice().reverse(), n: f.n })) };
   const nc = (n: readonly number[]) => n[0] * c[0] + n[1] * c[1] + n[2] * c[2];
   for (const pl of topo(poly).cells[cell].planes) {
@@ -113,15 +115,6 @@ export function partPolyhedron(poly: Polytope, cell: number, place: Iso3, clip: 
 
 /** Clipping tolerance of partPolyhedron, in piece units (independent of s). */
 export const PART_CLIP_EPS = 1e-12;
-
-const CUBE_NORMALS: V3[] = [
-  [-1, 0, 0],
-  [1, 0, 0],
-  [0, -1, 0],
-  [0, 1, 0],
-  [0, 0, -1],
-  [0, 0, 1],
-];
 
 function isoDet3(T: Iso3): number {
   const m = T.m;
@@ -143,7 +136,7 @@ export function partsOfDevelopment(poly: Polytope, piece: PieceName, index: numb
       // the ball reaches into the cell exactly when some ray of the window crosses the gate before length 1
       if (node.depth > 0 && node.gateDist >= r - PART_EPS) continue;
     } else {
-      P = partPolyhedron(poly, node.cell, place, clip, s);
+      P = partPolyhedron(poly, node.cell, place, clip, s, pieceShape(piece));
       if (!P.faces.length || polyhedronThickness(P) <= PART_EPS) continue;
     }
     // a ball is drawn as the unit ball under place.A, so its A carries the radius (the isometry times BALL_RADIUS)
@@ -174,7 +167,7 @@ export function pieceParts(poly: Polytope, piece: PieceName, config: BoundaryCon
  */
 export function partMesh(poly: Polytope, piece: PieceName, part: PiecePart, s: number): { vertices: number[][]; faces: number[][] } | null {
   if (piece === "ball") return null;
-  const P = partPolyhedron(poly, part.cell, isoFromAffine(part.place), part.clip, s);
+  const P = partPolyhedron(poly, part.cell, isoFromAffine(part.place), part.clip, s, pieceShape(piece));
   const verts = polyhedronVertices(P);
   const find = (v: V3) => verts.findIndex((q) => Math.abs(q[0] - v[0]) <= 1e-12 && Math.abs(q[1] - v[1]) <= 1e-12 && Math.abs(q[2] - v[2]) <= 1e-12);
   return { vertices: verts.map((v) => [v[0], v[1], v[2]]), faces: P.faces.map((f) => f.verts.map(find)) };

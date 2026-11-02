@@ -181,3 +181,37 @@ export function quaternionToMatrix(q: readonly number[]): number[] {
     1 - 2 * (x * x + y * y),
   ];
 }
+
+/** Unit quaternion (w, x, y, z) of a proper rotation matrix (row-major), w >= 0. */
+export function matrixToQuaternion(m: readonly number[]): [number, number, number, number] {
+  const tr = m[0] + m[4] + m[8];
+  let w: number, x: number, y: number, z: number;
+  if (tr > 0) {
+    const S = Math.sqrt(tr + 1) * 2;
+    w = S / 4;
+    x = (m[7] - m[5]) / S;
+    y = (m[2] - m[6]) / S;
+    z = (m[3] - m[1]) / S;
+  } else if (m[0] > m[4] && m[0] > m[8]) {
+    const S = Math.sqrt(1 + m[0] - m[4] - m[8]) * 2;
+    w = (m[7] - m[5]) / S;
+    x = S / 4;
+    y = (m[1] + m[3]) / S;
+    z = (m[2] + m[6]) / S;
+  } else if (m[4] > m[8]) {
+    const S = Math.sqrt(1 + m[4] - m[0] - m[8]) * 2;
+    w = (m[2] - m[6]) / S;
+    x = (m[1] + m[3]) / S;
+    y = S / 4;
+    z = (m[5] + m[7]) / S;
+  } else {
+    const S = Math.sqrt(1 + m[8] - m[0] - m[4]) * 2;
+    w = (m[3] - m[1]) / S;
+    x = (m[2] + m[6]) / S;
+    y = (m[5] + m[7]) / S;
+    z = S / 4;
+  }
+  const n = Math.hypot(w, x, y, z);
+  const sg = w < 0 ? -1 : 1;
+  return [(sg * w) / n, (sg * x) / n, (sg * y) / n, (sg * z) / n];
+}

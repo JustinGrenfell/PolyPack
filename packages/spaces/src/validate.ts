@@ -35,7 +35,7 @@ import {
   PieceName,
   PolytopeName,
   getPolytope,
-  ncubeDim,
+  highDimShape,
   validateBoundary,
 } from "@polypack/boundary";
 import { CurvedConfig, containerCircumradius, validationSteps as curvedSteps } from "@polypack/curved";
@@ -321,9 +321,10 @@ const BOUNDARY_UNIT_SLACK = 1e-9;
 function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<BoundaryConfig> {
   const r = new Reader();
   // the d-cubes (d = 5..10): 2d cells, d - 1 coordinates, no rotation; the 4-polytopes: their cells, 3 coordinates
-  const nc = ncubeDim(id.fields.polytope);
-  const C = nc ? 2 * nc : getPolytope(id.fields.polytope as PolytopeName).cells.length;
-  const dimU = nc ? nc - 1 : 3;
+  const hd = highDimShape(id.fields.polytope);
+  const nc = hd ? hd.dimU + 1 : 0;
+  const C = hd ? hd.cells : getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  const dimU = hd ? hd.dimU : 3;
   const ball = (id.fields.piece as PieceName) === "ball";
   const s = r.num(raw.s, "s", BOUNDARY_MAX_S, true);
   const list = piecesOf(raw, "pieces", id.P);
@@ -345,7 +346,7 @@ function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<
       u = Array.from({ length: dimU }, (_, k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
     const piece: BoundaryConfig["pieces"][number] = { cell: p.cell as number, u };
     if (p.q === undefined) return piece;
-    if (nc) {
+    if (nc && !ball) {
       r.errors.push(`pieces[${i}] has no rotation q (pieces on the ${String(id.fields.polytope)} stay axis-aligned)`);
       return piece;
     }

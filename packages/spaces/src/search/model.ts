@@ -9,7 +9,7 @@
  * that a page, its search threads and the volunteer client share it. Configurations come from the
  * server, so the readers treat them as untrusted input and return clean copies or null.
  */
-import { type ContainerName, type PieceName, type PolytopeName, getPolytope, ncubeDim, parseBoundaryId } from "@polypack/boundary";
+import { type ContainerName, type PieceName, type PolytopeName, getPolytope, highDimShape, parseBoundaryId } from "@polypack/boundary";
 import { MAX_PIECES } from "@polypack/geometry";
 import { type PlatonicName, type SolidName, isSolidName } from "@polypack/surface";
 import {
@@ -203,9 +203,10 @@ export function readSpaceConfig(p: SearchProblem, v: unknown): SpaceConfig | nul
     }
     case "boundary": {
       if (!positive(v.s) || !Array.isArray(v.pieces) || v.pieces.length !== p.P) return null;
-      const nc = ncubeDim(p.polytope);
-      const cells = nc ? 2 * nc : getPolytope(p.polytope as PolytopeName).cells.length;
-      const dimU = nc ? nc - 1 : 3;
+      const hd = highDimShape(p.polytope);
+      const nc = hd ? hd.dimU + 1 : 0;
+      const cells = hd ? hd.cells : getPolytope(p.polytope as PolytopeName).cells.length;
+      const dimU = hd ? hd.dimU : 3;
       const pieces: { cell: number; u: number[]; q?: number[] }[] = [];
       for (const q of v.pieces) {
         if (!isObject(q) || !Number.isInteger(q.cell) || (q.cell as number) < 0 || (q.cell as number) >= cells)

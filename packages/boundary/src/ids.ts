@@ -1,6 +1,6 @@
 /** Problem ids and standard pieces of the boundary space. */
-import { CUBE_FACES, CUBE_VERTICES } from "./parts";
 import { CONTAINER_PIECES } from "./bounds";
+import { isPolytopePiece, pieceShape } from "./pieces";
 import { isContainerName } from "./polytope";
 import type { BoundaryProblem, PieceName } from "./types";
 import { PIECES } from "./types";
@@ -41,13 +41,18 @@ export function formatBoundaryId(p: BoundaryProblem): string {
 
 /**
  * A piece in its standard pose (piece-local coordinates, centred at the origin): the ball (radius
- * BALL_RADIUS = 1/2; the shape {kind: "ball"} is the UNIT ball and the parts' place.A carries the radius, parts.ts), or the unit cube [-1/2, 1/2]^3 with its 8 vertices (vertex v has coordinate k = +1/2
+ * BALL_RADIUS = 1/2; the shape {kind: "ball"} is the UNIT ball and the parts' place.A carries the radius, parts.ts), or a Platonic
+ * solid of edge 1 (pieces.ts): the cube [-1/2, 1/2]^3 with its 8 vertices (vertex v has coordinate k = +1/2
  * exactly when bit k of v is set) and 6 faces (-x, +x, -y, +y, -z, +z, counter-clockwise seen
- * from outside). Pieces have dimension d - 1; only d = 4 is supported.
+ * from outside), the tetrahedron, octahedron, dodecahedron and icosahedron likewise (faces counter-clockwise seen from outside).
+ * Pieces have dimension d - 1; only d = 4 is supported.
  */
 export function standardPiece(piece: PieceName, d: number): { kind: "ball" } | { kind: "polytope"; vertices: number[][]; faces: number[][] } {
   if (d !== 4) throw new Error("standardPiece: only d = 4 (3D pieces) is supported");
   if (piece === "ball") return { kind: "ball" };
-  if (piece === "cube") return { kind: "polytope", vertices: CUBE_VERTICES.map((v) => v.slice()), faces: CUBE_FACES.map((f) => f.slice()) };
+  if (isPolytopePiece(piece)) {
+    const sh = pieceShape(piece);
+    return { kind: "polytope", vertices: sh.vertices.map((v) => v.slice()), faces: sh.faces.map((f) => f.slice()) };
+  }
   throw new Error(`standardPiece: unknown piece ${String(piece)}`);
 }

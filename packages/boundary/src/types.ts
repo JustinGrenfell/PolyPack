@@ -22,19 +22,26 @@ export type PolytopeName = "tesseract" | "5cell" | "16cell" | "24cell" | "120cel
 export const POLYTOPES: readonly PolytopeName[] = ["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"];
 
 import { NCUBE_NAMES, type NCubeName } from "./ncube/lattice";
-export type { NCubeName };
+import { ND_NAMES, type NDName } from "./nd/names";
+export type { NCubeName, NDName };
 
 /**
  * Every container of the catalogue: the regular 4-polytopes above and, since 2026-11-01, the d-cubes for d = 5..10 ("4D on 5D" to
  * "9D on 10D", ncube/), under the same problem ids `boundary/<container>/<piece>/<P>`. PolytopeName stays the 4-polytopes
  * (the Polytope objects of polytope.ts); a d-cube has no Polytope, its cells being lattice cubes handled in closed form.
  */
-export type ContainerName = PolytopeName | NCubeName;
-export const CONTAINERS: readonly ContainerName[] = [...POLYTOPES, ...NCUBE_NAMES];
+// and, since 2026-11-02, the d-simplex, d-orthoplex and d-demicube for d = 5..10 (nd/, balls only; docs/spaces/BOUNDARY.md 4D)
+export type ContainerName = PolytopeName | NCubeName | NDName;
+export const CONTAINERS: readonly ContainerName[] = [...POLYTOPES, ...NCUBE_NAMES, ...ND_NAMES];
 
-/** Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. */
-export type PieceName = "ball" | "cube";
-export const PIECES: readonly PieceName[] = ["ball", "cube"];
+/**
+ * Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. For d = 4 these are the five
+ * Platonic solids (pieces.ts). On the tesseract "cube" is the axis-aligned cube of its records; on the other 4-polytopes it is a
+ * freely rotated cube; on the d-cubes (d = 5..10) the axis-aligned (d-1)-cube.
+ */
+export type PolytopePieceName = "tetrahedron" | "cube" | "octahedron" | "dodecahedron" | "icosahedron";
+export type PieceName = "ball" | PolytopePieceName;
+export const PIECES: readonly PieceName[] = ["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"];
 
 /**
  * A problem: P pieces of one kind on one polytope. Its id is written

@@ -34,7 +34,7 @@ async function runFor(page: Page, evals: number, seed = 1): Promise<string> {
 
 test("the Problem set menu lists the nD dimensions after 3D on 4D, and each opens its own dimension", async ({ page }) => {
   // modules of the nD drawings and their data, by their paths in the dev server or their file names in a build
-  const nd = /(render\/(ndim|ncube|nd-ui|ndslice)|ConvexGeometry|data\/d[467]\.|\/(ndim|ncube|nd-ui|d4|d6|d7)-[A-Za-z0-9_-]{8}\.js)/;
+  const nd = /(render\/(ndim|ncube|ndpoly|nd-ui|ndslice)|ConvexGeometry|data\/d[467]\.|\/(ndim|ncube|ndpoly|nd-ui|d4|d6|d7)-[A-Za-z0-9_-]{8}\.js)/;
   const loaded: string[] = [];
   page.on("request", (r) => {
     if (nd.test(new URL(r.url()).pathname)) loaded.push(r.url());
@@ -46,7 +46,7 @@ test("the Problem set menu lists the nD dimensions after 3D on 4D, and each open
   expect(labels.slice(3, 8)).toEqual(["3D on 4D", "4D in 4D", "4D on 5D", "5D in 5D", "5D on 6D"]);
   expect(labels.at(-1)).toBe("10D in 10D");
   await expect(menu.locator('option[value="ndim-4"]')).toHaveText("4D in 4D: Polytopes and balls");
-  await expect(menu.locator('option[value="boundary-5cube"]')).toHaveText("4D on 5D: 5-cube boundary");
+  await expect(menu.locator('option[value="boundary-5cube"]')).toHaveText("4D on 5D: Polytope boundaries");
   await expect(menu.locator("option[disabled]")).toHaveCount(0);
 
   // the default board has loaded none of it, and neither has another kind of the board
@@ -79,9 +79,16 @@ test("the Problem set menu lists the nD dimensions after 3D on 4D, and each open
   await page.selectOption("#family-select", "boundary-7cube");
   await shown(page, "boundary/7cube/ball/9", LAZY_VIEW);
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "6-on-7");
-  await expect(page.locator("#space-f-polytope")).toHaveCount(0);
+  // the dimension holds four containers, the 7-cube (the old links' one) first
+  await expect(page.locator("#space-f-polytope option")).toHaveText(["7-cube", "7-simplex", "7-orthoplex", "7-demicube"]);
   await expect(page.locator("#space-f-piece option")).toHaveText(["Balls", "Cubes"]);
   await expect(page.locator("#space-score-label")).toHaveText("7-cube edge s");
+  // the others take balls only
+  await page.selectOption("#space-f-polytope", "7demicube");
+  await shown(page, "boundary/7demicube/ball/9");
+  await expect(page.locator("#space-f-piece option")).toHaveText(["Balls"]);
+  await expect(page.locator("#space-score-label")).toHaveText("7-demicube edge s");
+  await expect(page.locator("main")).toHaveAttribute("data-dimension", "6-on-7");
 
   // a family chosen again returns to the problem last shown in it; another one starts on its own
   await page.selectOption("#family-select", "ndim-6");
@@ -302,6 +309,49 @@ test("4D on 5D to 9D on 10D show the centres per facet in a chart and a table", 
   expect(errors).toEqual([]);
 });
 
+test("4D on 5D to 9D on 10D draw the simplex, orthoplex and demicube too: centres per facet in a chart and a table", async ({ page }) => {
+  test.setTimeout(180_000);
+  const errors = pageErrors(page);
+  for (const [polytope, D, name] of [
+    ["6simplex", 7, "6-simplex"],
+    ["6orthoplex", 6, "6-orthoplex"],
+    ["6demicube", 6, "6-demicube"],
+  ] as const) {
+    const id = `boundary/${polytope}/ball/5`;
+    await page.goto("/");
+    await page.goto(`/#space=${id}`);
+    await page.reload();
+    await shown(page, id, LAZY_VIEW);
+    await expect(page.locator("#family-select")).toHaveValue("boundary-6cube");
+    await expect(page.locator("main")).toHaveAttribute("data-dimension", "5-on-6");
+    // no research record: a run gives the first packing
+    await expect(page.locator("#space-empty")).toBeVisible();
+    await runFor(page, 2000);
+    await expect(page.locator(".nd-chart g[data-piece]")).toHaveCount(5, LAZY_VIEW);
+    await expect(page.locator(".nd-facets")).toContainText(/^Balls per facet: \S.* \d+/);
+    const table = page.locator(".nd-table");
+    await expect(table.locator("thead th")).toHaveText(["#", "Facet", "Centre in the facet", `Centre in x1 to x${D}`]);
+    await expect(table.locator("tbody tr")).toHaveCount(5);
+    await expect(page.locator(".nd-draw")).toHaveAttribute(
+      "aria-label",
+      new RegExp(`^5 balls on the boundary of the ${name} of edge \\d+\\.\\d{6}, their centres projected onto x\\d+ and x\\d+\\.$`),
+    );
+    // the axes are the user's, and the outline is the container's projection
+    await page.selectOption('[data-nd="axis-x"]', "3");
+    await expect(page.locator(".nd-draw")).toHaveAttribute("aria-label", /projected onto x4 and x\d+\.$/);
+    await expect(page.locator(".nd-chart polygon")).toHaveCount(1);
+    await expect(page.locator("#space-f-piece option")).toHaveText(["Balls"]);
+    // a submission is judged by the server's rule (the same engine) and kept
+    await page.fill("#name", "nd tester");
+    await page.click("#space-submit");
+    await expect(page.locator("#space-submit-result")).toContainText("✓ Kept. Server score", { timeout: 30_000 });
+    const api = (await (await page.request.get(`/api/spaces/boundary/problems/${id}`)).json()) as SpaceProblemResponse;
+    expect(api.status).toBe("no_record");
+    expect(api.site_best?.score).toBeGreaterThan(0);
+  }
+  expect(errors).toEqual([]);
+});
+
 test("3D on 4D still draws all six of its containers, in the three.js views", async ({ page }) => {
   test.setTimeout(240_000);
   const errors = pageErrors(page);
@@ -364,7 +414,11 @@ test("the Records page files the nD dimensions under their tabs and filters", as
   // the d-cube tab, and the older address of 3D on 4D
   await tabs.getByRole("link", { name: "4D on 5D" }).click();
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText("4D on 5D");
-  await expect(page.locator("#pick-polytope option")).toHaveText(["5-cube"]);
+  await expect(page.locator("#pick-polytope option")).toHaveText(["5-cube", "5-simplex", "5-orthoplex", "5-demicube"]);
+  // an address that names the simplex, orthoplex or demicube of a dimension opens that dimension's tab, listing the new problems
+  await page.goto("/records.html#space=boundary&polytope=7demicube");
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText("6D on 7D");
+  await expect(page.locator("#pick-polytope")).toHaveValue("7demicube");
   await page.goto("/records.html#space=boundary&polytope=tesseract");
   await expect(tabs.locator('a[aria-current="page"]')).toHaveText("3D on 4D");
   await expect(page.locator("#pick-polytope option")).toHaveCount(6);
@@ -386,7 +440,8 @@ test("the dimensions page has a card for each nD dimension and links it to the b
   await expect(four).toContainText("1,911");
   const cube = page.locator('section[data-dimension="9-on-10"]');
   await expect(cube.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/#space=boundary/10cube/ball/9");
-  await expect(cube).toContainText("800");
+  // 800 balls and cubes on the 10-cube and 72 balls on the 10-simplex, 10-orthoplex and 10-demicube
+  await expect(cube).toContainText("872");
   // a keyed card opens its own dimension on the board
   await four.getByRole("link", { name: /^Board/ }).click();
   await shown(page, "ndim/4/cube/cube/12", LAZY_VIEW);

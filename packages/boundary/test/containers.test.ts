@@ -32,8 +32,8 @@ const LIT: Record<PolytopeName, { V: number; E: number; C: number; R: number; co
 describe("the containers", () => {
   it("lists the six, the tesseract first, and the pieces each takes", () => {
     expect([...POLYTOPES]).toEqual(["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"]);
-    expect(CONTAINER_PIECES.tesseract).toEqual(["ball", "cube"]);
-    for (const n of POLYTOPES.slice(1)) expect(CONTAINER_PIECES[n]).toEqual(["ball"]);
+    // balls and the five Platonic solids on all six; on the tesseract "cube" is the aligned cube of its records, elsewhere a rotated cube
+    for (const n of POLYTOPES) expect(CONTAINER_PIECES[n]).toEqual(["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"]);
     expect(CONTAINER_MAX_P.tesseract).toBe(16);
     for (const n of POLYTOPES.slice(1)) expect(CONTAINER_MAX_P[n]).toBe(24);
   });
@@ -134,17 +134,21 @@ describe("the containers", () => {
 });
 
 describe("problem ids", () => {
-  it("accepts balls on every container and cubes on the tesseract only", () => {
+  it("accepts balls and every Platonic piece on every container", () => {
     for (const n of POLYTOPES) {
       const id = `boundary/${n}/ball/7`;
       expect(parseBoundaryId(id)).toEqual({ polytope: n, piece: "ball", P: 7 });
       expect(formatBoundaryId({ polytope: n, piece: "ball", P: 7 })).toBe(id);
     }
     expect(parseBoundaryId("boundary/tesseract/cube/12")).toEqual({ polytope: "tesseract", piece: "cube", P: 12 });
-    for (const n of POLYTOPES.slice(1)) {
-      expect(typeof parseBoundaryId(`boundary/${n}/cube/3`)).toBe("string");
-      expect(() => formatBoundaryId({ polytope: n, piece: "cube", P: 3 })).toThrow();
-    }
+    for (const n of POLYTOPES)
+      for (const piece of ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"] as const) {
+        const id = `boundary/${n}/${piece}/3`;
+        expect(parseBoundaryId(id)).toEqual({ polytope: n, piece, P: 3 });
+        expect(formatBoundaryId({ polytope: n, piece, P: 3 })).toBe(id);
+      }
+    expect(typeof parseBoundaryId("boundary/24cell/sphere/3")).toBe("string");
+    expect(() => formatBoundaryId({ polytope: "24cell", piece: "sphere" as never, P: 3 })).toThrow();
     expect(typeof parseBoundaryId("boundary/9cell/ball/3")).toBe("string");
     expect(typeof parseBoundaryId("boundary/24cell/ball/03")).toBe("string");
   });

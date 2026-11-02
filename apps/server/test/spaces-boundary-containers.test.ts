@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { getPolytope } from "@polypack/boundary";
+import { ND_NAMES, getPolytope } from "@polypack/boundary";
 import { boundaryCheckMs, boundaryIsHeavy } from "@polypack/spaces";
 import { SpaceProblemResponse, SpaceSubmitResponse, SpacesResponse } from "@polypack/spaces";
 import { loadSpacesIndex } from "@polypack/spaces/load";
@@ -58,10 +58,10 @@ async function submit(
 }
 
 describe("the boundary domain on the server", () => {
-  it("is listed with 4,440 problems (152 on the 4-polytopes, 4,288 on the d-cubes), 32 of them with records, and its dependent fields", async () => {
+  it("is listed with 5,536 problems (816 on the 4-polytopes, 4,288 on the d-cubes, 432 on the d-simplexes, d-orthoplexes and d-demicubes), 32 of them with records, and its dependent fields", async () => {
     const r = (await get("/api/spaces")).body as SpacesResponse;
     const b = r.spaces.find((s) => s.space === "boundary")!;
-    expect(b).toMatchObject({ problems: 152 + 2 * (160 + 384 + 4 * 400), records: 32 });
+    expect(b).toMatchObject({ problems: 816 + 2 * (160 + 384 + 4 * 400) + 18 * 24, records: 32 });
     expect(b.domain!.fields.map((f) => f.key)).toEqual(["polytope", "piece", "P"]);
     expect(b.domain!.fields[0].values).toEqual([
       "tesseract",
@@ -76,6 +76,7 @@ describe("the boundary domain on the server", () => {
       "8cube",
       "9cube",
       "10cube",
+      ...ND_NAMES,
     ]);
     expect(b.conventions.polytope).toMatch(/211\.6.*352\.6/);
   });
@@ -96,8 +97,8 @@ describe("the boundary domain on the server", () => {
     expect(r.bound!.label).toMatch(/^\[CALC\]/);
   });
 
-  it("has no problem for a cube off the tesseract, an unwritten P or a P above the container's largest", async () => {
-    for (const id of ["boundary/24cell/cube/3", "boundary/24cell/ball/03", "boundary/9cell/ball/3"])
+  it("has no problem for a solid on a d-cube, an unwritten P or a P above the container's largest", async () => {
+    for (const id of ["boundary/6cube/tetrahedron/3", "boundary/24cell/ball/03", "boundary/9cell/ball/3"])
       expect((await get(`/api/spaces/boundary/problems/${id}`)).status, id).toBe(400);
     for (const id of ["boundary/24cell/ball/25", "boundary/tesseract/ball/17", "boundary/600cell/ball/100"])
       expect((await get(`/api/spaces/boundary/problems/${id}`)).status, id).toBe(404);
@@ -146,7 +147,8 @@ describe("POST /api/spaces/submit: balls on the other containers", () => {
         .status,
     ).toBe(400);
     expect((await submit(r.id, { s: r.config.s, pieces: r.config.pieces.slice(1) })).status).toBe(422);
-    expect((await submit("boundary/16cell/cube/4", r.config)).status).toBe(400);
+    expect((await submit("boundary/16cell/sphere/4", r.config)).status).toBe(400);
+    expect((await submit("boundary/6cube/icosahedron/4", r.config)).status).toBe(400);
     expect((await submit("boundary/16cell/ball/30", r.config)).status).toBe(400);
   });
 

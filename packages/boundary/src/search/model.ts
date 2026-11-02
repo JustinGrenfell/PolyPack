@@ -21,6 +21,11 @@ export interface State {
   cells: Int32Array;
   /** 3 numbers per piece: its centre in its anchor cell's local frame, at the state's edge. */
   U: Float64Array;
+  /**
+   * Models of rotated pieces only (`rotates`): 9 numbers per piece, its orientation, an orthogonal matrix (row-major) in its anchor's local
+   * frame (improper after a gluing that reverses handedness; solids.ts).
+   */
+  R?: Float64Array;
 }
 
 /**
@@ -38,6 +43,12 @@ export interface TermOptions {
 
 export interface PieceModel {
   readonly P: number;
+  /**
+   * True for models of rotated pieces (solids.ts): the state carries orientations, the search adds three rotation variables per piece after
+   * the 3P displacements, and energy() / terms() write a gradient of 6P numbers: the centres' 3P, then the 3P rotation increments theta
+   * (R' = exp(theta) R, theta in the anchor's frame).
+   */
+  readonly rotates?: boolean;
   /** A relaxation counts as feasible below this energy. */
   readonly target: number;
   /**
@@ -70,12 +81,12 @@ export interface PieceModel {
 }
 
 export function copyState(st: State): State {
-  return { cells: Int32Array.from(st.cells), U: Float64Array.from(st.U) };
+  return st.R ? { cells: Int32Array.from(st.cells), U: Float64Array.from(st.U), R: Float64Array.from(st.R) } : { cells: Int32Array.from(st.cells), U: Float64Array.from(st.U) };
 }
 
 /** The state scaled by k about the cells' centres (for a change of edge s -> k s). */
 export function scaleState(st: State, k: number): State {
   const U = new Float64Array(st.U.length);
   for (let i = 0; i < U.length; i++) U[i] = st.U[i] * k;
-  return { cells: Int32Array.from(st.cells), U };
+  return st.R ? { cells: Int32Array.from(st.cells), U, R: Float64Array.from(st.R) } : { cells: Int32Array.from(st.cells), U };
 }
