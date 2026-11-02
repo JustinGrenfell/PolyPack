@@ -58,12 +58,25 @@ async function submit(
 }
 
 describe("the boundary domain on the server", () => {
-  it("is listed with 152 problems, 32 of them with records, and its dependent fields", async () => {
+  it("is listed with 4,440 problems (152 on the 4-polytopes, 4,288 on the d-cubes), 32 of them with records, and its dependent fields", async () => {
     const r = (await get("/api/spaces")).body as SpacesResponse;
     const b = r.spaces.find((s) => s.space === "boundary")!;
-    expect(b).toMatchObject({ problems: 152, records: 32 });
+    expect(b).toMatchObject({ problems: 152 + 2 * (160 + 384 + 4 * 400), records: 32 });
     expect(b.domain!.fields.map((f) => f.key)).toEqual(["polytope", "piece", "P"]);
-    expect(b.domain!.fields[0].values).toEqual(["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"]);
+    expect(b.domain!.fields[0].values).toEqual([
+      "tesseract",
+      "5cell",
+      "16cell",
+      "24cell",
+      "120cell",
+      "600cell",
+      "5cube",
+      "6cube",
+      "7cube",
+      "8cube",
+      "9cube",
+      "10cube",
+    ]);
     expect(b.conventions.polytope).toMatch(/211\.6.*352\.6/);
   });
 

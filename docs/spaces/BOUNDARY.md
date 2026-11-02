@@ -6,7 +6,8 @@ name `boundary`.
 
 P balls of diameter 1 (radius 1/2) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
 edge s. Since 2026-11-01 balls can also be packed on the boundary of the other five regular
-4-polytopes, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell (section 4A). The score is the smallest s,
+4-polytopes, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell (section 4A). Also since 2026-11-01 balls and
+axis-aligned cubes (of dimension d - 1) can be packed on the boundary of the d-cube, d = 5 to 10 (4D on 5D to 9D on 10D, section 4B). The score is the smallest s,
 the polytope's edge. Since 2026-10-27 balls have diameter 1; before, radius 1, and every ball score was twice as large (cube scores are unchanged). The sections below are stated in the site's units; the certifier and the ball code may work in radius-1 units internally (a factor of 2, exact) and convert at their edges. Every record is certified by an exact checker
 (`python/boundary/certify.py`, exact arithmetic only), so its validity is proven, not just
 tested. Records: `data/boundary/records.json`, from the PolyPack research prototype (2026-10-24),
@@ -524,6 +525,150 @@ random sequential layout drawn in by the engine's `finish` until the balls touch
 - The ball centre is read through float frames (4A.3): the certified configuration is within about 1e-16 s of the one the engine sees.
 - The 120-cell and 600-cell are nearly flat. Their problems are open, and their bounds are those of 4A.4; nothing is known about their optimal packings.
 
+## 4B. The d-cube: (d-1)D on dD, d = 5 to 10
+
+Added 2026-11-01. Under Dimensions these are **4D on 5D**, **5D on 6D**, ..., **9D on 10D**: balls of diameter 1 and axis-aligned unit (d-1)-cubes on the
+boundary of the d-cube [-s/2, s/2]^d. It generalises the tesseract (section 2 to 4) with 4 replaced by d, and nothing else: the d-cube is the one regular
+polytope whose every ridge is a right angle in every dimension, so the tesseract's lattice words carry over to Z^(d-1) [EST: research note 4.3; CALC: re-derived
+below]. The boundary has 2d facets (the cells), each a (d-1)-cube of edge s; the curvature sits on the (d-3)-faces (the hinges), around each of which
+three cells meet at right angles, 270 degrees, in every d. The score is the edge s. Ids are `boundary/<d>cube/ball/<P>` and `boundary/<d>cube/cube/<P>`
+(containers `5cube` to `10cube`). Code: `packages/boundary/src/ncube/`; exact certifier: `python/boundary/ncube.py`. Nothing is shown in Tighter, and
+the site's viewers do not draw these containers yet.
+
+### 4B.1 Conventions
+
+- **Cells.** Cell `2 i + (sigma > 0)` is the facet x_i = sigma h, h = s/2, i = 0..d-1, 2d cells. Its local coordinates u are the other d - 1 coordinates in
+  increasing order, so the cell is [-h, h]^n with n = d - 1 (the tesseract's convention for n = 3).
+- **Configuration.** `{s, pieces: [{cell, u}]}`, u of n numbers. There is no `q`: a cube is axis-aligned, and a rotation of a cube by one of its symmetries
+  changes nothing (the tesseract's engine accepts such a `q`; here it is refused as malformed, so there is one form of every packing). A rotation that is not
+  a symmetry of the cube is out of scope, as on the tesseract (4.3): the problems are about balls and aligned cubes.
+- **Units.** Balls have diameter 1, cubes edge 1; lengths scale with s except piece sizes.
+- **Problems and P.** Both pieces on each container, P = 1 to 160 (5cube), 384 (6cube) and 400 (7cube to 10cube): 4,288 problems. 160 and 384 are the first tilings that
+  need more than one cube per cell (P = 2d k^(d-1) cubes at s = k, k = 2), so the first two containers have the tilings for k = 1 and 2 inside their ranges (4B.5). The other
+  four stop at 400, below their second tiling (P = 896, 2,048, 4,608 and 10,240; the last is also above the id limit 9,999): a cap of 400 keeps the server's check under 20 ms and the kernel's quadratic pair stage small.
+  The larger tilings are still certified by the tests. All 4,288 problems have lower bounds and no records.
+
+### 4B.2 Lattice words in d - 1 axes
+
+Verbatim from 4.1, with Z^3 replaced by Z^n. Every ridge is a right angle, so the cells a straight path crosses unfold into the cubes of the lattice 2h Z^n with
+the anchor at the origin; the hinges are the lattice points with at least two coordinates that are odd multiples of h (their codimension in R^n is 2, as
+a (d-3)-face's in the boundary). A **word** is the ordered list of the planes y_k = (2m + 1) h that a straight path crosses; it has an end cell and an exact
+map x = A y + h b into R^d, A a signed permutation (stored per lattice axis k as a row r_k and a sign g_k, so that A e_k = g_k e_(r_k)) and b an integer vector.
+Crossing in direction tau a plane of axis k, from cell (i, sg) with r_k = j and t = tau g_k, enters cell (j, t) by the rotation R of the plane (e_i, e_j) about the
+ridge, R(sg e_i) = t e_j, R(t e_j) = -sg e_i; then A <- R A, b <- R (b - q) + q, q = sg e_i + t e_j.
+
+**Completeness for the reach used** [CALC]. *Every straight path of length L < 2s is realised by a word with at most two crossings per lattice axis, all in one
+direction.* Proof: three crossings of one axis are three consecutive planes, which are 4h = 2s apart in that coordinate (as in 4.1; the argument never used d).
+Balls need paths shorter than 1 (their diameter) and fit only from s = 1/sqrt 2 (4B.4), so 2s > 1; from s >= 1 only one crossing per axis is needed (the third plane level
+is at distance >= s from any centre). So the words with |m_k| <= 2 hold every path that can matter. Cubes need only one-crossing words (4B.5).
+
+| d | n = d-1 | words per cell, <= 2 per axis | <= 1 per axis |
+|---|---|---|---|
+| 5 | 4 | 109,601 | 633 |
+| 6 | 5 | 9,864,101 | 6,331 |
+| 7 | 6 | 1,302,061,345 | 75,973 |
+| 8 | 7 | 236,975,164,805 | 1,063,623 |
+| 9 | 8 | 56,874,039,553,217 | 17,017,969 |
+| 10 | 9 | 17,403,456,103,284,420 | 306,323,443 |
+
+[CALC] The counts are sum_k (2n)!/(2n-k)! (two crossings: the exponential generating function (1+x)^(2n)) and sum_k C(n,k) 2^k k! (one). The first two rows are the research
+note's 109,601, 9,864,101, 633 and 6,331; the tests enumerate d = 5 in full (109,601 words from three start cells), d = 6 in full (9,864,101, once) and the rest by formula. **The words are not listed**:
+they are found for one pair of points at a time, by reach.
+
+### 4B.3 The search by reach: the bounds, the loop lemma
+
+For a start u (cell c1) and a target point x2 (cell c2) the search looks for the realised words of length < 1. It first chooses the **support** m (the crossings per axis, m_k in
+{-2..2}, a path of length < 1 crosses axis k only up to the plane at distance < 1 from u), then the **orders** of the crossings, and tests each ordered word exactly as 4.1: the image
+y = A^T (x2 - h b) lies in the closed lattice cube m, and the segment u -> y crosses the word's planes at parameters 0 <= t_1 <= ... <= 1 (a plane holding both ends puts no constraint).
+Four exact facts prune it; each holds for every word of the support at hand, so the search finds every realised word of length < 1 (the Python tests compare it with a full enumeration, exact, d = 5 to 7).
+
+1. **Support bound.** length^2 >= sum over axes with m_k != 0 of delta_k^2 + sum over axes with m_k = 0 of (x2[r_k] - u_k)^2, delta_k = (2|m_k| - 1) h - sign(m_k) u_k, the distance from u to the last plane
+   crossed on axis k. The first sum: the segment crosses that plane, so |y_k - u_k| >= delta_k. The second: a column of A that is never crossed keeps its row r_k, and b keeps its value there, so y_k = x2[r_k].
+2. **Assignment bound.** y = 2h m + yhat, where yhat is a signed permutation of the target's local coordinates (a column of A is a signed unit vector), so with c = 2h m - u,
+   length^2 = sum (c_r + yhat_r)^2 >= sum (|c|_(r) - |u2|_(r))^2, both lists sorted ascending (the rearrangement inequality).
+3. **Image coordinates are known early.** *A crossing of axis k changes only column k of A and the entries of b along the old normal axis i and the old row j.* (R fixes e_l for l != i, j; the columns of A are
+   tangent to the cell, so only column k has a component along e_j, and none along e_i.) *No later crossing of another axis touches them:* a later crossing changes b along the then-normal axis and along a row
+   of another column, and neither is the row that column k now holds (the normal and the rows are all distinct). Hence y_k = g_k (x2[r_k] - h b[r_k]) is fixed from the last crossing of axis k, and during the
+   orders the search replaces delta_k by y_k - u_k in the sum, requires y_k in its lattice cube, and requires the crossing times known so far to lie in [0, 1] and to increase along the order.
+4. **The end cell.** *After any word the normal axis is the original row of a crossed axis, or the start's own normal axis* (a crossing swaps the normal with the row of the crossed column; induction). So unless an end cell has the
+   start's normal axis, the support must cross the axis whose original row is that end cell's normal axis.
+
+The search is capped by a **work budget** (steps of the support and order searches, 4,000,000 per check, `NCUBE_MAX_WORK`; 8,000 per pair in the kernel's energy): a search over its budget throws, and the
+check refuses the configuration with a plain reason. The cap makes the validator **sound but incomplete**: it never accepts an invalid configuration, and refuses a valid one only if
+the balls are so crowded against the (d-3)-faces that the search needs more than its budget. [CALC] The worst pair that the clearance rule allows (two balls at the minimum clearance 1/2 near a common corner,
+every slack 0.3536 on all n axes) costs 129, 374, 1,105, 3,230, 9,025 and 23,590 steps for d = 5 to 10, so the cap holds about 170 such pairs at d = 10 and takes 0.25 s to exhaust.
+
+**The loop lemma** [CALC]. *A nonempty word that ends in its start cell crosses at least two lattice axes twice.* Proof: write the frame (normal, A e_1, ..., A e_n) as the matrix F of a signed permutation;
+crossing axis k in direction tau is F <- F G with G the 90 degree rotation of the plane (0, k), by tau. Conjugating by the diagonal matrix of the directions tau_k (which fixes e_0), every crossing becomes the
+same rotation R_k: R_k e_0 = e_k, R_k e_k = -e_0, R_k e_l = e_l. The word returns to its start cell exactly when the product fixes e_0. Following e_0 through the product from the last crossing: it moves to e_k at a
+crossing of k, stays until the next crossing of the same k, where it becomes -e_0 (the sign flips); and so on. Returning to +e_0 needs an even number of such excursions, two at least, each using
+both crossings of one axis, and an axis crosses at most twice, so two different axes are crossed twice. [CALC: checked exhaustively for d = 5 and d = 6, all 109,601 and 9,864,101 words per cell.] So a geodesic loop is at least sqrt((3h - u_k)^2 + (3h - u_l)^2) >= sqrt 2 s
+long (the last plane of an axis crossed twice is 3h - u_k >= 2h = s away), which is >= 1 once a ball fits, and the loop check can never fire for s >= 1/sqrt 2 (the validator and the certifier keep it anyway; the kernel's energy leaves it out).
+
+### 4B.4 Balls
+
+The rule is 4.2 unchanged (its proof is dimension-free): a packing of balls of diameter 1 is valid exactly when every centre is >= 1/2 from the hinges, every two centres are >= 1 apart along every realised
+word, and every loop is >= 1.
+
+- **Clearance**, closed form: min over pairs of axes a < b of sqrt((h - |u_a|)^2 + (h - |u_b|)^2), the root of the two smallest squared slacks (the nearest lattice hinge is an edge-of-cell hinge of the anchor
+  cube; the Python tests check it against the lattice points). It is at most h sqrt 2, so a ball fits only from s = 1/sqrt 2 [CALC], and exactly there at the cell's centre.
+- **Pairs.** Only pairs whose centres are < 1 apart in R^d are searched (the geodesic is never shorter than the chord), found in a grid on four coordinates, so the work is linear in P; at most 20 reasons.
+- **No ridge snap.** Every gluing is an exact signed permutation, so no centre needs to be moved onto a facet (the chain validator of the 4-polytopes does). A centre on a ridge belongs to two cells: the search
+  accepts either as the target's end cell.
+- **Tolerance.** tol 1e-9 as the tesseract's (centres within tol of their cell, clearance >= 1/2 - tol, distances >= 1 - tol); the site's strict check for a problem without a record uses 1e-11.
+- **Cost** [CALC, Apple Silicon, one core]: the engine checked layouts of one to twenty balls per cell, tight at their edges, in 0.8, 0.9, 1.4, 2.8, 6.3 and 9.0 ms (d = 5 to 10, P = 2d) and 5.4, 12.9, 10.5, 10.3,
+  11.6 and 13.3 ms at P = 160, 384, 400, 400, 400, 400 (the test packings of the problem sets' largest P). The exact Python certifier takes 0.01 to 0.8 s for the P = 2d packings (d = 5 to 10).
+
+### 4B.5 Axis-aligned cubes
+
+4.3 with n axes. The cube centred at u is the box u +- 1/2 and crosses axis k when |u_k| + 1/2 > h. [CALC] *It is valid alone exactly when it crosses at most one axis* (two crossed axes k, l put the anchor's own hinge
+u_k = +-h, u_l = +-h, the other coordinates u_m, inside the open box; for s < 1 every axis is crossed, so a cube needs s >= 1 and, with one crossed axis, the slab beyond the face has depth <= 1/2 and stays in the
+neighbouring lattice cube). Its parts are the box clipped to the anchor and, beyond a crossed face, the slab mapped by the one-crossing word, a signed permutation, so again a box; parts of distinct cubes in a cell must
+not overlap by more than tol in all n axes. Strict mode counts a face touched from inside as crossed. A cube never overlaps itself (its two parts lie in different cells). The word search is not needed.
+
+**Tilings** [CALC]: P = 2d k^(d-1) cubes at s = k, k^(d-1) per cell on the grid of spacing 1, touching, so valid but not strictly valid; they are optimal for the cube problem by the volume bound (P <= 2d s^(d-1)),
+which they meet, so no packing of cubes of any orientation does better [CALC]. By the policy for proofs they stay best_known unless a published proof exists (none is cited; no records ship).
+
+### 4B.6 Lower bounds
+
+Stored as the largest binary64 value not above the exact one, decided in integer arithmetic (`ncubeBound`), and checked exactly in Python (`ncube.py exact_bounds`): the larger of
+- **volume**: P vol(piece) <= 2d s^(d-1) (the developments are injective on interiors, the interiors are disjoint); a ball has volume V_n 2^-n, V_n the unit n-ball's (pi replaced by its 60-digit truncation: a smaller, valid bound);
+- **one piece**: 1/sqrt 2 for a ball (4B.4), 1 for a cube (4B.5).
+For example P = 160 cubes on the 5-cube: exactly 2 (the tiling), and one ball: 0.7071067811865475 on every container.
+
+### 4B.7 The exact certifier
+
+`python/boundary/ncube.py`, reached through `certify.py` (`boundary/<d>cube/...` ids). Exact rationals only; shares no code with the engine. The same words, but a simpler search: the plane-distance part of bound 1 and bound 2, not the known image coordinates of fact 3 nor the end-cell fact 4 (and an unpruned mode, `prune=False`, that tries every word with
+|m_k| <= 2): so it also checks the engine's pruning. Strict validity needs > in every test. Checks:
+- the words (counts, every development an unfolding, the loop lemma), the pruned search against a full enumeration (exact, random pairs, d = 5 with two crossings and s from 0.75; d = 6 and 7 with one), the clearance against the lattice points;
+- 42 test packings (`fixtures/ncube_packings.json`, built by `build_ncube_packings.py`): per d one ball at the cell's centre at s = (1/sqrt 2)(1 + 1e-9), balls at the centres of the 2d cells, two per cell (4d balls, on a main diagonal of the inner cube),
+  one cube, 2d cubes, four cubes centred on the ridges of a ring of cells (each in two cells), and eight cubes round it, half a step off; each scaled by 1 + 1e-9 (4.4's argument) and certified strictly valid; their copies shrunk by 1e-6 fail;
+- the exact tilings (d = 5, 6, 7, 8, 10, k = 1 and 2: up to 896 cubes at s = 2 exactly), 160 and 384 balls on the 2^n grids of the cells at s = 2, touching;
+- the adversarial cases of both validators (`test_ncube.py`, `packages/boundary/test/ncube.test.ts`), d = 5 to 10: a ball over a (d-3)-face (clearance 0.509 valid, 0.495 not, on the hinge not), two balls across a ridge 1e-9 too close (the tolerance decides) and 1e-9 clear, two balls
+  that overlap only through the word that crosses two ridges round a hinge (clearance 0.6 each, 85 and 185 degrees round it, path 0.919, the other way 1.195), a cube over a hinge, two cubes whose parts overlap across a ridge by 0 and 1e-9, malformed input;
+- the engine's verdicts on 648 configurations (`fixtures/ncube_crosscheck.json`, `gen-ncube-crosscheck.ts`; the test packings scaled by 1.2, 1, 0.9999 and 0.97, and seeded random layouts, 325 valid): equal unless an exact margin lies within 1e-11 of its threshold.
+
+### 4B.8 Server, kernel, caps
+
+- **Rule** (`ncubeServerRule`): P at most the problem set's (160, 384, 400), the form (cell 0 to 2d - 1, u of n numbers at most 1e4 in absolute value, no `q`), s >= the bound less 1e-9 relative, then the validator at 1e-9 with 20 reasons.
+  The space's P limit rises from 64 to 400 for this; each container's own range is its domain's.
+- **Heavy checks.** `boundaryIsHeavy` uses 0.3, 0.35, 0.5, 0.6, 1 and 1.5 ms per ball (d = 5 to 10; three times the measured per-ball cost) and 0.02 ms per cube: a check of 50 ms or more waits in the server's heavy queue (one at a time) and is charged its estimate.
+- **Caps.** At most 400 pieces, the work budget above (a worst-case check takes about 0.25 s), 20 reasons, cell and coordinate ranges, no `q`; a configuration that exhausts the budget is refused, never slow.
+- **Kernel** (section 14): `boundaryKernel` returns `ncubeKernel` for these containers: n variables per piece, the exact energy of 4B.4 and 4B.5 with its analytic gradient in the displacements and in the size (the walk is `move.ts`, a signed permutation per crossing), weights, focus, a pair whose search exceeds
+  8,000 steps in the energy falls back to its chord in R^d; seeds are the cell layouts (balls: one per cell centred at s = 1, two on a diagonal at s = 1 + 1/sqrt n, then the grids of spacing 1 at s = k; cubes: the k^n grids) and the **ring cut** (the cells of two axes form a
+  flat strip of length 4s round the 2-axes' square, times a g^(d-2) grid across it, pieces at equal spacing from a random phase, some straddling ridges; a ball ring is kept only if the validator accepts it); finishing is the search's bisection plus the
+  validator at tolerance 0. The generic methods run on it; `searchBoundary` on a d-cube problem seeds and finishes (no optimiser: no records are searched).
+- **Tighter** must not see these containers: the game's slices and id patterns do not name `boundary` (`apps/web/test/tighter-boundary-excluded.test.ts` pins that for every d-cube id).
+
+### 4B.9 Limitations
+
+- **No records.** Test packings only. The cell layouts and the tilings are exact or nearly so; the others have no claim to being good (no search ran, as the tesseract's first two rounds would be); the optima for balls are open; a tesseract-like P = 2d layout below s = 1 would need the pair search at the worst corner (cost above).
+- **Aligned cubes only**, as on the tesseract: a turned cube might do better and would need parts and exact rotations in n dimensions (`parts.ts`, `polyhedron.ts` are 3-dimensional).
+- **The corner cap.** The validator refuses a configuration whose search needs more than 4,000,000 steps; the worst pair of the kind above costs at most 23,590, but a few hundred balls crowded at a common corner of d = 10 could reach it.
+- **The vertex rule** (section 3) is argued, not proved, in every d.
+- Not covered: the simplex, orthoplex and demicube boundaries for d >= 5, whose dihedral angles are not right angles; the chain code would need to go to R^(d-1) (phase C3 of the plan).
+
+
 ## 5. Lower bounds
 
 Only proven bounds are stored [CALC]. Each is stored as a binary64 value rounded down, and the
@@ -677,11 +822,15 @@ its field `previous`.
   `packages/boundary/src/bounds.ts` (facts, lower bounds, check-size estimates), `packages/boundary/src/domain.ts` (the 152 problems),
   `packages/boundary/scripts/gen-containers.ts`, `gen-general-crosscheck.ts` and `gen-general-packings.ts` (the fixtures
   `containers.json`, `general_crosscheck.json`, `general_packings_raw.json` of `python/boundary/fixtures`).
+- The d-cubes (section 4B): `packages/boundary/src/ncube/` (`lattice.ts` words and the reach search, `validate.ts`, `bounds.ts`, `move.ts`, `model.ts`, `kernel.ts`, `seeds.ts`, `rule.ts`, `search.ts`),
+  `python/boundary/ncube.py` (the exact certifier), `python/boundary/test_ncube.py` and `packages/boundary/test/ncube.test.ts` (tests), `python/boundary/build_ncube_packings.py` (the test packings),
+  `packages/boundary/scripts/gen-ncube-crosscheck.ts` and `gen-ncube-bounds.ts` (the fixtures `ncube_crosscheck.json`, `ncube_bounds.json`).
 
 ```
 python3 python/boundary/certify.py data/boundary/records.json
 python3 python/boundary/test_boundary.py
 python3 python/boundary/test_general.py
+python3 python/boundary/test_ncube.py
 npx tsx packages/boundary/scripts/search-sources.ts
 python3 python/boundary/build_records.py
 npx tsx packages/boundary/scripts/check-records.ts
@@ -690,6 +839,9 @@ npx tsx packages/boundary/scripts/gen-containers.ts
 npx tsx packages/boundary/scripts/gen-general-crosscheck.ts
 npx tsx packages/boundary/scripts/gen-general-packings.ts
 python3 python/boundary/build_general_packings.py
+python3 python/boundary/build_ncube_packings.py
+npx tsx packages/boundary/scripts/gen-ncube-crosscheck.ts
+npx tsx packages/boundary/scripts/gen-ncube-bounds.ts
 ```
 
 Timing (Apple Silicon, shared machine): the 11 searches about 2.5 minutes in all (the longest,

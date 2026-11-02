@@ -35,4 +35,23 @@ export { MAX_S, validateBoundary, validateOn } from "./validate";
 export type { ValidateOptions } from "./validate";
 export { TesseractWords, embed as tesseractEmbed, tesseractClearance } from "./tesseract";
 export * from "./search";
+export {
+  NCUBE_NAMES,
+  WordLimitError,
+  axesOf as ncubeAxes,
+  embedCell as ncubeEmbed,
+  isNCubeName,
+  ncubeClearance,
+  ncubeDim,
+  realisedWords as ncubeRealisedWords,
+  newBudget as ncubeBudget,
+} from "./ncube/lattice";
+export { NCUBE_MAX_P, NCUBE_TITLES, ncubeBound, ncubeCheckMs, ncubeProblemBound, unitBallVolume } from "./ncube/bounds";
+export { NCUBE_MAX_WORK, cubeParts as ncubeCubeParts, validateNCube } from "./ncube/validate";
+export type { NCubeProblem } from "./ncube/validate";
+export { NCUBE_SERVER_RULE, ncubeFormErrors, ncubeServerRule } from "./ncube/rule";
+export { ncubeKernel } from "./ncube/kernel";
+export { searchNCube } from "./ncube/search";
+export { cellLayout as ncubeCellLayout, ringLayout as ncubeRingLayout } from "./ncube/seeds";
+export { isContainerName } from "./polytope";
 export * from "./kernel";

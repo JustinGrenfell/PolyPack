@@ -1,7 +1,7 @@
 /** Problem ids and standard pieces of the boundary space. */
 import { CUBE_FACES, CUBE_VERTICES } from "./parts";
 import { CONTAINER_PIECES } from "./bounds";
-import { isPolytopeName } from "./polytope";
+import { isContainerName } from "./polytope";
 import type { BoundaryProblem, PieceName } from "./types";
 import { PIECES } from "./types";
 
@@ -26,7 +26,7 @@ export function parseBoundaryId(id: string): BoundaryProblem | string {
   const parts = id.split("/");
   if (parts.length !== 4 || parts[0] !== "boundary") return `"${id}" is not of the form boundary/<polytope>/<piece>/<P>.`;
   const [, polytope, piece, ps] = parts;
-  if (!isPolytopeName(polytope)) return `Unknown polytope "${polytope}".`;
+  if (!isContainerName(polytope)) return `Unknown polytope "${polytope}".`;
   if (!isPieceName(piece)) return `Unknown piece "${piece}".`;
   if (!CONTAINER_PIECES[polytope].includes(piece)) return `The ${polytope} takes ${CONTAINER_PIECES[polytope].join(" and ")} problems only, not "${piece}".`;
   if (!/^[1-9][0-9]{0,3}$/.test(ps)) return `The piece count "${ps}" must be a whole number from 1 to ${MAX_P}, written without leading zeros.`;
@@ -35,7 +35,7 @@ export function parseBoundaryId(id: string): BoundaryProblem | string {
 
 /** The one written form of a problem's id; throws on an invalid problem. */
 export function formatBoundaryId(p: BoundaryProblem): string {
-  if (!isPolytopeName(p.polytope) || !isPieceName(p.piece) || !CONTAINER_PIECES[p.polytope].includes(p.piece) || !isPieceCount(p.P)) throw new Error("formatBoundaryId: invalid problem");
+  if (!isContainerName(p.polytope) || !isPieceName(p.piece) || !CONTAINER_PIECES[p.polytope].includes(p.piece) || !isPieceCount(p.P)) throw new Error("formatBoundaryId: invalid problem");
   return `boundary/${p.polytope}/${p.piece}/${p.P}`;
 }
 

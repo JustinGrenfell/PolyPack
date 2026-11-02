@@ -223,7 +223,7 @@ describe("GET /api/spaces", () => {
       ["curved", 990000],
       ["sphere", 9900],
       ["torus", 148500],
-      ["boundary", 152],
+      ["boundary", 152 + 2 * (160 + 384 + 4 * 400)],
       ["polyhedra", 17263404],
       ["balls", 36927],
       ["ndim", 6131],

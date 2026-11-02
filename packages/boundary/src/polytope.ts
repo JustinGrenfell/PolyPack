@@ -27,8 +27,8 @@
  */
 import { convexHull } from "./hull";
 import { V3, dot, orthonormalBasis, rejectFrom, sub, toV3, unit, Iso3, isoFromAffine } from "./linalg";
-import type { Affine, Cell, CellFacet, Polytope, PolytopeName } from "./types";
-import { POLYTOPES } from "./types";
+import type { Affine, Cell, CellFacet, ContainerName, Polytope, PolytopeName } from "./types";
+import { CONTAINERS, POLYTOPES } from "./types";
 import { unitVertices } from "./containers";
 
 const ORDER_TOL = 1e-9;
@@ -280,6 +280,11 @@ const CACHE = new Map<PolytopeName, Polytope>();
 
 export function isPolytopeName(x: unknown): x is PolytopeName {
   return typeof x === "string" && (POLYTOPES as readonly string[]).includes(x);
+}
+
+/** Is x the name of a container of the catalogue: a 4-polytope or a d-cube (d = 5..10)? */
+export function isContainerName(x: unknown): x is ContainerName {
+  return typeof x === "string" && (CONTAINERS as readonly string[]).includes(x);
 }
 
 /** The catalogue's polytopes (unit edge, centred at the origin), built once and shared: treat as read-only. */

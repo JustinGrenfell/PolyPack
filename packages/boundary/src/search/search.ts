@@ -37,9 +37,11 @@
  * model's floor (balls: the proven bound max(one-ball, volume); aligned cubes: max(1, volume),
  * no aligned cube packing being smaller).
  */
+import { isNCubeName } from "../ncube/lattice";
+import { searchNCube } from "../ncube/search";
 import { getPolytope, isPolytopeName } from "../polytope";
 import { isPieceCount, isPieceName } from "../ids";
-import type { BoundaryConfig, BoundaryProblem } from "../types";
+import type { BoundaryConfig, BoundaryProblem, PolytopeName } from "../types";
 import { validateBoundary } from "../validate";
 import { BallModel, ChainMetric } from "./balls";
 import { SiteBallModel } from "./ball-site";
@@ -155,7 +157,7 @@ function cloneConfig(c: BoundaryConfig): BoundaryConfig {
 
 /** The search's model of a problem's pieces. */
 export function modelOf(problem: BoundaryProblem, ballMetric?: "words" | "chains"): PieceModel {
-  const poly = getPolytope(problem.polytope);
+  const poly = getPolytope(problem.polytope as PolytopeName);
   if (problem.piece === "cube") return new AlignedCubeModel(poly, problem.P, chartsOf(poly));
   // balls: the working model (radius 1) behind its site-unit wrapper (ball-site.ts)
   return new SiteBallModel(ballMetric === "chains" ? new BallModel(poly, problem.P, new ChainMetric(poly)) : new BallModel(poly, problem.P));
@@ -239,6 +241,8 @@ export function finalizeState(
 }
 
 export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOptions): BoundarySearchResult {
+  // the d-cubes (d = 5..10): seeds finished by the kernel's exact finishing (ncube/search.ts)
+  if (problem && isNCubeName(problem.polytope) && isPieceCount(problem.P) && (problem.piece === "ball" || problem.piece === "cube")) return searchNCube({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, opts);
   if (!problem || !isPolytopeName(problem.polytope) || !isPieceName(problem.piece) || !isPieceCount(problem.P)) throw new Error("searchBoundary: invalid problem");
   const poly = getPolytope(problem.polytope);
   const charts = chartsOf(poly);

@@ -35,15 +35,17 @@ const scaled = (c: any, f: number) => ({
 });
 
 describe("the boundary domain", () => {
-  it("is balls on six containers (P = 1 to 24; the tesseract 1 to 16) and the tesseract's cubes: 152 problems", () => {
+  it("is balls on six containers (P = 1 to 24; the tesseract 1 to 16), the tesseract's cubes (152 problems) and the six d-cubes (4,288)", () => {
     expect(SPACE_DOMAINS.boundary).toBe(boundaryDomain);
-    expect(boundaryDomain.info.problems).toBe(32 + 5 * 24);
+    // the d-cubes: balls and cubes for P up to 160, 384 and 400 (four times), see ncube/bounds.ts
+    const NCUBE_PROBLEMS = 2 * (160 + 384 + 4 * 400);
+    expect(boundaryDomain.info.problems).toBe(32 + 5 * 24 + NCUBE_PROBLEMS);
     expect(cat.domain).toBe(boundaryDomain);
-    expect(cat.maxP).toBe(24);
+    expect(cat.maxP).toBe(400);
     // the sample lists each problem once, small P first, and every id parses
-    const ids = boundaryDomain.sample(1000);
-    expect(ids).toHaveLength(152);
-    expect(new Set(ids).size).toBe(152);
+    const ids = boundaryDomain.sample(100000);
+    expect(ids).toHaveLength(152 + NCUBE_PROBLEMS);
+    expect(new Set(ids).size).toBe(152 + NCUBE_PROBLEMS);
     expect(ids.slice(0, 7)).toEqual([
       "boundary/tesseract/ball/1",
       "boundary/tesseract/cube/1",

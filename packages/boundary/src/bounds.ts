@@ -15,7 +15,9 @@
  * rounded down by a relative 1e-15 (far above the rounding of the few operations; the exact check in
  * python/boundary/general.py tests every stored bound against the exact value).
  */
-import type { PieceName, PolytopeName } from "./types";
+import { NCUBE_MAX_P, ncubeCheckMs } from "./ncube/bounds";
+import { NCUBE_NAMES, isNCubeName } from "./ncube/lattice";
+import type { ContainerName, PieceName, PolytopeName } from "./types";
 
 const PHI = (1 + Math.sqrt(5)) / 2;
 
@@ -88,7 +90,12 @@ export function ballBounds(
 }
 
 /** Which pieces each container takes (balls on all six; the tesseract's axis-aligned cubes besides). */
-export const CONTAINER_PIECES: Record<PolytopeName, readonly PieceName[]> = {
+export const CONTAINER_PIECES: Record<ContainerName, readonly PieceName[]> = {
+  // the d-cubes (d = 5..10) take balls and axis-aligned cubes
+  ...(Object.fromEntries(NCUBE_NAMES.map((n) => [n, ["ball", "cube"] as readonly PieceName[]])) as Record<
+    (typeof NCUBE_NAMES)[number],
+    readonly PieceName[]
+  >),
   tesseract: ["ball", "cube"],
   "5cell": ["ball"],
   "16cell": ["ball"],
@@ -98,7 +105,8 @@ export const CONTAINER_PIECES: Record<PolytopeName, readonly PieceName[]> = {
 };
 
 /** The largest P of each container in the catalogue: the tesseract's 16, 24 for the others. */
-export const CONTAINER_MAX_P: Record<PolytopeName, number> = {
+export const CONTAINER_MAX_P: Record<ContainerName, number> = {
+  ...NCUBE_MAX_P,
   tesseract: 16,
   "5cell": 24,
   "16cell": 24,
@@ -122,13 +130,14 @@ export const BOUNDARY_BALL_MS: Record<PolytopeName, number> = {
 };
 
 /** Estimated milliseconds of the server's check of a configuration of P pieces. Cubes, which have parts instead of chains, cost 0.3 each. */
-export function boundaryCheckMs(problem: { polytope: PolytopeName; piece: PieceName; P: number }): number {
+export function boundaryCheckMs(problem: { polytope: ContainerName; piece: PieceName; P: number }): number {
+  if (isNCubeName(problem.polytope)) return ncubeCheckMs(problem.polytope, problem.piece as "ball" | "cube", problem.P);
   return problem.piece === "cube" ? 0.3 * problem.P : BOUNDARY_BALL_MS[problem.polytope] * problem.P;
 }
 
 /** A check of at least this many milliseconds waits its turn in the server's heavy queue (the 120-cell from P = 5, the 24-cell from P = 22). */
 export const BOUNDARY_HEAVY_MS = 50;
 
-export function boundaryIsHeavy(problem: { polytope: PolytopeName; piece: PieceName; P: number }): boolean {
+export function boundaryIsHeavy(problem: { polytope: ContainerName; piece: PieceName; P: number }): boolean {
   return boundaryCheckMs(problem) >= BOUNDARY_HEAVY_MS;
 }

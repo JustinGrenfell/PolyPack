@@ -29,7 +29,15 @@ import { runSteps, runStepsAsync } from "@polypack/methods";
  *    before any chain is enumerated, and its pair stages bin the pieces in a grid, so their work is
  *    linear in P.
  */
-import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
+import {
+  BoundaryConfig,
+  ContainerName,
+  PieceName,
+  PolytopeName,
+  getPolytope,
+  ncubeDim,
+  validateBoundary,
+} from "@polypack/boundary";
 import { CurvedConfig, containerCircumradius, validationSteps as curvedSteps } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, pieceInradius } from "@polypack/geometry";
 import { SphereConfig, validationSteps as sphereSteps } from "@polypack/sphere";
@@ -99,7 +107,8 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   curved: 100,
   sphere: 100,
   torus: TORUS_MAX_P,
-  boundary: 64,
+  // 400 for the d-cubes (d = 5..10; the 4-polytopes' catalogue stops at 24, which their domain enforces)
+  boundary: 400,
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
   balls: 100,
@@ -311,26 +320,35 @@ const BOUNDARY_UNIT_SLACK = 1e-9;
 
 function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<BoundaryConfig> {
   const r = new Reader();
-  const C = getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  // the d-cubes (d = 5..10): 2d cells, d - 1 coordinates, no rotation; the 4-polytopes: their cells, 3 coordinates
+  const nc = ncubeDim(id.fields.polytope);
+  const C = nc ? 2 * nc : getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  const dimU = nc ? nc - 1 : 3;
   const ball = (id.fields.piece as PieceName) === "ball";
   const s = r.num(raw.s, "s", BOUNDARY_MAX_S, true);
   const list = piecesOf(raw, "pieces", id.P);
   if (!Array.isArray(list)) return r.failWith(list);
   const pieces = list.map((p, i): BoundaryConfig["pieces"][number] => {
-    const none = { cell: 0, u: [0, 0, 0] };
+    const none = { cell: 0, u: new Array<number>(dimU).fill(0) };
     if (r.full()) return none;
     if (!isObject(p)) {
-      r.errors.push(`pieces[${i}] must be an object {cell, u${ball ? "" : ", q?"}}`);
+      r.errors.push(`pieces[${i}] must be an object {cell, u${ball || nc ? "" : ", q?"}}`);
       return none;
     }
     if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= C)
       r.errors.push(`pieces[${i}].cell must be an integer from 0 to ${C - 1}`);
-    let u = [0, 0, 0];
+    let u = new Array<number>(dimU).fill(0);
     // read by index, so that a hole in a sparse array is seen
-    if (!Array.isArray(p.u) || p.u.length !== 3) r.errors.push(`pieces[${i}].u must be [u0, u1, u2]`);
-    else u = [0, 1, 2].map((k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
+    if (!Array.isArray(p.u) || p.u.length !== dimU)
+      r.errors.push(`pieces[${i}].u must be ${dimU === 3 ? "[u0, u1, u2]" : `${dimU} numbers`}`);
+    else
+      u = Array.from({ length: dimU }, (_, k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
     const piece: BoundaryConfig["pieces"][number] = { cell: p.cell as number, u };
     if (p.q === undefined) return piece;
+    if (nc) {
+      r.errors.push(`pieces[${i}] has no rotation q (pieces on the ${String(id.fields.polytope)} stay axis-aligned)`);
+      return piece;
+    }
     if (ball) {
       r.errors.push(`pieces[${i}] is a ball and has no rotation q`);
       return piece;
@@ -490,7 +508,7 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
         );
     }
     case "boundary": {
-      const problem = { polytope: f.polytope as PolytopeName, piece: f.piece as PieceName, P: id.P };
+      const problem = { polytope: f.polytope as ContainerName, piece: f.piece as PieceName, P: id.P };
       // the validator's own volume bound and in-cell edge tests run before any chain is enumerated
       const v = validateBoundary(problem, config, { tol, maxReasons: MAX_REASONS, maxChains: BOUNDARY_MAX_CHAINS });
       return v.ok ? [] : reasonsOf(v.reasons, "not a valid packing");

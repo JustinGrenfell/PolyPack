@@ -9,7 +9,7 @@
  * that a page, its search threads and the volunteer client share it. Configurations come from the
  * server, so the readers treat them as untrusted input and return clean copies or null.
  */
-import { type PieceName, type PolytopeName, getPolytope, parseBoundaryId } from "@polypack/boundary";
+import { type ContainerName, type PieceName, type PolytopeName, getPolytope, ncubeDim, parseBoundaryId } from "@polypack/boundary";
 import { MAX_PIECES } from "@polypack/geometry";
 import { type PlatonicName, type SolidName, isSolidName } from "@polypack/surface";
 import {
@@ -36,7 +36,7 @@ export type SearchProblem =
   | { space: "curved"; id: string; P: number; K: number; N: number; M: number }
   | { space: "sphere"; id: string; P: number; N: number }
   | { space: "torus"; id: string; P: number; family: TorusFamily; N: number }
-  | { space: "boundary"; id: string; P: number; polytope: PolytopeName; piece: PieceName }
+  | { space: "boundary"; id: string; P: number; polytope: ContainerName; piece: PieceName }
   | { space: "polyhedra"; id: string; P: number; code: string }
   | { space: "balls"; id: string; P: number; code: string }
   | { space: "ndim"; id: string; P: number; d: number; piece: string; container: string };
@@ -203,15 +203,18 @@ export function readSpaceConfig(p: SearchProblem, v: unknown): SpaceConfig | nul
     }
     case "boundary": {
       if (!positive(v.s) || !Array.isArray(v.pieces) || v.pieces.length !== p.P) return null;
-      const cells = getPolytope(p.polytope).cells.length;
+      const nc = ncubeDim(p.polytope);
+      const cells = nc ? 2 * nc : getPolytope(p.polytope as PolytopeName).cells.length;
+      const dimU = nc ? nc - 1 : 3;
       const pieces: { cell: number; u: number[]; q?: number[] }[] = [];
       for (const q of v.pieces) {
         if (!isObject(q) || !Number.isInteger(q.cell) || (q.cell as number) < 0 || (q.cell as number) >= cells)
           return null;
-        if (!Array.isArray(q.u) || q.u.length !== 3 || ![0, 1, 2].every((k) => finite((q.u as unknown[])[k])))
+        if (!Array.isArray(q.u) || q.u.length !== dimU || !Array.from({ length: dimU }, (_, k) => k).every((k) => finite((q.u as unknown[])[k])))
           return null;
         const piece: { cell: number; u: number[]; q?: number[] } = { cell: q.cell as number, u: [...q.u] };
         if (q.q !== undefined) {
+          if (nc) return null;
           // balls have no rotation; a cube's is four finite numbers (the check decides whether it is a unit one)
           if (p.piece === "ball" || !Array.isArray(q.q) || q.q.length !== 4) return null;
           if (![0, 1, 2, 3].every((k) => finite((q.q as unknown[])[k]))) return null;

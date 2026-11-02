@@ -47,12 +47,14 @@ import { displacementTo } from "./kernel-pose";
 import { cellLayout, generalLayout } from "./kernel-seeds";
 import { BOUNDARY_SERVER_RULE, boundaryBound, serverForm, serverRule } from "./kernel-validate";
 import { ballBounds } from "./bounds";
+import { ncubeKernel } from "./ncube/kernel";
+import { isNCubeName } from "./ncube/lattice";
 import { getPolytope, isPolytopeName } from "./polytope";
 import { type Charts, chartsOf, randomCellPoint } from "./search/chart";
 import type { PieceModel, State } from "./search/model";
 import { randInt } from "./search/random";
 import { finalizeState, modelOf } from "./search/search";
-import type { BoundaryConfig, BoundaryProblem, PieceName, PolytopeName } from "./types";
+import type { BoundaryConfig, BoundaryProblem, ContainerName, PieceName, PolytopeName } from "./types";
 import { BALL_RADIUS } from "./units";
 import { validateBoundary } from "./validate";
 
@@ -86,7 +88,10 @@ const MAX_WALK_EDGES = 64;
 /** Targets randomPose draws before it gives up and leaves the piece where it is. */
 const POSE_TRIES = 16;
 
-export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceName; P: number }): SpaceKernel {
+export function boundaryKernel(problem: { polytope: ContainerName; piece: PieceName; P: number }): SpaceKernel {
+  // the d-cubes (d = 5..10) have their own kernel (ncube/kernel.ts)
+  if (problem && isNCubeName(problem.polytope) && (problem.piece === "ball" || problem.piece === "cube"))
+    return ncubeKernel({ polytope: problem.polytope, piece: problem.piece, P: problem.P });
   if (!problem || !isPolytopeName(problem.polytope) || !isPieceName(problem.piece) || !isPieceCount(problem.P))
     throw new Error("boundaryKernel: invalid problem");
   // the server takes no larger P, so a method could never submit what such a kernel finds
@@ -94,7 +99,7 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
     throw new Error(`boundaryKernel: P = ${problem.P} is above the server's largest, ${BOUNDARY_SERVER_RULE.maxP}`);
   const prob: BoundaryProblem = { polytope: problem.polytope, piece: problem.piece, P: problem.P };
   const { P, piece } = prob;
-  const poly = getPolytope(prob.polytope);
+  const poly = getPolytope(prob.polytope as PolytopeName);
   const charts = chartsOf(poly);
   const model: PieceModel = modelOf(prob);
   const n = 3 * P;
@@ -114,7 +119,8 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
   const poseU = new Float64Array(3);
   const poseM = new Float64Array(9);
   // the problem's lower bound as the server applies it (cubes: turned ones included)
-  const serverBound = prob.polytope === "tesseract" ? boundaryBound(piece, P) : ballBounds(prob.polytope, P).value;
+  const serverBound =
+    prob.polytope === "tesseract" ? boundaryBound(piece, P) : ballBounds(prob.polytope as PolytopeName, P).value;
 
   const anchorsOf = (s: KernelState) => s.aux as Anchors;
 

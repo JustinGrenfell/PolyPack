@@ -4,7 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { PIECES, POLYTOPES, formatBoundaryId, validateBoundary } from "@polypack/boundary";
+import { NCUBE_NAMES, PIECES, POLYTOPES, boundaryDomain, formatBoundaryId, validateBoundary } from "@polypack/boundary";
 import { describe, expect, it } from "vitest";
 import {
   BOUNDARY_MAX_CHAINS,
@@ -100,14 +100,14 @@ describe("boundary problem ids", () => {
     expect(typeof parseSpaceId("boundary", 9)).toBe("string");
     // the message names the form and, when the id has four parts, what is wrong
     expect(parseSpaceId("boundary", "boundary/tesseract/ball/09")).toMatch(
-      /the form is boundary\/<polytope>\/<piece>\/<P>, polytope tesseract or 5cell or 16cell or 24cell or 120cell or 600cell, piece ball or cube\. .*without leading zeros/,
+      /the form is boundary\/<polytope>\/<piece>\/<P>, polytope tesseract or 5cell or 16cell or 24cell or 120cell or 600cell or 5cube or 6cube or 7cube or 8cube or 9cube or 10cube, piece ball or cube\. .*without leading zeros/,
     );
     expect(parseSpaceId("boundary", "boundary/tesseract/sphere/9")).toMatch(/Unknown piece "sphere"/);
     expect(parseSpaceId("sphere", "boundary/tesseract/ball/9")).toMatch(/starts with "sphere\/"/);
   });
 
   it("use the polytopes and pieces of the boundary package", () => {
-    expect([...BOUNDARY_POLYTOPES]).toEqual([...POLYTOPES]);
+    expect([...BOUNDARY_POLYTOPES]).toEqual([...POLYTOPES, ...NCUBE_NAMES]);
     expect([...BOUNDARY_PIECES]).toEqual([...PIECES]);
   });
 });
@@ -116,9 +116,9 @@ describe("the boundary catalogue", () => {
   it("loads all 32 records, balls then cubes, P = 1..16 each, none left out", () => {
     expect(cat.skipped).toEqual([]);
     expect(cat.generated).toBe(file.generated);
-    // the records reach P = 16; the domain (balls on the five other containers) reaches 24
+    // the records reach P = 16; the domain reaches 24 for the other 4-polytopes and 400 for the d-cubes
     expect(Math.max(...cat.problems.map((p) => p.P))).toBe(16);
-    expect(cat.maxP).toBe(24);
+    expect(cat.maxP).toBe(400);
     expect(cat.maxP).toBeLessThanOrEqual(SPACE_MAX_P.boundary);
     const ids = cat.problems.map((p) => p.id);
     expect(ids).toEqual([
@@ -332,11 +332,13 @@ describe("boundary configurations under the server's rule", () => {
   });
 
   it("refuse a P above the space's or the catalogue's largest, and another space's id", () => {
-    expect(SPACE_MAX_P.boundary).toBe(64);
-    const v = validateSpaceSubmission("boundary", "boundary/tesseract/ball/65", { s: 9, pieces: [] });
+    expect(SPACE_MAX_P.boundary).toBe(400);
+    const v = validateSpaceSubmission("boundary", "boundary/tesseract/ball/401", { s: 9, pieces: [] });
     expect(v.malformed).toBe(true);
-    expect(v.reasons[0]).toBe("P = 65 is above the largest P of the boundary catalogue (64)");
-    expect(check("boundary/24cell/ball/25", { s: 9, pieces: [] }).reasons[0]).toMatch(/above the largest P .* \(24\)/);
+    expect(v.reasons[0]).toBe("P = 401 is above the largest P of the boundary catalogue (400)");
+    // a P above a container's own range is no problem of the domain, whatever the space's limit
+    expect(boundaryDomain.bound({ fields: { polytope: "24cell", piece: "ball" }, P: 25 })).toBeUndefined();
+    expect(boundaryDomain.bound({ fields: { polytope: "10cube", piece: "ball" }, P: 401 })).toBeUndefined();
     expect(validateSpaceSubmission("boundary", "sphere/4/12", {}).malformed).toBe(true);
   });
 

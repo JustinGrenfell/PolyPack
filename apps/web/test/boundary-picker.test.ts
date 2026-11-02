@@ -12,7 +12,20 @@ describe("pickFromDomain on the boundary domain", () => {
   it("opens the tesseract with balls and cubes, P = 1 to 16, and the default problem", () => {
     const p = pick({});
     expect(p.id).toBe("boundary/tesseract/ball/9");
-    expect(values(p, "polytope")).toEqual(["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"]);
+    expect(values(p, "polytope")).toEqual([
+      "tesseract",
+      "5cell",
+      "16cell",
+      "24cell",
+      "120cell",
+      "600cell",
+      "5cube",
+      "6cube",
+      "7cube",
+      "8cube",
+      "9cube",
+      "10cube",
+    ]);
     expect(values(p, "piece")).toEqual(["ball", "cube"]);
     expect(values(p, "P")).toHaveLength(16);
     expect(p.fields.find((f) => f.key === "polytope")!.options.map((o) => o.text)).toEqual([
@@ -22,8 +35,23 @@ describe("pickFromDomain on the boundary domain", () => {
       "24-cell",
       "120-cell",
       "600-cell",
+      "5-cube",
+      "6-cube",
+      "7-cube",
+      "8-cube",
+      "9-cube",
+      "10-cube",
     ]);
     expect(p.fields.find((f) => f.key === "piece")!.options.map((o) => o.text)).toEqual(["Balls", "Cubes"]);
+  });
+
+  it("offers balls and cubes on the d-cubes, P = 1 to 160, 384 and 400, and moves a wish to the nearest offered value", () => {
+    const p = pick({ polytope: "5cube", piece: "cube", P: "200" });
+    expect(p.id).toBe("boundary/5cube/cube/160");
+    expect(values(p, "piece")).toEqual(["ball", "cube"]);
+    expect(values(p, "P")).toHaveLength(160);
+    expect(pick({ polytope: "6cube", piece: "ball", P: "384" }).id).toBe("boundary/6cube/ball/384");
+    expect(values(pick({ polytope: "10cube", piece: "ball" }), "P")).toHaveLength(400);
   });
 
   it("offers balls only and P = 1 to 24 on the other polytopes, and moves a wish to the nearest offered value", () => {

@@ -5,10 +5,13 @@
  */
 import { CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds } from "./bounds";
 import { boundaryBound } from "./kernel-validate";
-import type { PieceName, PolytopeName } from "./types";
-import { PIECES, POLYTOPES } from "./types";
+import { NCUBE_TITLES, ncubeProblemBound } from "./ncube/bounds";
+import { isNCubeName } from "./ncube/lattice";
+import type { ContainerName, PieceName, PolytopeName } from "./types";
+import { CONTAINERS, PIECES, POLYTOPES } from "./types";
 
-const TITLES: Record<PolytopeName, string> = {
+const TITLES: Record<ContainerName, string> = {
+  ...NCUBE_TITLES,
   tesseract: "Tesseract",
   "5cell": "5-cell",
   "16cell": "16-cell",
@@ -18,20 +21,34 @@ const TITLES: Record<PolytopeName, string> = {
 };
 
 /** The most pieces of any container (the P field's overall range). */
-export const BOUNDARY_DOMAIN_MAX_P = Math.max(...POLYTOPES.map((n) => CONTAINER_MAX_P[n]));
+export const BOUNDARY_DOMAIN_MAX_P = Math.max(...CONTAINERS.map((n) => CONTAINER_MAX_P[n]));
 
 /** Number of problems of the domain. */
-export const BOUNDARY_PROBLEM_COUNT = POLYTOPES.reduce(
+export const BOUNDARY_PROBLEM_COUNT = CONTAINERS.reduce(
   (n, p) => n + CONTAINER_PIECES[p].length * CONTAINER_MAX_P[p],
   0,
 );
 
-const isPolytope = (x: unknown): x is PolytopeName =>
-  typeof x === "string" && (POLYTOPES as readonly string[]).includes(x);
+const isPolytope = (x: unknown): x is ContainerName =>
+  typeof x === "string" && (CONTAINERS as readonly string[]).includes(x);
 const isPiece = (x: unknown): x is PieceName => typeof x === "string" && (PIECES as readonly string[]).includes(x);
 
 /** The bound of a problem of the domain as the listing shows it, or undefined when the id is outside the domain. */
-function boundEntry(polytope: PolytopeName, piece: PieceName, P: number): { value: number; label: string } | null {
+function boundEntry(polytope: ContainerName, piece: PieceName, P: number): { value: number; label: string } | null {
+  if (isNCubeName(polytope)) {
+    const value = ncubeProblemBound(polytope, piece as "ball" | "cube", P);
+    return piece === "ball"
+      ? {
+          value,
+          label:
+            "[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)",
+        }
+      : {
+          value,
+          label:
+            "[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)",
+        };
+  }
   if (polytope === "tesseract") {
     const value = boundaryBound(piece, P);
     return piece === "ball"
@@ -42,7 +59,7 @@ function boundEntry(polytope: PolytopeName, piece: PieceName, P: number): { valu
         }
       : { value, label: "[CALC] larger of the volume bound (P <= 8 s^3) and one cube (1/sqrt 2)" };
   }
-  const b = ballBounds(polytope, P);
+  const b = ballBounds(polytope as PolytopeName, P);
   return {
     value: b.value,
     label:
@@ -56,14 +73,14 @@ export const boundaryDomain = {
   info: {
     id: "boundary/<polytope>/<piece>/<P>",
     fields: [
-      { key: "polytope", label: "Polytope", values: [...POLYTOPES], titles: TITLES },
+      { key: "polytope", label: "Polytope", values: [...CONTAINERS], titles: TITLES },
       {
         key: "piece",
         label: "Piece",
         values: [...PIECES],
         titles: { ball: "Balls", cube: "Cubes" },
         // a field whose values depend on the polytope: balls on all, the aligned cubes on the tesseract
-        dependent: { on: "polytope", values: Object.fromEntries(POLYTOPES.map((n) => [n, [...CONTAINER_PIECES[n]]])) },
+        dependent: { on: "polytope", values: Object.fromEntries(CONTAINERS.map((n) => [n, [...CONTAINER_PIECES[n]]])) },
       },
       {
         key: "P",
@@ -72,7 +89,7 @@ export const boundaryDomain = {
         max: BOUNDARY_DOMAIN_MAX_P,
         dependent: {
           on: "polytope",
-          ranges: Object.fromEntries(POLYTOPES.map((n) => [n, [1, CONTAINER_MAX_P[n]] as [number, number]])),
+          ranges: Object.fromEntries(CONTAINERS.map((n) => [n, [1, CONTAINER_MAX_P[n]] as [number, number]])),
         },
       },
     ],
@@ -88,7 +105,7 @@ export const boundaryDomain = {
   sample(limit: number): string[] {
     const out: string[] = [];
     for (let P = 1; P <= BOUNDARY_DOMAIN_MAX_P; P++)
-      for (const n of POLYTOPES)
+      for (const n of CONTAINERS)
         for (const piece of CONTAINER_PIECES[n]) {
           if (P > CONTAINER_MAX_P[n]) continue;
           if (out.length >= limit) return out;

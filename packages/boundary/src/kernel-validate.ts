@@ -19,6 +19,8 @@
  * needs the record. finish() gives configurations valid at tolerance 0, which pass it anyway.
  */
 import type { Validation } from "@polypack/methods";
+import { ncubeFormErrors, ncubeServerRule } from "./ncube/rule";
+import { isNCubeName } from "./ncube/lattice";
 import { getPolytope } from "./polytope";
 import type { BoundaryProblem, PieceName, PolytopeName } from "./types";
 import { MAX_S, validateBoundary } from "./validate";
@@ -49,6 +51,8 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  */
 export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
   const R = BOUNDARY_SERVER_RULE;
+  if (isNCubeName(problem.polytope))
+    return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, raw);
   if (!isObject(raw)) return ["config must be an object"];
   const errors: string[] = [];
   const num = (v: unknown, path: string, max: number, positive = false): number => {
@@ -99,6 +103,8 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
 /** The server's verdict on a configuration of the problem (header). */
 export function serverRule(problem: BoundaryProblem, config: unknown, bound: number): Validation {
   const R = BOUNDARY_SERVER_RULE;
+  if (isNCubeName(problem.polytope))
+    return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, config, bound);
   const fail = (reasons: string[], score: number | null = null): Validation => ({ valid: false, score, reasons });
   if (problem.P > R.maxP)
     return fail([`P = ${problem.P} is above the largest P of the boundary catalogue (${R.maxP})`]);

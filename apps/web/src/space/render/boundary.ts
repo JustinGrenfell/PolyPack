@@ -49,6 +49,18 @@ export function mountBoundaryView(host: HTMLElement, p: BoundaryDrawing, label =
   root.append(wait);
   host.replaceChildren(root);
 
+  // The d-cubes (5cube to 10cube, 4D on 5D to 9D on 10D) have no drawing yet: the table and the numbers are all there is.
+  if (/^\d+cube$/.test(p.polytope)) {
+    text.textContent = "There is no drawing of this container yet. Its packings are in the table and the numbers.";
+    return {
+      show() {},
+      canShow: (q) => q.space === "boundary" && q.polytope === p.polytope && q.piece === p.piece,
+      destroy() {
+        root.remove();
+      },
+    };
+  }
+
   let view: BoundaryView | null = null;
   let gone = false;
   /** The configuration to draw once the view exists (undefined: none was asked for). */

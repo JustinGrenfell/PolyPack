@@ -21,6 +21,17 @@
 export type PolytopeName = "tesseract" | "5cell" | "16cell" | "24cell" | "120cell" | "600cell";
 export const POLYTOPES: readonly PolytopeName[] = ["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"];
 
+import { NCUBE_NAMES, type NCubeName } from "./ncube/lattice";
+export type { NCubeName };
+
+/**
+ * Every container of the catalogue: the regular 4-polytopes above and, since 2026-11-01, the d-cubes for d = 5..10 ("4D on 5D" to
+ * "9D on 10D", ncube/), under the same problem ids `boundary/<container>/<piece>/<P>`. PolytopeName stays the 4-polytopes
+ * (the Polytope objects of polytope.ts); a d-cube has no Polytope, its cells being lattice cubes handled in closed form.
+ */
+export type ContainerName = PolytopeName | NCubeName;
+export const CONTAINERS: readonly ContainerName[] = [...POLYTOPES, ...NCUBE_NAMES];
+
 /** Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. */
 export type PieceName = "ball" | "cube";
 export const PIECES: readonly PieceName[] = ["ball", "cube"];
@@ -30,7 +41,7 @@ export const PIECES: readonly PieceName[] = ["ball", "cube"];
  * `boundary/<polytope>/<piece>/<P>`, e.g. `boundary/tesseract/ball/9`, in exactly one form.
  */
 export interface BoundaryProblem {
-  polytope: PolytopeName;
+  polytope: ContainerName;
   piece: PieceName;
   P: number;
 }
