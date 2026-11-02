@@ -89,6 +89,8 @@ import {
   stallAfter,
   stallEnds,
   submitTarget,
+  multiplierFor,
+  type PaidPoints,
 } from "./game";
 import {
   COMBO_BONUS,
@@ -123,7 +125,8 @@ import { HolderReader, addRival, heldByTighter, heldKeys, removeRival } from "./
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { GROUPS, SOURCES, income } from "./income";
-import { FIRST_BONUS, LEAD_BONUS, TIERS, TIER_LABEL, Tier, show6 } from "./points";
+import { FIRST_BONUS, LEAD_BONUS, TIERS, TIER_LABEL, Tier, costFactor, shapeWeight, show6 } from "./points";
+import { bonusKindOf, bonusRow, multiplierRow, multiplierTitle, payDetail } from "./pay-text";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { moreDetail } from "./detail";
 import { renderMechanics } from "./mechanics";
@@ -187,7 +190,16 @@ import {
   submissionBody,
   troubleText,
 } from "./submission";
-import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
+import {
+  BoardStage,
+  RunChoice,
+  boardStage,
+  chooseRun,
+  observeRun,
+  pipelineMethod,
+  planRandom,
+  problemKind,
+} from "./runplan";
 import { renderRunsPanel } from "./runs-ui";
 import { runPayday } from "./payday";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
@@ -288,8 +300,11 @@ const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
  */
 const SPACE_EVAL_MS = 5;
 const tableMsOf = (p: ProblemKey): number => (isPolygon(p) ? msPerEval(p.N + p.M + p.P) : SPACE_EVAL_MS);
-/** The kind of problem the bandit learns a space problem's methods for: its tier and its family. */
-const kindOf = (p: ProblemKey & { tier: string }): string => (isPolygon(p) ? problemKind(p) : `${p.tier}|${p.family}`);
+/** The board's stage for Method match: fresh until a run on it ends by itself or it reaches its patience without progress. */
+const stageOf = (p: ProblemState): BoardStage => boardStage(p.endedRuns, p.sinceGain, stallAfter(state, p));
+/** The kind of problem the bandit learns a problem's methods for: its tier, family (polygons: size and piece shape) and stage. */
+const kindOf = (p: ProblemState & { tier: string }): string =>
+  isPolygon(p) ? problemKind(p, stageOf(p)) : `${p.tier}|${p.family}|${stageOf(p)}`;
 
 /** What a read of a problem's leader gives: whether it takes entries, and who leads it. */
 interface LeaderRead {
@@ -1009,7 +1024,7 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, ev
   const tune = o.has("autoTune") && state.runplan.auto;
   const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
     chooseRun(state.runplan, {
-      kind: problemKind(needPolygon(p, "run kinds")),
+      kind: kindOf(p),
       methods: ms,
       levelOf: (m) => tuningLevel(o, m),
       tune: withLevels,
@@ -1085,6 +1100,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   const params = methodParams(owned(), method, level);
   // drawn before anything awaits, so that two runs opening at once on one problem never share a seed
   const seed = reserveSeed(state, p);
+  const kind = kindOf(p);
   // a problem's run lives in one lane: a run on it elsewhere closes first
   for (const other of lanes)
     if (other !== lv && other.run?.key === p.key) {
@@ -1133,7 +1149,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     stage: a.state.stage,
     origin: setup.start,
     startScore,
-    kind: problemKind(q),
+    kind,
     rpAt: basePoints(p),
     evalsAt: 0,
   };
@@ -3094,7 +3110,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     ? "Your pipeline in the Runs panel picks each new run's method."
     : canAuto && state.runplan.auto
       ? "The game picks each new run's method from what has paid best on similar problems."
-      : "The method your clicks use. Changing it starts a new run.";
+      : `The method your clicks use. Changing it starts a new run. ${methodGame(state.settings.method).bestFor ?? ""}`.trim();
   show("t-auto", autoPerSecond(o) !== null);
   const autoBtn = $<HTMLButtonElement>("t-auto");
   autoBtn.setAttribute("aria-pressed", String(state.settings.auto));
@@ -3151,9 +3167,13 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
       chip.className = "chip good";
       chip.textContent = fmtChange(c.before, c.after) + (c.points ? ` · +${fmtRP(c.points.total)} RP` : "");
       if (delta.textContent !== chip.textContent) delta.replaceChildren(chip);
-    } else text("t-delta", c ? "no change" : "—");
+    } else {
+      text("t-delta", c ? "no change" : "—");
+    }
   }
   text("t-prob-rp", fmtRP(p.rp));
+  renderPays(p);
+  renderPayDetail(p);
   text(
     "t-record",
     p.ourId !== null
@@ -3163,6 +3183,34 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
         : "none yet",
   );
   renderTraces(p, o.has("trace"));
+}
+
+/** The More detail button under the score box: how the last payment on the board's problem was made up. */
+function renderPayDetail(p: ProblemState): void {
+  const row = $("t-pay-more");
+  const c = lastChange.get(p.key);
+  const why = c?.improved && c.points ? payDetail(c.points as PaidPoints) : [];
+  const sig = why.join("|");
+  if (row.dataset.sig === sig) return;
+  row.dataset.sig = sig;
+  row.replaceChildren(...(why.length ? [moreDetail({ text: why }, "The last payment", "t-pay-detail")] : []));
+}
+
+/** The score box's two pay rows: what multiplies the problem's improvements, and the bonus it can still pay. */
+function renderPays(p: ProblemState): void {
+  const o = owned();
+  const standing = standingMultiplier(state.standing);
+  const collectionsF = 1 + collectionsBonus(state, o);
+  // the rule rewards are what is left of the game's own multiplier, so this row never prices pay itself
+  const rules = multiplierFor(state, p) / (standing * collectionsF);
+  const parts = { shape: rulesOf(p).weight(p), cost: costFactor(p), standing, collections: collectionsF, rules };
+  text("t-pays", multiplierRow(parts));
+  $("t-pays").title = multiplierTitle();
+  const spent = state.bonusPaid[p.key] === state.standing.resets;
+  const hasRecord = p.paidTo !== null || p.leader !== null || p.verified !== null || p.published !== null;
+  text("t-bonus", bonusRow(bonusKindOf({ hasRecord }), spent));
+  $("t-bonus").title =
+    "A flat bonus, paid once per problem each cycle and not multiplied. The first record on a problem that has none pays only the bonus.";
 }
 
 /**
