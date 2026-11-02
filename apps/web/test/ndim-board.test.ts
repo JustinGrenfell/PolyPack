@@ -18,6 +18,8 @@ import { parseSpaceAddress, spaceAddress } from "../src/space-address";
 import { parseSearchProblem } from "@polypack/spaces/search";
 import { isQueuedCheck, pickFromDomain, submitAnswer, submittingText } from "../src/space/model";
 import { facetName, ncubeDimension, readNcubeConfig, worldCentre } from "../src/space/render/ncube";
+import { hull2, ndWorldCentre, ndpolyName, readNdpolyConfig } from "../src/space/render/ndpoly";
+import { getND } from "@polypack/boundary";
 import { SPACE_FIELDS } from "../src/spaces-model";
 
 const ndim = SPACE_DOMAINS.ndim!.info;
@@ -61,7 +63,7 @@ describe("the board's picker of one dimension", () => {
       expect(pickFromDomain("ndim", ndim, {}, scopeOf(`ndim-${d}`)).id.startsWith(`ndim/${d}/`), String(d)).toBe(true);
   });
 
-  it("limits 3D on 4D to its six polytopes and a d-cube to itself", () => {
+  it("limits 3D on 4D to its six polytopes and a dimension of the others to its four containers", () => {
     const three = pickFromDomain("boundary", boundary, { polytope: "5cube" }, scopeOf("boundary"));
     expect(three.fields.find((f) => f.key === "polytope")!.options.map((o) => o.value)).toEqual([
       "tesseract",
@@ -77,9 +79,19 @@ describe("the board's picker of one dimension", () => {
       "boundary/24cell/ball/7",
     );
     for (let d = 5; d <= 10; d++) {
-      const pick = pickFromDomain("boundary", boundary, { polytope: "tesseract", piece: "cube", P: "9" }, scopeOf(`boundary-${d}cube`));
+      const scope = scopeOf(`boundary-${d}cube`);
+      const pick = pickFromDomain("boundary", boundary, { polytope: `${d}cube`, piece: "cube", P: "9" }, scope);
       expect(pick.id, String(d)).toBe(`boundary/${d}cube/cube/9`);
-      expect(pick.fields.find((f) => f.key === "polytope")!.hidden).toBe(true);
+      expect(pick.fields.find((f) => f.key === "polytope")!.options.map((o) => o.value), String(d)).toEqual([
+        `${d}simplex`,
+        `${d}cube`,
+        `${d}orthoplex`,
+        `${d}demicube`,
+      ].sort((a, b) => boundary.fields.find((f) => f.key === "polytope")!.values!.indexOf(a) - boundary.fields.find((f) => f.key === "polytope")!.values!.indexOf(b)));
+      // balls only on the simplex, orthoplex and demicube: a wish for cubes there moves to balls
+      expect(pickFromDomain("boundary", boundary, { polytope: `${d}demicube`, piece: "cube", P: "9" }, scope).id).toBe(`boundary/${d}demicube/ball/9`);
+      // a wish that names another dimension's container keeps to this one's
+      expect(pickFromDomain("boundary", boundary, { polytope: "tesseract", piece: "ball", P: "9" }, scope).id.startsWith(`boundary/${d}`)).toBe(true);
     }
   });
 });
@@ -110,20 +122,26 @@ describe("the Records page of one dimension", () => {
       expect.arrayContaining(["Hypercube", "Orthoplex", "24-cell", "600-cell", "Ball"]),
     );
     const cube = pickers("boundary", [], info("boundary"), scopeOf("boundary-8cube"));
-    expect(cube.find((p) => p.spec.key === "polytope")!.options).toEqual([{ value: "8cube", text: "8-cube" }]);
+    expect(cube.find((p) => p.spec.key === "polytope")!.options).toEqual([
+      { value: "8cube", text: "8-cube" },
+      { value: "8simplex", text: "8-simplex" },
+      { value: "8orthoplex", text: "8-orthoplex" },
+      { value: "8demicube", text: "8-demicube" },
+    ]);
     const four4 = pickers("boundary", [], info("boundary"), scopeOf("boundary"));
     expect(four4.find((p) => p.spec.key === "polytope")!.options.map((o) => o.value)).toHaveLength(6);
   });
 
-  it("counts a dimension's problems from the domain: 6,131 in all, 152 and 4,288 on the boundaries", () => {
+  it("counts a dimension's problems from the domain: 6,131 in all, 152, 4,288 and 432 on the boundaries", () => {
     const per = [4, 5, 6, 7, 8, 9, 10].map((d) => scopedDomainCount(info("ndim"), scopeOf(`ndim-${d}`)));
     expect(per).toEqual([1911, 775, 1127, 684, 684, 475, 475]);
     expect(per.reduce((a, b) => a! + b!, 0)).toBe(6131);
     expect(scopedDomainCount(info("ndim"), null)).toBe(6131);
     expect(scopedDomainCount(info("boundary"), scopeOf("boundary"))).toBe(152);
     const cubes = [5, 6, 7, 8, 9, 10].map((d) => scopedDomainCount(info("boundary"), scopeOf(`boundary-${d}cube`)));
-    expect(cubes).toEqual([320, 768, 800, 800, 800, 800]);
-    expect(cubes.reduce((a, b) => a! + b!, 0)).toBe(4288);
+    // the d-cubes' balls and cubes (320, 768, 800 x 4) and 3 x 24 balls on the simplex, orthoplex and demicube of each dimension
+    expect(cubes).toEqual([320 + 72, 768 + 72, 800 + 72, 800 + 72, 800 + 72, 800 + 72]);
+    expect(cubes.reduce((a, b) => a! + b!, 0)).toBe(4288 + 432);
     expect(scopedDomainCount(undefined, null)).toBeNull();
   });
 
@@ -143,6 +161,50 @@ describe("the Records page of one dimension", () => {
     expect(recordsSource("ndim", { d: "5" })).toMatch(/Nakajima/);
     expect(recordsSource("ndim", { d: "9" })).toMatch(/^No research record yet/);
     expect(recordsSource("sphere", {})).toBeNull();
+  });
+});
+
+describe("the simplex, orthoplex and demicube configuration", () => {
+  it("names facets, places centres in the engine's coordinates and refuses malformed configurations", () => {
+    expect(ndpolyName("6simplex")).toBe("6simplex");
+    expect(ndpolyName("6cube")).toBeNull();
+    expect(ndpolyName("24cell")).toBeNull();
+    // facet labels
+    expect(getND("6simplex").facetLabel(0)).toBe("x1 = 0");
+    expect(getND("5orthoplex").facetLabel(0)).toBe("+++++");
+    expect(getND("5orthoplex").facetLabel(5)).toBe("-+-++");
+    expect(getND("7demicube").facetLabel(0)).toBe("-x1");
+    expect(getND("7demicube").facetLabel(3)).toBe("+x2");
+    // the first simplex facet of the demicube is the odd sign vector with the fewest set bits: one minus sign, in the first place
+    expect(getND("7demicube").facetLabel(14)).toBe("w = -++++++");
+    // the engine's ambient point of a centre: the facet x_1 = -1/2 of the 5-demicube, at s = 2, is the plane x_1 = -s / (2 sqrt 2)
+    const c = ndWorldCentre("5demicube", { cell: 0, u: [0, 0, 0, 0] }, 2);
+    expect(c[0]).toBeCloseTo(-2 / (2 * Math.SQRT2), 14);
+    expect(c.slice(1).map(Math.abs)).toEqual([0, 0, 0, 0]);
+    // the simplex lives in R^(d+1)
+    expect(ndWorldCentre("6simplex", { cell: 2, u: [0, 0, 0, 0, 0] }, 3)).toHaveLength(7);
+    const ok = { s: 2, pieces: [{ cell: 6, u: [0, 0, 0, 0, 0] }] };
+    expect(readNdpolyConfig(ok, "6simplex")).toEqual(ok);
+    for (const bad of [
+      null,
+      { s: 2 },
+      { s: -1, pieces: [] },
+      { s: 2, pieces: [{ cell: 7, u: [0, 0, 0, 0, 0] }] }, // 7 cells are 0..6
+      { s: 2, pieces: [{ cell: 0, u: [0, 0, 0, 0] }] },
+      { s: 2, pieces: [{ cell: 0, u: [0, 0, 0, 0, NaN] }] },
+      { s: 2, pieces: [[0, 0, 0, 0, 0]] },
+    ])
+      expect(readNdpolyConfig(bad, "6simplex"), JSON.stringify(bad)).toBeNull();
+  });
+
+  it("outlines the projected container by the convex hull of its projected vertices", () => {
+    expect(hull2([[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0.5], [0.25, 0.75]])).toEqual([[0, 0], [1, 0], [1, 1], [0, 1]]);
+    expect(hull2([[0, 0], [2, 0]])).toEqual([[0, 0], [2, 0]]);
+    // the 7-orthoplex projected onto two axes is a square; the 5-simplex's six vertices project to a hexagon at most
+    const C = getND("7orthoplex");
+    const hull = hull2(C.vertices(1).map((v): [number, number] => [v[0], v[1]]));
+    expect(hull).toHaveLength(4);
+    expect(hull2(getND("5simplex").vertices(1).map((v): [number, number] => [v[0], v[1]])).length).toBeLessThanOrEqual(6);
   });
 });
 

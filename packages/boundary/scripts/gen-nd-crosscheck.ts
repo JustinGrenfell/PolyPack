@@ -109,7 +109,18 @@ const record = (name: NDName, s: number, pieces: Case["pieces"], kind: string, d
   try {
     const m = measureND(problem, config);
     const v = validateND(problem, config, { tol: 0 });
-    adv.push({ kind, delta, polytope: name, s, pieces, clearance: m.clearance.map(fin), pairs: m.pairs.map((r) => ({ i: r.i, j: r.j, dist: fin(r.dist) })), loops: m.loops.map(fin), valid0: v.ok, steps: m.steps });
+    adv.push({
+      kind,
+      delta,
+      polytope: name,
+      s,
+      pieces,
+      clearance: m.clearance.map(fin),
+      pairs: m.pairs.map((r) => ({ i: r.i, j: r.j, dist: fin(r.dist) })),
+      loops: m.loops.map(fin),
+      valid0: v.ok,
+      steps: m.steps,
+    });
   } catch (e) {
     console.error("adv skipped", name, kind, String(e).slice(0, 80));
   }
@@ -133,11 +144,34 @@ for (const name of ND_NAMES) {
   for (const delta of [1e-3, 1e-6, 1e-9, 1e-12, -1e-12, -1e-9, -1e-6]) {
     for (let tries = 0; tries < 40; tries++) {
       const cell = C.pickCell(rand);
-      const u = Array.from({ length: C.n }, () => (gauss() * 0.1 * s) / Math.sqrt(C.n));
-      const x = C.toAmbient(cell, u, s);
+      const cl0 = C.cell(cell);
+      const u0 = Array.from({ length: C.n }, () => (gauss() * 0.1 * s) / Math.sqrt(C.n));
+      // shrunk toward the cell's centre until the centre is inside the cell
+      let u = u0;
+      let x = C.toAmbient(cell, u, s);
+      for (let lam = 0.8, k = 0; k < 40; k++, lam *= 0.8) {
+        let ok = true;
+        for (let q = 0; q < cl0.nbr.length && ok; q++) {
+          let v = -s * cl0.hn[q];
+          for (let j = 0; j < C.D; j++) v += cl0.nn[q * C.D + j] * x[j];
+          if (v > 0) ok = false;
+        }
+        if (ok) break;
+        u = u0.map((t) => t * lam);
+        x = C.toAmbient(cell, u, s);
+      }
       const w = walkND(C, s, cell, x, randomDir(C, cell, 1 + delta));
       if (w.hit || w.cells.length < 2) continue;
-      record(name, s, [{ cell, u }, { cell: w.cell, u: Array.from(C.toLocal(w.cell, w.x, s)) }], "pair", delta);
+      record(
+        name,
+        s,
+        [
+          { cell, u },
+          { cell: w.cell, u: Array.from(C.toLocal(w.cell, w.x, s)) },
+        ],
+        "pair",
+        delta,
+      );
       break;
     }
   }
@@ -147,7 +181,8 @@ for (const name of ND_NAMES) {
     const dirU = Array.from({ length: C.n }, () => gauss());
     const nm = Math.sqrt(dirU.reduce((a, v) => a + v * v, 0));
     const at = (t: number) => dirU.map((v) => (v / nm) * t);
-    const clear = (t: number) => measureND({ polytope: name, piece: "ball", P: 1 }, { s, pieces: [{ cell, u: at(t) }] }).clearance[0];
+    const clear = (t: number) =>
+      measureND({ polytope: name, piece: "ball", P: 1 }, { s, pieces: [{ cell, u: at(t) }] }).clearance[0];
     // clearance falls from its centre value as the ball moves out: find t in [0, tmax] with clearance 1/2 + delta
     let lo = 0;
     let hi = 0.6 * s;
@@ -190,7 +225,16 @@ for (const name of ND_NAMES) {
     const u = Array.from(C.toLocal(cell, x, s));
     const w = walkND(C, s, cell, x, randomDir(C, cell, dist));
     if (w.hit) continue;
-    record(name, s, [{ cell, u }, { cell: w.cell, u: Array.from(C.toLocal(w.cell, w.x, s)) }], "ridge", dist);
+    record(
+      name,
+      s,
+      [
+        { cell, u },
+        { cell: w.cell, u: Array.from(C.toLocal(w.cell, w.x, s)) },
+      ],
+      "ridge",
+      dist,
+    );
   }
 }
 writeFileSync(out, JSON.stringify({ about: "gen-nd-crosscheck.ts", cases, adversarial: adv }, null, 0) + "\n");

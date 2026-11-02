@@ -163,9 +163,13 @@ export function ndProblemBound(polytope: string, P: number): number {
 }
 
 /** The cell counts and sizes the docs table lists: facets, ridges and hinges of each container. */
-export function ndCounts(family: NDFamily, d: number): { facets: number; ridges: number; simplexFacets: number; otherFacets: number } {
+export function ndCounts(
+  family: NDFamily,
+  d: number,
+): { facets: number; ridges: number; simplexFacets: number; otherFacets: number } {
   if (family === "simplex") return { facets: d + 1, ridges: ((d + 1) * d) / 2, simplexFacets: d + 1, otherFacets: 0 };
-  if (family === "orthoplex") return { facets: 2 ** d, ridges: 2 ** d * (d / 2), simplexFacets: 2 ** d, otherFacets: 0 };
+  if (family === "orthoplex")
+    return { facets: 2 ** d, ridges: 2 ** d * (d / 2), simplexFacets: 2 ** d, otherFacets: 0 };
   // demicube: 2 d demicube facets, 2^(d-1) simplex facets; each simplex facet has d ridges (all shared with demicube facets),
   // each demicube facet 2 (d-1) ridges shared with demicube facets and 2^(d-2) with simplex facets
   const dem = 2 * d;
@@ -190,7 +194,7 @@ export function ndPairEdge(polytope: NDName): number {
  * largest cost per ball measured on the test packings (touching, P = 1 to 24; the P = 1 packings at the one-ball edge are the slowest, a ball
  * at a facet's centre with dozens of hinges at the same distance: 0.08 ms on the simplex and orthoplex, 0.05 ms on the 5-demicube, 5.5 on
  * the 6-demicube, 9.5 on the 7-, 41 on the 8-, 0.6 on the 9- and 1.4 ms on the 10-demicube), rounded up. A check of 50 ms or more waits in the server's
- * heavy queue (BOUNDARY_HEAVY_MS): the 6-demicube from P = 3, the 7-demicube from P = 2 and the 8-demicube always; the work of every check is
+ * heavy queue (BOUNDARY_HEAVY_MS): the 6-demicube from P = 3, the 7-demicube from P = 2, the 8-demicube always and the 10-demicube from P = 13; the work of every check is
  * also capped (ND_MAX_WORK steps), so a crowded layout is refused, not slow.
  */
 export const ND_BALL_MS: Record<NDName, number> = {

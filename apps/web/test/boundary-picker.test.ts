@@ -1,5 +1,5 @@
 /** The board's picker for the boundary domain: the pieces and the P range depend on the polytope. */
-import { boundaryDomain } from "@polypack/boundary";
+import { ND_NAMES, boundaryDomain } from "@polypack/boundary";
 import { describe, expect, it } from "vitest";
 import { BOUNDARY_ROUND, boundaryRound, defaultBudget, freshSize, roundSize } from "../src/space/model";
 import { pickFromDomain } from "../src/space/model";
@@ -25,6 +25,7 @@ describe("pickFromDomain on the boundary domain", () => {
       "8cube",
       "9cube",
       "10cube",
+      ...ND_NAMES,
     ]);
     expect(values(p, "piece")).toEqual(["ball", "cube"]);
     expect(values(p, "P")).toHaveLength(16);
@@ -41,6 +42,7 @@ describe("pickFromDomain on the boundary domain", () => {
       "8-cube",
       "9-cube",
       "10-cube",
+      ...ND_NAMES.map((n) => n.replace(/^(\d+)/, "$1-")),
     ]);
     expect(p.fields.find((f) => f.key === "piece")!.options.map((o) => o.text)).toEqual(["Balls", "Cubes"]);
   });
@@ -52,6 +54,14 @@ describe("pickFromDomain on the boundary domain", () => {
     expect(values(p, "P")).toHaveLength(160);
     expect(pick({ polytope: "6cube", piece: "ball", P: "384" }).id).toBe("boundary/6cube/ball/384");
     expect(values(pick({ polytope: "10cube", piece: "ball" }), "P")).toHaveLength(400);
+  });
+
+  it("offers balls only and P = 1 to 24 on the simplex, orthoplex and demicube of dimensions 5 to 10", () => {
+    const p = pick({ polytope: "9demicube", piece: "cube", P: "30" });
+    expect(p.id).toBe("boundary/9demicube/ball/24");
+    expect(values(p, "piece")).toEqual(["ball"]);
+    expect(values(p, "P")).toHaveLength(24);
+    expect(pick({ polytope: "5simplex", piece: "ball", P: "3" }).id).toBe("boundary/5simplex/ball/3");
   });
 
   it("offers balls only and P = 1 to 24 on the other polytopes, and moves a wish to the nearest offered value", () => {

@@ -49,8 +49,11 @@ import type { NDName } from "../src/index";
 
 type Cfg = { s: number; pieces: { cell: number; u: number[] }[] };
 const fixtures = (name: string) =>
-  JSON.parse(readFileSync(fileURLToPath(new URL(`../../../python/boundary/fixtures/${name}`, import.meta.url)), "utf8"));
-const packings: { id: string; polytope: NDName; P: number; source: string; config: Cfg }[] = fixtures("nd_packings.json").packings;
+  JSON.parse(
+    readFileSync(fileURLToPath(new URL(`../../../python/boundary/fixtures/${name}`, import.meta.url)), "utf8"),
+  );
+const packings: { id: string; polytope: NDName; P: number; source: string; config: Cfg }[] =
+  fixtures("nd_packings.json").packings;
 const problem = (polytope: NDName, P: number) => ({ polytope, piece: "ball" as const, P });
 const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => {
   let s = 0;
@@ -94,7 +97,8 @@ describe("the containers", () => {
   it("have the facet counts of the literature [EST: Coxeter, Regular Polytopes]", () => {
     for (const name of ND_NAMES) {
       const p = ndParse(name)!;
-      const expected = p.family === "simplex" ? p.d + 1 : p.family === "orthoplex" ? 2 ** p.d : 2 * p.d + 2 ** (p.d - 1);
+      const expected =
+        p.family === "simplex" ? p.d + 1 : p.family === "orthoplex" ? 2 ** p.d : 2 * p.d + 2 ** (p.d - 1);
       expect(getND(name).C, name).toBe(expected);
       expect(ndCellCount(p.family, p.d)).toBe(expected);
     }
@@ -113,12 +117,18 @@ describe("the containers", () => {
       const V = C.vertices(1);
       // unit edge: the closest pair of vertices is 1 apart
       let minD = Infinity;
-      for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) minD = Math.min(minD, Math.hypot(...V[i].map((x, r) => x - V[j][r])));
+      for (let i = 0; i < V.length; i++)
+        for (let j = i + 1; j < V.length; j++) minD = Math.min(minD, Math.hypot(...V[i].map((x, r) => x - V[j][r])));
       expect(minD, name).toBeCloseTo(1, 12);
-      const cells = C.C <= 70 ? Array.from({ length: C.C }, (_, i) => i) : [0, 1, 2, 5, 7, 11, 13, 20, 33, 40, 41, 63].filter((c) => c < C.C);
+      const cells =
+        C.C <= 70
+          ? Array.from({ length: C.C }, (_, i) => i)
+          : [0, 1, 2, 5, 7, 11, 13, 20, 33, 40, 41, 63].filter((c) => c < C.C);
       const tight = (c: number) => {
         const cl = C.cell(c);
-        return V.map((v, i) => [Math.abs(dot(cl.n, v) - cl.h) < 1e-9, i] as const).filter((t) => t[0]).map((t) => t[1]);
+        return V.map((v, i) => [Math.abs(dot(cl.n, v) - cl.h) < 1e-9, i] as const)
+          .filter((t) => t[0])
+          .map((t) => t[1]);
       };
       const rank = (ids: number[]): number => {
         if (ids.length < 2) return 0;
@@ -150,7 +160,10 @@ describe("the containers", () => {
           const common = tv.filter((i) => Math.abs(dot(C.cell(g).n, V[i]) - C.cell(g).h) < 1e-9);
           if (common.length >= C.n && rank(common) === C.n - 1) nbrBrute.push(g);
         }
-        expect([...cl.nbr].sort((a, b) => a - b), `${name} cell ${c} neighbours`).toEqual(nbrBrute);
+        expect(
+          [...cl.nbr].sort((a, b) => a - b),
+          `${name} cell ${c} neighbours`,
+        ).toEqual(nbrBrute);
         // the ridge points lie on both planes
         for (let k = 0; k < cl.nbr.length; k++) {
           const q = cl.rp.subarray(k * C.D, (k + 1) * C.D);
@@ -164,7 +177,11 @@ describe("the containers", () => {
           const brute = new Set<string>();
           for (let k = 0; k < cl.nbr.length; k++)
             for (let l = k + 1; l < cl.nbr.length; l++) {
-              const common = tv.filter((i) => Math.abs(dot(C.cell(cl.nbr[k]).n, V[i]) - C.cell(cl.nbr[k]).h) < 1e-9 && Math.abs(dot(C.cell(cl.nbr[l]).n, V[i]) - C.cell(cl.nbr[l]).h) < 1e-9);
+              const common = tv.filter(
+                (i) =>
+                  Math.abs(dot(C.cell(cl.nbr[k]).n, V[i]) - C.cell(cl.nbr[k]).h) < 1e-9 &&
+                  Math.abs(dot(C.cell(cl.nbr[l]).n, V[i]) - C.cell(cl.nbr[l]).h) < 1e-9,
+              );
               if (common.length >= C.n - 1 && rank(common) === C.n - 2) brute.add(`${k},${l}`);
             }
           expect(pairs, `${name} cell ${c} hinges`).toEqual(brute);
@@ -181,11 +198,13 @@ describe("the containers", () => {
       for (let c = 0; c < Math.min(C.C, 20); c++) {
         const cl = C.cell(c);
         // the interior dihedral angle between cells c and g has cosine -n_c . n_g
-        for (let k = 0; k < cl.nbr.length; k++) cosines.add(Math.abs(dot(cl.n, cl.nn.subarray(k * C.D, (k + 1) * C.D))).toFixed(10));
+        for (let k = 0; k < cl.nbr.length; k++)
+          cosines.add(Math.abs(dot(cl.n, cl.nn.subarray(k * C.D, (k + 1) * C.D))).toFixed(10));
       }
       if (p.family === "simplex") expect([...cosines], name).toEqual([(1 / p.d).toFixed(10)]);
       if (p.family === "orthoplex") expect([...cosines], name).toEqual([((p.d - 2) / p.d).toFixed(10)]);
-      if (p.family === "demicube") expect([...cosines].sort(), name).toEqual([(0).toFixed(10), (1 / Math.sqrt(p.d)).toFixed(10)].sort());
+      if (p.family === "demicube")
+        expect([...cosines].sort(), name).toEqual([(0).toFixed(10), (1 / Math.sqrt(p.d)).toFixed(10)].sort());
     }
   });
 });
@@ -205,13 +224,22 @@ describe("the development maps", () => {
         const mm = dot(m, m);
         const q = cl.rp.subarray(k * D, (k + 1) * D);
         const sigma = (x: ArrayLike<number>) => {
-          const f = (2 * dot(m, Array.from(x, (v, j) => v - q[j]))) / mm;
+          const f =
+            (2 *
+              dot(
+                m,
+                Array.from(x, (v, j) => v - q[j]),
+              )) /
+            mm;
           return Array.from(x, (v, j) => v - f * m[j]);
         };
         // involution, isometry
         const a = Array.from({ length: D }, () => gauss(rand));
         const b = Array.from({ length: D }, () => gauss(rand));
-        expect(Math.hypot(...sigma(a).map((v, j) => v - sigma(b)[j]))).toBeCloseTo(Math.hypot(...a.map((v, j) => v - b[j])), 10);
+        expect(Math.hypot(...sigma(a).map((v, j) => v - sigma(b)[j]))).toBeCloseTo(
+          Math.hypot(...a.map((v, j) => v - b[j])),
+          10,
+        );
         sigma(sigma(a)).forEach((v, j) => expect(v).toBeCloseTo(a[j], 10));
         // fixes the ridge point; maps the plane of g onto the plane of c
         sigma(q).forEach((v, j) => expect(v).toBeCloseTo(q[j], 12));
@@ -222,7 +250,13 @@ describe("the development maps", () => {
         expect(dot(g.n, img) - g.h).toBeGreaterThan(1e-9);
         // the other reflection through the ridge (normal n1 - n2) folds the neighbour back over c: its image is on c's own side
         const m2 = Array.from(cl.n, (v, j) => v - g.n[j]);
-        const f2 = (2 * dot(m2, og.map((v, j) => v - q[j]))) / dot(m2, m2);
+        const f2 =
+          (2 *
+            dot(
+              m2,
+              og.map((v, j) => v - q[j]),
+            )) /
+          dot(m2, m2);
         const back = og.map((v, j) => v - f2 * m2[j]);
         expect(dot(g.n, back) - g.h).toBeLessThan(-1e-9);
         // the rotation of the plane (n_c, n_g) taking n_c to n_g agrees with the reflection on the directions tangent to H_c
@@ -295,8 +329,28 @@ describe("the half-chain engine", () => {
           for (let r = 0; r < C.D; r++) wv[r] = h.x[r] - A[h.node].a[r];
           const z = ndDirectionAtAnchor(C, A, h.node, wv);
           const zl = Math.hypot(...z);
-          expect(walkND(C, s, c, x, z.map((v) => (v * h.dist * (1 + 1e-6)) / zl), null, 1e-9).hit).toBe(true);
-          expect(walkND(C, s, c, x, z.map((v) => (v * h.dist * (1 - 1e-6)) / zl), null, 1e-9).hit).toBe(false);
+          expect(
+            walkND(
+              C,
+              s,
+              c,
+              x,
+              z.map((v) => (v * h.dist * (1 + 1e-6)) / zl),
+              null,
+              1e-9,
+            ).hit,
+          ).toBe(true);
+          expect(
+            walkND(
+              C,
+              s,
+              c,
+              x,
+              z.map((v) => (v * h.dist * (1 - 1e-6)) / zl),
+              null,
+              1e-9,
+            ).hit,
+          ).toBe(false);
         } catch (e) {
           if (!(e instanceof NDLimitError)) throw e;
         }
@@ -325,15 +379,29 @@ describe("known distances", () => {
       const m = measureND(problem(name, 1), { s, pieces: [{ cell: 0, u: zeros(p.d - 1) }] });
       expect(m.clearance[0], name).toBeCloseTo(0.45, 12);
       // and above the centre edge nothing is reported: the clearance is more than the reach 1/2
-      expect(measureND(problem(name, 1), { s: ndCentreEdge(name) * 1.05, pieces: [{ cell: 0, u: zeros(p.d - 1) }] }).clearance[0], name).toBe(Infinity);
+      expect(
+        measureND(problem(name, 1), { s: ndCentreEdge(name) * 1.05, pieces: [{ cell: 0, u: zeros(p.d - 1) }] })
+          .clearance[0],
+        name,
+      ).toBe(Infinity);
     }
   });
 
   it("two simplex cells' centres are 2 r = s sqrt(2 / (n (n+1))) apart across their ridge, two adjacent demicube facets' centres s / sqrt 2", () => {
-    for (const [d, s] of [[5, 3], [7, 4], [10, 6]] as const) {
+    for (const [d, s] of [
+      [5, 3],
+      [7, 4],
+      [10, 6],
+    ] as const) {
       const n = d - 1;
       const name = `${d}simplex` as NDName;
-      const m = measureND(problem(name, 2), { s, pieces: [{ cell: 0, u: zeros(n) }, { cell: 1, u: zeros(n) }] });
+      const m = measureND(problem(name, 2), {
+        s,
+        pieces: [
+          { cell: 0, u: zeros(n) },
+          { cell: 1, u: zeros(n) },
+        ],
+      });
       expect(m.pairs).toHaveLength(1);
       expect(m.pairs[0].dist).toBeCloseTo(s * Math.sqrt(2 / (n * (n + 1))), 12);
     }
@@ -341,7 +409,13 @@ describe("known distances", () => {
       const name = `${d}demicube` as NDName;
       const s = 1.2;
       // cells 0 (x1 = -1/2) and 2 (x2 = -1/2) are adjacent at 90 degrees: the straight path across the ridge
-      const m = measureND(problem(name, 2), { s, pieces: [{ cell: 0, u: zeros(d - 1) }, { cell: 2, u: zeros(d - 1) }] });
+      const m = measureND(problem(name, 2), {
+        s,
+        pieces: [
+          { cell: 0, u: zeros(d - 1) },
+          { cell: 2, u: zeros(d - 1) },
+        ],
+      });
       expect(m.pairs).toHaveLength(1);
       expect(m.pairs[0].dist).toBeCloseTo(s / Math.SQRT2, 12);
     }
@@ -353,7 +427,13 @@ describe("known distances", () => {
       const rand = mulberry(5);
       const lay = ndExactLayout(name, p.family === "simplex" ? p.d + 1 : p.family === "orthoplex" ? 2 : 2 * p.d, rand)!;
       expect(lay).not.toBeNull();
-      const cfg = { s: lay.s, pieces: Array.from(lay.st.cells, (cell, i) => ({ cell, u: Array.from(lay.st.U.subarray(i * (p.d - 1), (i + 1) * (p.d - 1))) })) };
+      const cfg = {
+        s: lay.s,
+        pieces: Array.from(lay.st.cells, (cell, i) => ({
+          cell,
+          u: Array.from(lay.st.U.subarray(i * (p.d - 1), (i + 1) * (p.d - 1))),
+        })),
+      };
       expect(validateND(problem(name, cfg.pieces.length), cfg, { tol: 0 }).ok, name).toBe(true);
       // below the derived edge the pair of nearest centres overlaps
       const lo = { s: ndPairEdge(name) * (1 - 1e-6), pieces: cfg.pieces };
@@ -371,7 +451,10 @@ describe("the bounds", () => {
         const b = ndBound(p.family, p.d, P);
         expect(b, `${name} ${P}`).toBeGreaterThanOrEqual(prev);
         prev = b;
-        const one = p.family === "demicube" ? Math.sqrt((2 * (p.d - 2)) / ((p.d - 1) ** 2 - 5 * (p.d - 1) + 8)) : Math.sqrt(p.d * (p.d - 2)) / 2;
+        const one =
+          p.family === "demicube"
+            ? Math.sqrt((2 * (p.d - 2)) / ((p.d - 1) ** 2 - 5 * (p.d - 1) + 8))
+            : Math.sqrt(p.d * (p.d - 2)) / 2;
         expect(b).toBeGreaterThanOrEqual(one * (1 - 1e-15));
         const vol = Math.pow((P * ndBallVolume(p.d - 1)) / ndBoundaryVolume(p.family, p.d), 1 / (p.d - 1));
         expect(b).toBeGreaterThanOrEqual(vol * (1 - 1e-12));
@@ -407,16 +490,28 @@ describe("the float validator", () => {
     for (const r of packings) {
       const prob = problem(r.polytope, r.P);
       expect(validateND(prob, r.config, { tol: 0 }).ok, r.id).toBe(true);
-      expect(ndServerRule(prob, r.config, ndBound(ndParse(r.polytope)!.family, ndParse(r.polytope)!.d, r.P)).valid, r.id).toBe(true);
+      expect(
+        ndServerRule(prob, r.config, ndBound(ndParse(r.polytope)!.family, ndParse(r.polytope)!.d, r.P)).valid,
+        r.id,
+      ).toBe(true);
       const f = 1 - 1e-6;
-      const shrunk = { s: r.config.s * f, pieces: r.config.pieces.map((q) => ({ cell: q.cell, u: q.u.map((x) => x * f) })) };
+      const shrunk = {
+        s: r.config.s * f,
+        pieces: r.config.pieces.map((q) => ({ cell: q.cell, u: q.u.map((x) => x * f) })),
+      };
       expect(validateND(prob, shrunk, { tol: 1e-9 }).ok, `${r.id} shrunk`).toBe(false);
     }
   });
 
   it("refuses malformed input with reasons and never throws", () => {
     const prob = problem("7orthoplex", 2);
-    const ok = { s: 5, pieces: [{ cell: 0, u: zeros(6) }, { cell: 127, u: zeros(6) }] };
+    const ok = {
+      s: 5,
+      pieces: [
+        { cell: 0, u: zeros(6) },
+        { cell: 127, u: zeros(6) },
+      ],
+    };
     expect(validateND(prob, ok).ok).toBe(true);
     const bad: unknown[] = [
       null,
@@ -468,7 +563,8 @@ describe("the float validator", () => {
     const out = { s, pieces: [{ cell: 0, u: [s, 0, 0, 0, 0] }] };
     expect(validateND(problem(name, 1), out).reasons[0]).toMatch(/outside its anchor cell/);
     // a ball at the centre of a facet, then one moved toward a hinge until its clearance is 0.5 + 1e-3 (valid) and 0.5 - 1e-3 (invalid)
-    const clearance = (t: number) => measureND(problem(name, 1), { s, pieces: [{ cell: 0, u: [t, t, 0, 0, 0] }] }).clearance[0];
+    const clearance = (t: number) =>
+      measureND(problem(name, 1), { s, pieces: [{ cell: 0, u: [t, t, 0, 0, 0] }] }).clearance[0];
     let lo = 0;
     let hi = s / 2;
     for (let i = 0; i < 60; i++) {
@@ -520,18 +616,31 @@ describe("the server rule, the registry and the heavy queue", () => {
     expect(boundaryDomain.info.problems).toBeGreaterThan(432);
     const n = boundaryDomain.info.fields.find((f) => f.key === "polytope")!;
     for (const name of ND_NAMES) expect(n.values).toContain(name);
-    expect(boundaryDomain.sample(100_000).filter((id) => /\/(\d+)(simplex|orthoplex|demicube)\//.test(id))).toHaveLength(432);
+    expect(
+      boundaryDomain.sample(100_000).filter((id) => /\/(\d+)(simplex|orthoplex|demicube)\//.test(id)),
+    ).toHaveLength(432);
   });
 
   it("refuses P above 24, wrong cells, a rotation and a size below the bound, and accepts the fixtures", () => {
     const name: NDName = "8simplex";
     const p = ndParse(name)!;
     const b = ndBound(p.family, p.d, 2);
-    const okc = { s: 5.3, pieces: [{ cell: 0, u: zeros(7) }, { cell: 8, u: zeros(7) }] };
+    const okc = {
+      s: 5.3,
+      pieces: [
+        { cell: 0, u: zeros(7) },
+        { cell: 8, u: zeros(7) },
+      ],
+    };
     expect(ndServerRule(problem(name, 2), okc, b).valid).toBe(true);
     expect(ndServerRule(problem(name, 25), okc, b).valid).toBe(false);
-    expect(ndServerRule(problem(name, 2), { ...okc, pieces: [okc.pieces[0], { cell: 9, u: zeros(7) }] }, b).valid).toBe(false);
-    expect(ndServerRule(problem(name, 2), { ...okc, pieces: [okc.pieces[0], { cell: 8, u: zeros(7), q: [1, 0, 0, 0] }] }, b).valid).toBe(false);
+    expect(ndServerRule(problem(name, 2), { ...okc, pieces: [okc.pieces[0], { cell: 9, u: zeros(7) }] }, b).valid).toBe(
+      false,
+    );
+    expect(
+      ndServerRule(problem(name, 2), { ...okc, pieces: [okc.pieces[0], { cell: 8, u: zeros(7), q: [1, 0, 0, 0] }] }, b)
+        .valid,
+    ).toBe(false);
     expect(ndServerRule(problem(name, 2), { ...okc, s: b * (1 - 1e-6) }, b).valid).toBe(false);
   });
 
@@ -539,6 +648,8 @@ describe("the server rule, the registry and the heavy queue", () => {
     expect(boundaryIsHeavy({ polytope: "8demicube", piece: "ball", P: 1 })).toBe(true);
     expect(boundaryIsHeavy({ polytope: "7simplex", piece: "ball", P: 24 })).toBe(false);
     expect(boundaryIsHeavy({ polytope: "10orthoplex", piece: "ball", P: 24 })).toBe(false);
+    expect(boundaryIsHeavy({ polytope: "10demicube", piece: "ball", P: 12 })).toBe(false);
+    expect(boundaryIsHeavy({ polytope: "10demicube", piece: "ball", P: 13 })).toBe(true);
     expect(BOUNDARY_HEAVY_MS).toBe(50);
   });
 });
@@ -556,7 +667,10 @@ describe("the kernel and the search", () => {
       ["7demicube", 3],
       ["10demicube", 4],
     ] as const)
-      expect(checkKernel(() => kernel(name, P), { seed: P, states: 2 }), `${name} ${P}`).toEqual([]);
+      expect(
+        checkKernel(() => kernel(name, P), { seed: P, states: 2 }),
+        `${name} ${P}`,
+      ).toEqual([]);
   }, 600_000);
 
   it("seeds valid layouts, exact where one is derived and sequential otherwise, each with no energy", () => {
@@ -578,7 +692,19 @@ describe("the kernel and the search", () => {
       }
     }
     const lay = ndSequentialLayout("7orthoplex", 10, mulberry(2));
-    expect(validateND(problem("7orthoplex", 10), { s: lay.s, pieces: Array.from(lay.st.cells, (cell, i) => ({ cell, u: Array.from(lay.st.U.subarray(i * 6, (i + 1) * 6)) })) }, { tol: 0 }).ok).toBe(true);
+    expect(
+      validateND(
+        problem("7orthoplex", 10),
+        {
+          s: lay.s,
+          pieces: Array.from(lay.st.cells, (cell, i) => ({
+            cell,
+            u: Array.from(lay.st.U.subarray(i * 6, (i + 1) * 6)),
+          })),
+        },
+        { tol: 0 },
+      ).ok,
+    ).toBe(true);
   }, 300_000);
 
   it("runs the boundary search: seeded, reproducible, valid at tolerance 0, never below the bound", () => {

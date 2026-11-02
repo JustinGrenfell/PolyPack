@@ -90,12 +90,21 @@ const AHEAD = 1e-15;
  * The half-chains from the point x0 (ambient, in the hyperplane of cell c0, edge s) of reach `reach`: every chain a straight path of
  * length <= reach can follow. The anchor is node 0.
  */
-export function develop(C: NDContainer, s: number, c0: number, x0: Float64Array, reach: number, budget: NDBudget): NDNode[] {
+export function develop(
+  C: NDContainer,
+  s: number,
+  c0: number,
+  x0: Float64Array,
+  reach: number,
+  budget: NDBudget,
+): NDNode[] {
   const D = C.D;
   const reach2 = reach * reach * (1 + 1e-12);
   const I = new Float64Array(D * D);
   for (let j = 0; j < D; j++) I[j * D + j] = 1;
-  const nodes: NDNode[] = [{ cell: c0, parent: -1, via: -1, depth: 0, a: Float64Array.from(x0), L: I, t: new Float64Array(D) }];
+  const nodes: NDNode[] = [
+    { cell: c0, parent: -1, via: -1, depth: 0, a: Float64Array.from(x0), L: I, t: new Float64Array(D) },
+  ];
   const m = new Float64Array(D);
   const nu = new Float64Array(D);
   const Lm = new Float64Array(D);
@@ -165,7 +174,15 @@ export function develop(C: NDContainer, s: number, c0: number, x0: Float64Array,
  * Is the direction w (in the frame of the end cell of node idx) in the closed window of the chain ending at idx, and, when `beyond`,
  * beyond its last ridge? tol is relative (to |w| times the slacks involved).
  */
-export function inWindow(C: NDContainer, s: number, nodes: readonly NDNode[], idx: number, w: Float64Array, beyond: boolean, tol: number): boolean {
+export function inWindow(
+  C: NDContainer,
+  s: number,
+  nodes: readonly NDNode[],
+  idx: number,
+  w: Float64Array,
+  beyond: boolean,
+  tol: number,
+): boolean {
   const D = C.D;
   const z = Float64Array.from(w);
   const m = new Float64Array(D);
@@ -265,7 +282,15 @@ interface Row {
  * polytope to the projection, whose normal-cone vector has a positive inner product with some active constraint's normal, a constraint
  * the projection violates), so the distance is the least over the violated ones of the distance with that one added to the equalities.
  */
-function nearest2(a: Float64Array, eqs: Row[], rows0: Row[], D: number, tolV: number, budget: NDBudget, cap: number): { d2: number; x: Float64Array | null } {
+function nearest2(
+  a: Float64Array,
+  eqs: Row[],
+  rows0: Row[],
+  D: number,
+  tolV: number,
+  budget: NDBudget,
+  cap: number,
+): { d2: number; x: Float64Array | null } {
   // a row the whole ball of radius sqrt(cap) about a satisfies cannot matter (rows are unit vectors)
   const rad = Math.sqrt(cap);
   const rows = rows0.filter((r) => dot(r.v, 0, a, 0, D) - r.b > -rad - tolV);
@@ -428,7 +453,14 @@ function flatDist2(cl: NDCell, S: Float64Array, k: number, l: number, D: number)
  * The geodesic distance from the source to the hinges (the (d-3)-faces) over `nodes` (its half-chains), if below `reach`: for each
  * node and each hinge of its cell within reach, the nearest point of the hinge inside the chain's window.
  */
-export function hingeDistance(C: NDContainer, s: number, nodes: readonly NDNode[], reach: number, budget: NDBudget, only = -1): NDHinge {
+export function hingeDistance(
+  C: NDContainer,
+  s: number,
+  nodes: readonly NDNode[],
+  reach: number,
+  budget: NDBudget,
+  only = -1,
+): NDHinge {
   const D = C.D;
   const reach2 = reach * reach * (1 + 1e-12);
   const tolV = 1e-12 * Math.max(1, s);
@@ -455,9 +487,14 @@ export function hingeDistance(C: NDContainer, s: number, nodes: readonly NDNode[
       if (!(lb <= reach2)) continue;
       spend(budget);
       if (!wrows) wrows = windowRows(C, s, nodes, idx);
-      const eqs = [...cellEqs(cl), unitRow(cl.nn.subarray(k * D, k * D + D), s * cl.hn[k]), unitRow(cl.nn.subarray(l * D, l * D + D), s * cl.hn[l])];
+      const eqs = [
+        ...cellEqs(cl),
+        unitRow(cl.nn.subarray(k * D, k * D + D), s * cl.hn[k]),
+        unitRow(cl.nn.subarray(l * D, l * D + D), s * cl.hn[l]),
+      ];
       const rows: Row[] = [];
-      for (let j = 0; j < F; j++) if (j !== k && j !== l) rows.push(unitRow(cl.nn.subarray(j * D, j * D + D), s * cl.hn[j]));
+      for (let j = 0; j < F; j++)
+        if (j !== k && j !== l) rows.push(unitRow(cl.nn.subarray(j * D, j * D + D), s * cl.hn[j]));
       for (const r of wrows) rows.push(r);
       const r = nearest2(nd.a, eqs, rows, D, tolV, budget, Math.min(reach2, best.dist * best.dist));
       if (r.d2 < best.dist * best.dist && r.d2 <= reach2) best = { dist: Math.sqrt(r.d2), node: idx, x: r.x };
@@ -467,7 +504,12 @@ export function hingeDistance(C: NDContainer, s: number, nodes: readonly NDNode[
 }
 
 /** The direction w (in the frame of the end cell of node idx) carried back along the chain to the anchor's frame. */
-export function directionAtAnchor(C: NDContainer, nodes: readonly NDNode[], idx: number, w: Float64Array): Float64Array {
+export function directionAtAnchor(
+  C: NDContainer,
+  nodes: readonly NDNode[],
+  idx: number,
+  w: Float64Array,
+): Float64Array {
   const D = C.D;
   const z = Float64Array.from(w);
   const m = new Float64Array(D);

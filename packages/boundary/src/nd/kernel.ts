@@ -45,8 +45,16 @@ const MAX_WALK_EDGES = 64;
 const POSE_TRIES = 16;
 
 export function ndKernel(problem: { polytope: NDName; piece: "ball"; P: number }): SpaceKernel {
-  if (!problem || !isNDName(problem.polytope) || problem.piece !== "ball" || !Number.isInteger(problem.P) || problem.P < 1) throw new Error("ndKernel: invalid problem");
-  if (problem.P > ND_MAX_P) throw new Error(`ndKernel: P = ${problem.P} is above the largest of the ${problem.polytope}, ${ND_MAX_P}`);
+  if (
+    !problem ||
+    !isNDName(problem.polytope) ||
+    problem.piece !== "ball" ||
+    !Number.isInteger(problem.P) ||
+    problem.P < 1
+  )
+    throw new Error("ndKernel: invalid problem");
+  if (problem.P > ND_MAX_P)
+    throw new Error(`ndKernel: P = ${problem.P} is above the largest of the ${problem.polytope}, ${ND_MAX_P}`);
   const C = getND(problem.polytope);
   const n = C.n;
   const D = C.D;
@@ -266,7 +274,8 @@ export function ndKernel(problem: { polytope: NDName; piece: "ball"; P: number }
       const out: KernelState[] = [];
       for (let t = 0; t < count; t++) {
         // the exact layout (when one is known) and the sequential layout alternate, the exact one first
-        const built = (t % 2 === 0 ? ndExactLayout(prob.polytope, P, rng) : null) ?? ndSequentialLayout(prob.polytope, P, rng);
+        const built =
+          (t % 2 === 0 ? ndExactLayout(prob.polytope, P, rng) : null) ?? ndSequentialLayout(prob.polytope, P, rng);
         out.push(stateOf(built.st, built.s));
       }
       return out;

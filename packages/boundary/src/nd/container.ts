@@ -264,7 +264,20 @@ export class NDContainer {
       frame.push(v);
     }
     if (frame.length !== nn_) throw new Error(`frame of cell ${c} of the ${this.name} has ${frame.length} vectors`);
-    return { c, kind, n, h, nbr: Int32Array.from(nb), nn, hn, rp, nu2, o: this.centre(c), frame, hinges: Int32Array.from(pairs) };
+    return {
+      c,
+      kind,
+      n,
+      h,
+      nbr: Int32Array.from(nb),
+      nn,
+      hn,
+      rp,
+      nu2,
+      o: this.centre(c),
+      frame,
+      hinges: Int32Array.from(pairs),
+    };
   }
 
   /**
@@ -339,7 +352,13 @@ export class NDContainer {
   }
 
   /** The ambient point of local coordinates u (n numbers, at edge s) of cell c. */
-  toAmbient(c: number, u: ArrayLike<number>, s: number, uo = 0, out: Float64Array = new Float64Array(this.D)): Float64Array {
+  toAmbient(
+    c: number,
+    u: ArrayLike<number>,
+    s: number,
+    uo = 0,
+    out: Float64Array = new Float64Array(this.D),
+  ): Float64Array {
     const cl = this.cell(c);
     const { D, n } = this;
     for (let j = 0; j < D; j++) out[j] = s * cl.o[j];

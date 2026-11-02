@@ -38,7 +38,8 @@ export function readNdpolyConfig(c: unknown, polytope: NDName): { s: number; pie
     if (typeof q !== "object" || q === null) return null;
     const { cell, u } = q as { cell?: unknown; u?: unknown };
     if (!Number.isInteger(cell) || (cell as number) < 0 || (cell as number) >= C.C) return null;
-    if (!Array.isArray(u) || u.length !== C.n || !u.every((x) => typeof x === "number" && Number.isFinite(x))) return null;
+    if (!Array.isArray(u) || u.length !== C.n || !u.every((x) => typeof x === "number" && Number.isFinite(x)))
+      return null;
     out.push({ cell: cell as number, u: u as number[] });
   }
   return { s, pieces: out };
@@ -53,7 +54,8 @@ export function ndWorldCentre(polytope: NDName, q: NPiece, s: number): number[] 
 export function hull2(points: readonly [number, number][]): [number, number][] {
   const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   if (p.length < 3) return p;
-  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lo: [number, number][] = [];
   for (const q of p) {
     while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop();
@@ -87,22 +89,34 @@ export function mountNdpolyView(host: HTMLElement, p: BoundaryProblem, label = "
   let ax = 0;
   let ay = 1;
   let config: { s: number; pieces: NPiece[] } | null = null;
-  const fx = labelledSelect("Horizontal axis", axes, String(ax), (v) => {
-    ax = Number(v);
-    if (ax === ay) {
-      ay = (ax + 1) % D;
-      fy.select.value = String(ay);
-    }
-    draw();
-  }, { "data-nd": "axis-x" });
-  const fy = labelledSelect("Vertical axis", axes, String(ay), (v) => {
-    ay = Number(v);
-    if (ax === ay) {
-      ax = (ay + 1) % D;
-      fx.select.value = String(ax);
-    }
-    draw();
-  }, { "data-nd": "axis-y" });
+  const fx = labelledSelect(
+    "Horizontal axis",
+    axes,
+    String(ax),
+    (v) => {
+      ax = Number(v);
+      if (ax === ay) {
+        ay = (ax + 1) % D;
+        fy.select.value = String(ay);
+      }
+      draw();
+    },
+    { "data-nd": "axis-x" },
+  );
+  const fy = labelledSelect(
+    "Vertical axis",
+    axes,
+    String(ay),
+    (v) => {
+      ay = Number(v);
+      if (ax === ay) {
+        ax = (ay + 1) % D;
+        fx.select.value = String(ax);
+      }
+      draw();
+    },
+    { "data-nd": "axis-y" },
+  );
   tools.append(fx.box, fy.box);
 
   function draw(): void {
@@ -129,18 +143,54 @@ export function mountNdpolyView(host: HTMLElement, p: BoundaryProblem, label = "
     element.setAttribute("viewBox", `${x0 - m} ${y0 - m} ${x1 - x0 + 2 * m} ${y1 - y0 + 2 * m}`);
     const stroke = { "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" } as const;
     const parts: SVGElement[] = [
-      svg("polygon", { points: outline.map((q) => q.join(",")).join(" "), fill: col.face, "fill-opacity": 0.5, stroke: col.edge, "stroke-width": 1.5, ...stroke }),
+      svg("polygon", {
+        points: outline.map((q) => q.join(",")).join(" "),
+        fill: col.face,
+        "fill-opacity": 0.5,
+        stroke: col.edge,
+        "stroke-width": 1.5,
+        ...stroke,
+      }),
     ];
     pieces.forEach((q, n) => {
       const c = centres[n];
       const fill = pieceFill(q.cell, 0.55);
       const g = svg("g", { "data-piece": n + 1, "data-cell": q.cell });
       // a ball in a demicube facet x_i = const projects to a full disk on two other axes
-      const full = info.family === "demicube" && q.cell < 2 * info.d && Math.floor(q.cell / 2) !== ax && Math.floor(q.cell / 2) !== ay;
-      if (full) g.append(svg("circle", { cx: c[ax], cy: -c[ay], r: 0.5, fill, stroke: col.piece, "stroke-width": 1, ...stroke }));
-      else g.append(svg("circle", { cx: c[ax], cy: -c[ay], r: 0.04 * span, fill, stroke: col.piece, "stroke-width": 1, ...stroke }));
+      const full =
+        info.family === "demicube" &&
+        q.cell < 2 * info.d &&
+        Math.floor(q.cell / 2) !== ax &&
+        Math.floor(q.cell / 2) !== ay;
+      if (full)
+        g.append(
+          svg("circle", { cx: c[ax], cy: -c[ay], r: 0.5, fill, stroke: col.piece, "stroke-width": 1, ...stroke }),
+        );
+      else
+        g.append(
+          svg("circle", {
+            cx: c[ax],
+            cy: -c[ay],
+            r: 0.04 * span,
+            fill,
+            stroke: col.piece,
+            "stroke-width": 1,
+            ...stroke,
+          }),
+        );
       g.append(
-        svg("text", { x: c[ax], y: -c[ay], "font-size": Math.max(0.025 * span, full ? 0.3 : 0), "text-anchor": "middle", "dominant-baseline": "central", fill: col.text }, String(n + 1)),
+        svg(
+          "text",
+          {
+            x: c[ax],
+            y: -c[ay],
+            "font-size": Math.max(0.025 * span, full ? 0.3 : 0),
+            "text-anchor": "middle",
+            "dominant-baseline": "central",
+            fill: col.text,
+          },
+          String(n + 1),
+        ),
       );
       parts.push(g);
     });
@@ -161,7 +211,12 @@ export function mountNdpolyView(host: HTMLElement, p: BoundaryProblem, label = "
     for (const q of config.pieces) counts.set(q.cell, (counts.get(q.cell) ?? 0) + 1);
     const used = [...counts.entries()].sort((a, b) => a[0] - b[0]);
     summary.textContent = `Balls per facet: ${used.map(([c, n]) => `${C.facetLabel(c)} ${n}`).join(", ") || "none"}. The other ${C.C - used.length} of the ${C.C} facets hold none.`;
-    const rows = config.pieces.map((q, i) => [String(i + 1), C.facetLabel(q.cell), centreText(q.u), centreText(ndWorldCentre(name, q, config!.s))]);
+    const rows = config.pieces.map((q, i) => [
+      String(i + 1),
+      C.facetLabel(q.cell),
+      centreText(q.u),
+      centreText(ndWorldCentre(name, q, config!.s)),
+    ]);
     tableHost.replaceChildren(
       dataTable(
         `Balls of the packing (${config.pieces.length}); a centre in its facet is in the facet's own frame, in the engine's coordinates x1 to x${D}`,

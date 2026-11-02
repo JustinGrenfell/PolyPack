@@ -259,7 +259,11 @@ export class NDBallModel implements PieceModel {
 
   startEdge(): number {
     // a ball fits at a cell's centre from ndCentreEdge, which is above the bound on the demicube (d >= 6); start 30% above it
-    return Math.max(this.floor * 1.5, ndCentreEdge(this.polytope as NDName) * 1.3, this.P > 1 ? ndPairEdge(this.polytope as NDName) * 1.1 : 0);
+    return Math.max(
+      this.floor * 1.5,
+      ndCentreEdge(this.polytope as NDName) * 1.3,
+      this.P > 1 ? ndPairEdge(this.polytope as NDName) * 1.1 : 0,
+    );
   }
 
   /** A random point of cell c (local coordinates at edge s), shrunk toward the cell's centre until it is inside. */
@@ -268,7 +272,8 @@ export class NDBallModel implements PieceModel {
     const cl = C.cell(c);
     const D = C.D;
     const u0 = new Array<number>(n);
-    for (let k = 0; k < n; k++) u0[k] = Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand()) * spread * s;
+    for (let k = 0; k < n; k++)
+      u0[k] = Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand()) * spread * s;
     let lam = 1;
     for (let t = 0; t < 40; t++) {
       const u = u0.map((v) => v * lam);
@@ -338,7 +343,16 @@ export class NDBallModel implements PieceModel {
     const U = new Float64Array(n * P);
     for (let i = 0; i < P; i++) {
       const p = config.pieces[i];
-      if (!p || !Number.isInteger(p.cell) || p.cell < 0 || p.cell >= C.C || !Array.isArray(p.u) || p.u.length !== n || !p.u.every(Number.isFinite)) return null;
+      if (
+        !p ||
+        !Number.isInteger(p.cell) ||
+        p.cell < 0 ||
+        p.cell >= C.C ||
+        !Array.isArray(p.u) ||
+        p.u.length !== n ||
+        !p.u.every(Number.isFinite)
+      )
+        return null;
       cells[i] = p.cell;
       for (let k = 0; k < n; k++) U[i * n + k] = p.u[k];
     }

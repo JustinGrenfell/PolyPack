@@ -11,7 +11,17 @@
  */
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ND_NAMES, boundaryKernel, getND, ndBound, ndCentreEdge, ndPairEdge, ndParse, searchBoundary, validateBoundary } from "../src/index";
+import {
+  ND_NAMES,
+  boundaryKernel,
+  getND,
+  ndBound,
+  ndCentreEdge,
+  ndPairEdge,
+  ndParse,
+  searchBoundary,
+  validateBoundary,
+} from "../src/index";
 import { mulberry32 } from "../src/search/random";
 
 const out = fileURLToPath(new URL("../../../python/boundary/fixtures/nd_packings_raw.json", import.meta.url));
@@ -25,15 +35,29 @@ for (const name of ND_NAMES) {
   const add = (P: number, source: string, config: { s: number; pieces: unknown[] }) => {
     const v = validateBoundary({ polytope: name, piece: "ball", P }, config, { tol: 0 });
     if (!v.ok) throw new Error(`${name} ${P} ${source}: ${v.reasons[0]}`);
-    packings.push({ id: `boundary/${name}/ball/${P}`, polytope: name, P, source, config, ts_score: config.s, bound: ndBound(p.family, p.d, P) });
+    packings.push({
+      id: `boundary/${name}/ball/${P}`,
+      polytope: name,
+      P,
+      source,
+      config,
+      ts_score: config.s,
+      bound: ndBound(p.family, p.d, P),
+    });
     console.log(name, P, source, "s", config.s.toFixed(6), "bound", ndBound(p.family, p.d, P).toFixed(6));
   };
   // P = 1
-  add(1, "one ball at a cell centre", { s: ndCentreEdge(name) * (1 + 1e-9), pieces: [{ cell: 0, u: new Array(C.n).fill(0) }] });
+  add(1, "one ball at a cell centre", {
+    s: ndCentreEdge(name) * (1 + 1e-9),
+    pieces: [{ cell: 0, u: new Array(C.n).fill(0) }],
+  });
   // the exact layout
   const Pex = p.family === "simplex" ? p.d + 1 : p.family === "orthoplex" ? 2 : 2 * p.d;
   const cells = p.family === "orthoplex" ? [0, 1] : Array.from({ length: Pex }, (_, i) => i);
-  add(Pex, "balls at cell centres", { s: ndPairEdge(name) * (1 + 1e-9), pieces: cells.map((cell) => ({ cell, u: new Array(C.n).fill(0) })) });
+  add(Pex, "balls at cell centres", {
+    s: ndPairEdge(name) * (1 + 1e-9),
+    pieces: cells.map((cell) => ({ cell, u: new Array(C.n).fill(0) })),
+  });
   // two seeded runs
   for (const P of [4, 24]) {
     if (P === Pex) continue;

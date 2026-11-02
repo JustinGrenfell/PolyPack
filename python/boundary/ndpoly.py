@@ -87,45 +87,84 @@ def squarefree(d):
 
 
 def make_qf(k):
-    """The class of numbers a + b sqrt k with Fraction a, b (k > 1 squarefree)."""
+    """The class of numbers (n + m sqrt k) / q with integers n, m and q > 0 (k > 1 squarefree): the value a + b sqrt k with rational a = n/q, b = m/q.
+    Integer arithmetic with the denominator carried along (and reduced when the numbers grow) is several times faster than pairs of Fractions."""
 
     class QF:
-        __slots__ = ("a", "b")
+        __slots__ = ("n", "m", "q")
         K = k
 
-        def __init__(self, a=0, b=0):
-            self.a = a if isinstance(a, Fraction) else Fraction(a)
-            self.b = b if isinstance(b, Fraction) else Fraction(b)
+        def __init__(self, a=0, b=0, _raw=None):
+            if _raw is not None:
+                self.n, self.m, self.q = _raw
+                return
+            a = a if isinstance(a, Fraction) else Fraction(a)
+            b = b if isinstance(b, Fraction) else Fraction(b)
+            q = a.denominator * b.denominator // math.gcd(a.denominator, b.denominator)
+            self.n, self.m, self.q = a.numerator * (q // a.denominator), b.numerator * (q // b.denominator), q
+
+        @property
+        def a(self):
+            return Fraction(self.n, self.q)
+
+        @property
+        def b(self):
+            return Fraction(self.m, self.q)
 
         @staticmethod
         def of(x):
-            return x if isinstance(x, QF) else QF(x, 0)
+            if isinstance(x, QF):
+                return x
+            if isinstance(x, int):
+                return QF(_raw=(x, 0, 1))
+            x = x if isinstance(x, Fraction) else Fraction(x)
+            return QF(_raw=(x.numerator, 0, x.denominator))
+
+        @staticmethod
+        def _mk(n, m, q):
+            if q.bit_length() > 96 or abs(n).bit_length() > 96 or abs(m).bit_length() > 96:
+                g = math.gcd(n, m, q)
+                if g > 1:
+                    n, m, q = n // g, m // g, q // g
+            return QF(_raw=(n, m, q))
 
         def __add__(self, o):
-            o = QF.of(o)
-            return QF(self.a + o.a, self.b + o.b)
+            if not isinstance(o, QF):
+                o = QF.of(o)
+            if self.q == o.q:
+                return QF._mk(self.n + o.n, self.m + o.m, self.q)
+            return QF._mk(self.n * o.q + o.n * self.q, self.m * o.q + o.m * self.q, self.q * o.q)
 
         __radd__ = __add__
 
         def __neg__(self):
-            return QF(-self.a, -self.b)
+            return QF(_raw=(-self.n, -self.m, self.q))
 
         def __sub__(self, o):
-            o = QF.of(o)
-            return QF(self.a - o.a, self.b - o.b)
+            if not isinstance(o, QF):
+                o = QF.of(o)
+            if self.q == o.q:
+                return QF._mk(self.n - o.n, self.m - o.m, self.q)
+            return QF._mk(self.n * o.q - o.n * self.q, self.m * o.q - o.m * self.q, self.q * o.q)
 
         def __rsub__(self, o):
             return QF.of(o) - self
 
         def __mul__(self, o):
-            o = QF.of(o)
-            return QF(self.a * o.a + self.b * o.b * k, self.a * o.b + self.b * o.a)
+            if not isinstance(o, QF):
+                o = QF.of(o)
+            return QF._mk(self.n * o.n + self.m * o.m * k, self.n * o.m + self.m * o.n, self.q * o.q)
 
         __rmul__ = __mul__
 
         def inv(self):
-            n = self.a * self.a - self.b * self.b * k
-            return QF(self.a / n, -self.b / n)
+            d = self.n * self.n - self.m * self.m * k
+            if d == 0:
+                raise ZeroDivisionError("division by zero in Q(sqrt k)")
+            n, m, q = self.q * self.n, -self.q * self.m, d
+            if q < 0:
+                n, m, q = -n, -m, -q
+            return QF._mk(n, m, q)
 
         def __truediv__(self, o):
             return self * QF.of(o).inv()
@@ -134,7 +173,7 @@ def make_qf(k):
             return QF.of(o) * self.inv()
 
         def sign(self):
-            a, b = self.a, self.b
+            a, b = self.n, self.m
             if b == 0:
                 return (a > 0) - (a < 0)
             if a == 0:
@@ -146,11 +185,13 @@ def make_qf(k):
             return s if a > 0 else -s
 
         def __eq__(self, o):
-            o = QF.of(o)
-            return self.a == o.a and self.b == o.b
+            if not isinstance(o, QF):
+                o = QF.of(o)
+            return self.n * o.q == o.n * self.q and self.m * o.q == o.m * self.q
 
         def __hash__(self):
-            return hash((self.a, self.b))
+            g = math.gcd(self.n, self.m, self.q)
+            return hash((self.n // g, self.m // g, self.q // g))
 
         def __lt__(self, o):
             return (self - o).sign() < 0
@@ -165,7 +206,7 @@ def make_qf(k):
             return (self - o).sign() >= 0
 
         def __bool__(self):
-            return self.a != 0 or self.b != 0
+            return self.n != 0 or self.m != 0
 
         def __float__(self):
             lo, hi = self.bounds(30)
@@ -175,8 +216,9 @@ def make_qf(k):
             """Rational lower and upper bounds."""
             r = Fraction(sqrt_floor(k * 10 ** (2 * digits)), 10 ** digits)
             r_hi = r + Fraction(1, 10 ** digits)
-            lo = self.a + self.b * (r if self.b > 0 else r_hi)
-            hi = self.a + self.b * (r_hi if self.b > 0 else r)
+            a, b = self.a, self.b
+            lo = a + b * (r if b > 0 else r_hi)
+            hi = a + b * (r_hi if b > 0 else r)
             return lo, hi
 
     return QF
@@ -192,7 +234,7 @@ def sg(x):
 def dot(u, v):
     s = 0
     for a, b in zip(u, v):
-        if a != 0 and b != 0:
+        if a and b:  # truthiness: no equality test with a number (a Q(sqrt k) test would build a number)
             s = s + a * b
     return s
 
@@ -460,9 +502,9 @@ def get_cont(name):
 
 
 class Budget:
-    def __init__(self, limit=MAX_STEPS):
+    def __init__(self, limit=None):
         self.steps = 0
-        self.limit = limit
+        self.limit = MAX_STEPS if limit is None else limit
 
     def spend(self, k=1):
         self.steps += k
@@ -872,6 +914,17 @@ def read_centre(cn, c, u, s):
     return x
 
 
+def reading_error(polytope, c, u, s):
+    """For the documentation's measurement: the distance (relative to s) between the engine's float point for (cell c, u at edge s) and the exact
+    point read_centre gives (before any clamping)."""
+    cn = get_cont(polytope)
+    s = Fraction(s)
+    xf = cn.ambient_float(c, [float(t) for t in u], float(s))
+    x = read_centre(cn, c, [Fraction(t) for t in u], s)
+    err2 = sum(((Fraction(a) - b * s / SQRT2_Q) ** 2 for a, b in zip(xf, x)), Fraction(0))
+    return math.sqrt(float(err2)) / float(s)
+
+
 def clamp_exact(cn, c, x, s):
     """Moves x onto the facet planes of cell c that it violates, if by less than SNAP s; returns the point and the real distance moved (squared, base units)."""
     cl = cn.cell(c)
@@ -1003,22 +1056,30 @@ def _check_balls(cn, cfg, v, extra=Fraction(0)):
         pts.append((n_, x, anchors))
     if not v.ok:
         return
-    # clearance
+    # clearance: a centre nearer than the threshold to a hinge of its own cell is refused before any chain is built
     chains = {}
     clear = []
     for n_, x, anchors in pts:
-        cs = []
         best = None
         for (c, xa) in anchors:
-            nodes = develop(cn, c, xa, reach2, budget)
-            cs.append(nodes)
-            for i in range(len(nodes)):
-                h2 = hinge_dist2(cn, nodes, i, reach2, budget)
-                if h2 is not None and (best is None or h2 < best):
-                    best = h2
-        chains[n_] = cs
+            root = develop(cn, c, xa, Fraction(0), budget)
+            h2 = hinge_dist2(cn, root, 0, reach2, budget)
+            if h2 is not None and (best is None or h2 < best):
+                best = h2
+        bad = best is not None and (best < clr_lim2 or (strict and best == clr_lim2))
+        if not bad:
+            cs = []
+            for (c, xa) in anchors:
+                nodes = develop(cn, c, xa, reach2, budget)
+                cs.append(nodes)
+                for i in range(len(nodes)):
+                    h2 = hinge_dist2(cn, nodes, i, reach2, budget)
+                    if h2 is not None and (best is None or h2 < best):
+                        best = h2
+            chains[n_] = cs
+            bad = best is not None and (best < clr_lim2 or (strict and best == clr_lim2))
         clear.append(best)
-        if best is not None and (best < clr_lim2 or (strict and best == clr_lim2)):
+        if bad:
             v.fail(f"ball {n_} is {fmt(math.sqrt(to_float(best / scale2)))} from a (d-3)-face of the {cfg.polytope}; it must be {'more than' if strict else 'at least'} 1/2")
     mins = [b for b in clear if b is not None]
     v.margins["clearance_sq"] = None if not mins else min(mins) / scale2

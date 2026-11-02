@@ -34,7 +34,7 @@ export interface NDValidateOptions {
 }
 
 /** Search steps one check may spend (chains.ts): BOUNDARY.md 4C.7 gives the measurements it comes from. */
-export const ND_MAX_WORK = 1_500_000;
+export const ND_MAX_WORK = 60_000;
 
 export interface NDProblem {
   polytope: NDName;
@@ -62,7 +62,13 @@ function finiteNumbers(x: unknown, n: number): number[] | null {
 }
 
 /** Checks the shape of a configuration; returns the typed pieces or pushes reasons. */
-export function readNDConfig(problem: NDProblem, config: unknown, tol: number, reasons: string[], maxReasons: number): NDConfig | null {
+export function readNDConfig(
+  problem: NDProblem,
+  config: unknown,
+  tol: number,
+  reasons: string[],
+  maxReasons: number,
+): NDConfig | null {
   const push = (r: string) => {
     if (reasons.length < maxReasons) reasons.push(r);
   };
@@ -79,7 +85,8 @@ export function readNDConfig(problem: NDProblem, config: unknown, tol: number, r
     push("The configuration needs a list of pieces.");
     return null;
   }
-  if (list.length !== problem.P) push(`The configuration has ${list.length} pieces; the problem needs exactly ${problem.P}.`);
+  if (list.length !== problem.P)
+    push(`The configuration has ${list.length} pieces; the problem needs exactly ${problem.P}.`);
   if (reasons.length) return null;
   const pieces: NDConfig["pieces"] = [];
   for (let i = 0; i < list.length; i++) {
@@ -130,7 +137,14 @@ export interface NDAnchored {
 }
 
 /** Reads a centre of cell c (local u at edge s): clamped into the closed cell, snapped onto the ridge planes within eta. */
-export function anchorPiece(C: NDContainer, s: number, c: number, u: ArrayLike<number>, eta: number, uo = 0): NDAnchored {
+export function anchorPiece(
+  C: NDContainer,
+  s: number,
+  c: number,
+  u: ArrayLike<number>,
+  eta: number,
+  uo = 0,
+): NDAnchored {
   const D = C.D;
   const cl = C.cell(c);
   const x0 = C.toAmbient(c, u, s, uo);
@@ -213,7 +227,9 @@ function validateBalls(C: NDContainer, cfg: NDConfig, tol: number, maxReasons: n
     let h0 = Infinity;
     for (const r of rootOnly) h0 = Math.min(h0, hingeDistance(C, s, r, ND_REACH, budget).dist);
     if (!(h0 >= 0.5 - tol + at[i].moved)) {
-      push(`Ball ${i} is ${fmt(h0)} from a (d-3)-face of the ${C.name}; it must be at least 0.5, or the face passes through the ball.`);
+      push(
+        `Ball ${i} is ${fmt(h0)} from a (d-3)-face of the ${C.name}; it must be at least 0.5, or the face passes through the ball.`,
+      );
       bad[i] = 1;
       chains.push([]);
       hinge.push(h0);
@@ -225,7 +241,9 @@ function validateBalls(C: NDContainer, cfg: NDConfig, tol: number, maxReasons: n
     for (const c of cs) h = Math.min(h, hingeDistance(C, s, c, ND_REACH, budget).dist);
     hinge.push(h);
     if (!(h >= 0.5 - tol + at[i].moved))
-      push(`Ball ${i} is ${fmt(h)} from a (d-3)-face of the ${C.name} along a path over a ridge; it must be at least 0.5, or the face passes through the ball.`);
+      push(
+        `Ball ${i} is ${fmt(h)} from a (d-3)-face of the ${C.name} along a path over a ridge; it must be at least 0.5, or the face passes through the ball.`,
+      );
   }
   if (reasons.length) return reasons;
   // pairs
@@ -236,16 +254,24 @@ function validateBalls(C: NDContainer, cfg: NDConfig, tol: number, maxReasons: n
       const lim = 1 - tol + at[i].moved + at[j].moved;
       if (!(q < 1 * 1)) continue;
       let best = Infinity;
-      for (const A of chains[i]) for (const B of chains[j]) best = Math.min(best, joinDistance(C, s, A, B, lim, budget, false).dist);
-      if (best < lim) push(`Balls ${i} and ${j} overlap: their centres are ${fmt(best)} apart along the boundary; they must be at least 1 apart.`);
+      for (const A of chains[i])
+        for (const B of chains[j]) best = Math.min(best, joinDistance(C, s, A, B, lim, budget, false).dist);
+      if (best < lim)
+        push(
+          `Balls ${i} and ${j} overlap: their centres are ${fmt(best)} apart along the boundary; they must be at least 1 apart.`,
+        );
     }
   // loops
   for (let i = 0; i < P && reasons.length < maxReasons; i++) {
     const lim = 1 - tol + 2 * at[i].moved;
     let best = Infinity;
     for (let a = 0; a < chains[i].length; a++)
-      for (let b = a; b < chains[i].length; b++) best = Math.min(best, joinDistance(C, s, chains[i][a], chains[i][b], lim, budget, a === b).dist);
-    if (best < lim) push(`Ball ${i} overlaps itself: a geodesic loop of length ${fmt(best)} leaves and returns to its centre; it must be at least 1.`);
+      for (let b = a; b < chains[i].length; b++)
+        best = Math.min(best, joinDistance(C, s, chains[i][a], chains[i][b], lim, budget, a === b).dist);
+    if (best < lim)
+      push(
+        `Ball ${i} overlaps itself: a geodesic loop of length ${fmt(best)} leaves and returns to its centre; it must be at least 1.`,
+      );
   }
   return reasons;
 }
@@ -258,7 +284,11 @@ export function validateND(problem: NDProblem, config: unknown, opts: NDValidate
   const mw = opts.maxWork ?? ND_MAX_WORK;
   const maxWork = mw >= 1 ? Math.floor(mw) : 1;
   const reasons: string[] = [];
-  const bad = (): BoundaryVerdict => ({ ok: false, score: null, reasons: reasons.length ? reasons : ["The configuration is malformed."] });
+  const bad = (): BoundaryVerdict => ({
+    ok: false,
+    score: null,
+    reasons: reasons.length ? reasons : ["The configuration is malformed."],
+  });
   if (!isObject(problem) || !isNDName(problem.polytope)) {
     reasons.push(`Unknown polytope "${String((problem as { polytope?: unknown })?.polytope)}".`);
     return bad();
@@ -291,7 +321,9 @@ export function validateND(problem: NDProblem, config: unknown, opts: NDValidate
     geo = validateBalls(C, cfg, tol, maxReasons, budget);
   } catch (e) {
     if (!(e instanceof NDLimitError)) throw e;
-    geo = [`The check reached its work limit (${maxWork} search steps) before it could decide: too many balls crowd the (d-3)-faces of the ${problem.polytope}.`];
+    geo = [
+      `The check reached its work limit (${maxWork} search steps) before it could decide: too many balls crowd the (d-3)-faces of the ${problem.polytope}.`,
+    ];
   }
   if (opts.stats) opts.stats.steps = budget.steps;
   return geo.length ? { ok: false, score: null, reasons: geo } : { ok: true, score: cfg.s, reasons: [] };
@@ -348,14 +380,17 @@ export function measureND(problem: NDProblem, config: NDConfig, opts: { maxWork?
         continue;
       }
       let best = Infinity;
-      for (const A of chains[i]) for (const B of chains[j]) best = Math.min(best, joinDistance(C, s, A, B, Math.min(best, 1), budget, false).dist);
+      for (const A of chains[i])
+        for (const B of chains[j])
+          best = Math.min(best, joinDistance(C, s, A, B, Math.min(best, 1), budget, false).dist);
       pairs.push({ i, j, dist: best });
     }
   const loops: number[] = [];
   for (let i = 0; i < P; i++) {
     let best = Infinity;
     for (let a = 0; a < chains[i].length; a++)
-      for (let b = a; b < chains[i].length; b++) best = Math.min(best, joinDistance(C, s, chains[i][a], chains[i][b], Math.min(best, 1), budget, a === b).dist);
+      for (let b = a; b < chains[i].length; b++)
+        best = Math.min(best, joinDistance(C, s, chains[i][a], chains[i][b], Math.min(best, 1), budget, a === b).dist);
     loops.push(best);
   }
   return { clearance, pairs, loops, steps: budget.steps };

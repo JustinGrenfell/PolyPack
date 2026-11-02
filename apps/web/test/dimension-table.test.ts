@@ -120,7 +120,7 @@ describe("the table of dimensions", () => {
       { text: "4D in 4D: Polytopes and balls", value: "ndim-4", disabled: false },
     ]);
     expect(menuGroups()[5].options).toEqual([
-      { text: "4D on 5D: 5-cube boundary", value: "boundary-5cube", disabled: false },
+      { text: "4D on 5D: Polytope boundaries", value: "boundary-5cube", disabled: false },
     ]);
     expect(menuGroups()[16].options.map((o) => o.value)).toEqual(["ndim-10"]);
     // the value is what the board shows: "polygon", the space, or (where a space backs several families) the family's key
@@ -174,11 +174,12 @@ describe("one space behind several dimensions", () => {
       expect(whereIs("boundary", `boundary/${polytope}/ball/3`)?.dimension.label, polytope).toBe("3D on 4D");
     expect(whereIs("boundary")?.dimension.label).toBe("3D on 4D");
     expect(whereIs("boundary", "boundary/tesseract/ball/9")).toMatchObject({ family: { name: "Polytope boundaries" } });
-    // the d-cubes: "4D on 5D" to "9D on 10D"
+    // the d-cubes, simplexes, orthoplexes and demicubes: "4D on 5D" to "9D on 10D"
     for (let d = 5; d <= 10; d++) {
-      const id = `boundary/${d}cube/cube/7`;
-      expect(whereIs("boundary", id)?.dimension.label, id).toBe(`${d - 1}D on ${d}D`);
+      const ids = [`boundary/${d}cube/cube/7`, `boundary/${d}simplex/ball/7`, `boundary/${d}orthoplex/ball/7`, `boundary/${d}demicube/ball/7`];
+      for (const id of ids) expect(whereIs("boundary", id)?.dimension.label, id).toBe(`${d - 1}D on ${d}D`);
       expect(whereIs(`boundary-${d}cube`)?.dimension.id).toBe(`${d - 1}-on-${d}`);
+      expect(whereIs(`boundary-${d}cube`)?.family).toMatchObject({ name: "Polytope boundaries" });
     }
   });
 

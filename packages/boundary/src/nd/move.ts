@@ -26,7 +26,15 @@ export interface NDWalk {
  * Walks from x (cell c, edge s) along d (a vector tangent to H_c, any length) for the length |d|. `M`, when given (D*D numbers),
  * receives the linear part of the map d_start -> d_end (identity when nothing was crossed).
  */
-export function walkND(C: NDContainer, s: number, c: number, x0: ArrayLike<number>, d0: ArrayLike<number>, M: Float64Array | null = null, hingeTol = 1e-12): NDWalk {
+export function walkND(
+  C: NDContainer,
+  s: number,
+  c: number,
+  x0: ArrayLike<number>,
+  d0: ArrayLike<number>,
+  M: Float64Array | null = null,
+  hingeTol = 1e-12,
+): NDWalk {
   const D = C.D;
   const x = Float64Array.from(x0);
   const d = Float64Array.from(d0);

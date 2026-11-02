@@ -14,5 +14,11 @@ for (const name of ND_NAMES) {
   const p = ndParse(name)!;
   for (let P = 1; P <= ND_MAX_P; P++) bounds.push({ polytope: name, P, value: ndBound(p.family, p.d, P) });
 }
-writeFileSync(out, JSON.stringify({ note: "written by packages/boundary/scripts/gen-nd-bounds.ts; read by python/boundary/test_ndpoly.py", bounds }));
+writeFileSync(
+  out,
+  JSON.stringify({
+    note: "written by packages/boundary/scripts/gen-nd-bounds.ts; read by python/boundary/test_ndpoly.py",
+    bounds,
+  }),
+);
 console.log("bounds", bounds.length);

@@ -6,7 +6,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { NCUBE_MAX_P, NCUBE_NAMES, ncubeCellLayout } from "@polypack/boundary";
+import { NCUBE_MAX_P, NCUBE_NAMES, ND_NAMES, ncubeCellLayout } from "@polypack/boundary";
 import { boundaryCheckMs, boundaryIsHeavy } from "@polypack/spaces";
 import { SpaceProblemResponse, SpaceSubmitResponse, SpacesResponse } from "@polypack/spaces";
 import { loadSpacesIndex } from "@polypack/spaces/load";
@@ -81,10 +81,10 @@ describe("the d-cube domain on the server", () => {
   it("is listed among the boundary problems with its containers, pieces and P ranges", async () => {
     const r = (await get("/api/spaces")).body as SpacesResponse;
     const b = r.spaces.find((s) => s.space === "boundary")!;
-    expect(b.problems).toBe(152 + 2 * (160 + 384 + 4 * 400));
+    expect(b.problems).toBe(152 + 2 * (160 + 384 + 4 * 400) + 18 * 24);
     expect(b.records).toBe(32);
     const fields = b.domain!.fields;
-    expect(fields[0].values).toEqual(["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell", ...NCUBE_NAMES]);
+    expect(fields[0].values).toEqual(["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell", ...NCUBE_NAMES, ...ND_NAMES]);
     expect(fields[1].dependent!.values!["7cube"]).toEqual(["ball", "cube"]);
     expect(fields[2].dependent!.ranges!["5cube"]).toEqual([1, 160]);
     expect(fields[2].dependent!.ranges!["6cube"]).toEqual([1, 384]);

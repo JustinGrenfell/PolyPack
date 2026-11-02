@@ -42,7 +42,8 @@ export function ndFormErrors(problem: NDProblem, raw: unknown): string[] {
   num(raw.s, "s", MAX_S, true);
   const list = raw.pieces;
   if (!Array.isArray(list)) return [...errors, "pieces must be an array"];
-  if (list.length !== problem.P) return [...errors, `expected ${problem.P} pieces for this problem, got ${list.length}`];
+  if (list.length !== problem.P)
+    return [...errors, `expected ${problem.P} pieces for this problem, got ${list.length}`];
   for (let i = 0; i < list.length; i++) {
     if (errors.length >= R.maxReasons) break;
     if (!(i in list)) continue;
@@ -53,7 +54,8 @@ export function ndFormErrors(problem: NDProblem, raw: unknown): string[] {
     }
     if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= C.C)
       errors.push(`pieces[${i}].cell must be an integer from 0 to ${C.C - 1}`);
-    if (!Array.isArray(p.u) || p.u.length !== C.n) errors.push(`pieces[${i}].u must be [u0, ..., u${C.n - 1}] (${C.n} numbers)`);
+    if (!Array.isArray(p.u) || p.u.length !== C.n)
+      errors.push(`pieces[${i}].u must be [u0, ..., u${C.n - 1}] (${C.n} numbers)`);
     else for (let k = 0; k < C.n; k++) num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, R.maxCoord);
     if (p.q !== undefined) errors.push(`pieces[${i}] is a ball and has no rotation q`);
   }
@@ -64,11 +66,13 @@ export function ndFormErrors(problem: NDProblem, raw: unknown): string[] {
 export function ndServerRule(problem: NDProblem, config: unknown, bound: number): Validation {
   const R = ND_SERVER_RULE;
   const fail = (reasons: string[], score: number | null = null): Validation => ({ valid: false, score, reasons });
-  if (!(problem.P <= ND_MAX_P)) return fail([`P = ${problem.P} is above the largest P of the ${problem.polytope} problems (${ND_MAX_P})`]);
+  if (!(problem.P <= ND_MAX_P))
+    return fail([`P = ${problem.P} is above the largest P of the ${problem.polytope} problems (${ND_MAX_P})`]);
   const errors = ndFormErrors(problem, config);
   if (errors.length) return fail(errors.slice(0, R.maxReasons));
   const s = (config as { s: number }).s;
-  if (s < bound * (1 - R.boundSlack)) return fail([`the size ${s} is below the lower bound ${bound} of this problem`], s);
+  if (s < bound * (1 - R.boundSlack))
+    return fail([`the size ${s} is below the lower bound ${bound} of this problem`], s);
   let reasons: string[];
   try {
     const v = validateND(problem, config, { tol: R.tol, maxReasons: R.maxReasons, maxWork: R.maxWork });

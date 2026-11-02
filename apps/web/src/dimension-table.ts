@@ -32,6 +32,11 @@ export interface FamilyScope {
   /** Its position in the problem id. */
   at: number;
   values: readonly string[];
+  /**
+   * For a scope of several values, the one whose filter opens the family's records ("5cube" for 4D on 5D, whose scope also holds the
+   * 5-simplex, 5-orthoplex and 5-demicube): the address the dimension's tab has always had. Absent: no single filter opens the family.
+   */
+  open?: string;
 }
 
 interface FamilyText {
@@ -120,7 +125,7 @@ function highBoundaryDimension(d: number): Dimension {
       {
         key: `boundary-${d}cube`,
         space: "boundary",
-        scope: { field: "polytope", at: 1, values: [`${d}simplex`, `${d}cube`, `${d}orthoplex`, `${d}demicube`] },
+        scope: { field: "polytope", at: 1, values: [`${d}simplex`, `${d}cube`, `${d}orthoplex`, `${d}demicube`], open: `${d}cube` },
         start: `boundary/${d}cube/ball/9`,
         name: "Polytope boundaries",
         short: "Boundaries",
@@ -326,9 +331,13 @@ export function familyOfFilters(space: string, filters: Record<string, string>) 
   return first;
 }
 
-/** The table filters that open a family's records: its scope's field fixed to the one value, none for a scope of several. */
+/** The table filters that open a family's records: its scope's field fixed to the one value (or the scope's `open` value), none for a scope of several. */
 export const familyFilters = (f: Family): Record<string, string> =>
-  f.scope && f.scope.values.length === 1 ? { [f.scope.field]: f.scope.values[0] } : {};
+  f.scope && f.scope.open !== undefined
+    ? { [f.scope.field]: f.scope.open }
+    : f.scope && f.scope.values.length === 1
+      ? { [f.scope.field]: f.scope.values[0] }
+      : {};
 
 /** "2D on 3D, Sphere": a family with its dimension, for sentences. */
 export function familyTitle(target: string, id?: string | null): string {
