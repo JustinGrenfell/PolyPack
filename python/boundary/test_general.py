@@ -373,7 +373,9 @@ class Input(unittest.TestCase):
             with self.assertRaises(C.CertError):
                 C.check(bad_id, ok)
         with self.assertRaises(C.CertError):
-            C.check("boundary/24cell/cube/1", ok)  # balls only
+            C.check("boundary/24cell/sphere/1", ok)  # no such piece
+        # the Platonic solids, a rotated cube included, go to platonic.py (test_platonic.py)
+        self.assertTrue(C.check("boundary/24cell/cube/1", ok, strict=False).ok)
         for conf in (
             {"s": 0, "pieces": ok["pieces"]},
             {"s": 1e5, "pieces": ok["pieces"]},
