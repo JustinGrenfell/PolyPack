@@ -186,9 +186,33 @@ export function ndPairEdge(polytope: NDName): number {
 }
 
 /**
- * Estimated milliseconds of the server's check per ball ([CALC] BOUNDARY.md 4C.7, 2026-11-02, one core): set from measurements.
+ * Estimated milliseconds of the server's check per ball ([CALC] BOUNDARY.md 4C.8, 2026-11-02, one core, Apple Silicon): three times the
+ * largest cost per ball measured on the test packings (touching, P = 1 to 24; the P = 1 packings at the one-ball edge are the slowest, a ball
+ * at a facet's centre with dozens of hinges at the same distance: 0.08 ms on the simplex and orthoplex, 0.05 ms on the 5-demicube, 5.5 on
+ * the 6-demicube, 9.5 on the 7-, 41 on the 8-, 0.6 on the 9- and 1.4 ms on the 10-demicube), rounded up. A check of 50 ms or more waits in the server's
+ * heavy queue (BOUNDARY_HEAVY_MS): the 6-demicube from P = 3, the 7-demicube from P = 2 and the 8-demicube always; the work of every check is
+ * also capped (ND_MAX_WORK steps), so a crowded layout is refused, not slow.
  */
-export const ND_BALL_MS: Record<NDName, number> = Object.fromEntries(ND_NAMES.map((n) => [n, 5])) as Record<NDName, number>;
+export const ND_BALL_MS: Record<NDName, number> = {
+  "5simplex": 0.3,
+  "6simplex": 0.3,
+  "7simplex": 0.3,
+  "8simplex": 0.3,
+  "9simplex": 0.3,
+  "10simplex": 0.3,
+  "5orthoplex": 0.3,
+  "6orthoplex": 0.3,
+  "7orthoplex": 0.3,
+  "8orthoplex": 0.3,
+  "9orthoplex": 0.3,
+  "10orthoplex": 0.3,
+  "5demicube": 0.3,
+  "6demicube": 17,
+  "7demicube": 30,
+  "8demicube": 125,
+  "9demicube": 2,
+  "10demicube": 4,
+};
 
 export function ndCheckMs(polytope: NDName, P: number): number {
   return ND_BALL_MS[polytope] * P;

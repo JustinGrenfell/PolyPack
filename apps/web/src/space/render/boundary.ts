@@ -49,15 +49,22 @@ export function mountBoundaryView(host: HTMLElement, p: BoundaryDrawing, label =
   root.append(wait);
   host.replaceChildren(root);
 
-  // The d-cubes (5cube to 10cube, 4D on 5D to 9D on 10D) are drawn as a table and a chart (ncube.ts), not as the 3D views of the tesseract.
-  if (/^\d+cube$/.test(p.polytope)) {
+  // The d-cubes (5cube to 10cube, 4D on 5D to 9D on 10D) are drawn as a table and a chart (ncube.ts), and so are the simplex, orthoplex and
+  // demicube of the same dimensions (ndpoly.ts), not as the 3D views of the tesseract.
+  if (/^\d+(cube|simplex|orthoplex|demicube)$/.test(p.polytope)) {
     let inner: SpaceView | null = null;
     let gone = false;
     let later: SpaceConfig | null | undefined;
-    void import("./ncube").then(
-      (m) => {
-        if (gone) return;
-        inner = m.mountNcubeView(host, p as Parameters<typeof m.mountNcubeView>[1], label);
+    const load = /^\d+cube$/.test(p.polytope)
+      ? import("./ncube").then((m) => m.mountNcubeView(host, p as Parameters<typeof m.mountNcubeView>[1], label))
+      : import("./ndpoly").then((m) => m.mountNdpolyView(host, p as Parameters<typeof m.mountNdpolyView>[1], label));
+    void load.then(
+      (view) => {
+        if (gone) {
+          view.destroy();
+          return;
+        }
+        inner = view;
         if (later !== undefined) inner.show(later);
       },
       () => {

@@ -167,6 +167,10 @@ def make_qf(k):
         def __bool__(self):
             return self.a != 0 or self.b != 0
 
+        def __float__(self):
+            lo, hi = self.bounds(30)
+            return float((lo + hi) / 2)
+
         def bounds(self, digits=60):
             """Rational lower and upper bounds."""
             r = Fraction(sqrt_floor(k * 10 ** (2 * digits)), 10 ** digits)
@@ -945,7 +949,9 @@ def ball_volume_ok(cn, P, s):
     return P * ball_volume_lo(cn.n) <= boundary_volume_hi(cn) * s ** cn.n
 
 
-def check(polytope, piece, P, config, to_fraction, strict=True):
+def check(polytope, piece, P, config, to_fraction, strict=True, extra=0):
+    """Decides validity exactly. `extra` (a length, site units) widens the search past the thresholds so that margins up to that much are found
+    and reported (the fixtures' builder asks for 2e-12 to show their margins are at least 1e-12); the verdict does not depend on it."""
     if polytope not in NAMES:
         raise NDError(f"unknown container {polytope!r}")
     if piece != "ball":
@@ -960,21 +966,23 @@ def check(polytope, piece, P, config, to_fraction, strict=True):
         v.fail(f"{P} balls have more volume than the boundary of the {polytope} at s = {fmt(float(s))}")
         return v
     try:
-        _check_balls(cn, cfg, v)
+        _check_balls(cn, cfg, v, Fraction(extra))
     except WorkLimit as e:
         raise NDError(str(e)) from None
     return v
 
 
-def _check_balls(cn, cfg, v):
+def _check_balls(cn, cfg, v, extra=Fraction(0)):
     s, strict = cfg.s, v.strict
     scale2 = Fraction(2) / (s * s)  # real^2 -> base^2
     sp = READING_PAIR * s if strict else Fraction(0)
     sc = READING_CLEAR * s if strict else Fraction(0)
     pair_lim2 = (1 + sp) ** 2 * scale2
     clr_lim2 = (Fraction(1, 2) + sc) ** 2 * scale2
-    half = max(Fraction(1, 2) + sc, (1 + sp) / 2)
+    half = max(Fraction(1, 2) + sc, (1 + sp) / 2) + extra
     reach2 = half * half * scale2
+    # pairs and loops are searched up to a length of 2 * half, so that margins up to 2 extra show
+    pair_search2 = (2 * half) ** 2 * scale2
     budget = Budget()
     pts = []
     for n_, (c, u) in enumerate(zip(cfg.cells, cfg.U)):
@@ -1023,13 +1031,13 @@ def _check_balls(cn, cfg, v):
         for j in range(i + 1, len(pts)):
             xi, xj = pts[i][1], pts[j][1]
             diff = [p - q for p, q in zip(xi, xj)]
-            if dot(diff, diff) > pair_lim2:
+            if dot(diff, diff) > pair_search2:
                 continue
             npairs += 1
             m = None
             for A in chains[pts[i][0]]:
                 for B in chains[pts[j][0]]:
-                    r = join_distance2(cn, A, B, pair_lim2, budget, False)
+                    r = join_distance2(cn, A, B, pair_search2, budget, False)
                     if r is not None and (m is None or r < m):
                         m = r
             if m is None:
@@ -1043,7 +1051,7 @@ def _check_balls(cn, cfg, v):
         m = None
         for a in range(len(cs)):
             for b in range(a, len(cs)):
-                r = join_distance2(cn, cs[a], cs[b], pair_lim2, budget, a == b)
+                r = join_distance2(cn, cs[a], cs[b], pair_search2, budget, a == b)
                 if r is not None and (m is None or r < m):
                     m = r
         if m is None:
@@ -1056,6 +1064,85 @@ def _check_balls(cn, cfg, v):
     v.stats["pairs_within_1_in_Rd"] = npairs
     v.stats["chains"] = sum(len(nodes) for cs in chains.values() for nodes in cs)
     v.stats["steps"] = budget.steps
+
+
+def read_pieces(cn, cfg):
+    """The exact centres of a configuration (clamped into their closed cells) with the cells each one belongs to; raises NDError if one lies outside."""
+    s = cfg.s
+    pts = []
+    for n_, (c, u) in enumerate(zip(cfg.cells, cfg.U)):
+        x = read_centre(cn, c, u, s)
+        x, mv = clamp_exact(cn, c, x, s)
+        cl = cn.cell(c)
+        if any(sg(cl.hn[k] - dot(cl.Nn[k], x)) < 0 for k in range(len(cl.nbr))) or mv * s * s / 2 > (SNAP * s) ** 2:
+            raise NDError(f"piece {n_}: its centre lies outside its anchor cell {c}")
+        anchors = [(c, x)] + [(cl.nbr[k], x) for k in range(len(cl.nbr)) if sg(cl.hn[k] - dot(cl.Nn[k], x)) == 0]
+        pts.append((n_, x, anchors))
+    return pts
+
+
+def measure(polytope, P, config, to_fraction, reach=Fraction(1, 2) * (1 + Fraction(1, 10 ** 12))):
+    """For cross-checks: the exact squared distances (site units) the rule is made of, without a verdict: per centre the geodesic distance to the
+    hinges when it is at most `reach` (else None), per pair of centres closer than 1 in R^D the shortest straight path when it is below 1
+    (else None), per centre the shortest loop below 1. A centre within 1/2 of a hinge of its own cell is not developed further (pairs: the chord)."""
+    cfg = parse_config(polytope, P, config, to_fraction)
+    cn, s = cfg.cont, cfg.s
+    scale2 = Fraction(2) / (s * s)
+    reach2 = reach * reach * scale2
+    pair_lim2 = scale2
+    budget = Budget()
+    pts = read_pieces(cn, cfg)
+    clear, chains, crowded = [], {}, {}
+    for n_, x, anchors in pts:
+        best = None
+        for (c, xa) in anchors:
+            nodes = develop(cn, c, xa, Fraction(0), budget)
+            h2 = hinge_dist2(cn, nodes, 0, reach2, budget)
+            if h2 is not None and (best is None or h2 < best):
+                best = h2
+        crowded[n_] = best is not None and best < Fraction(1, 4) * scale2
+        if not crowded[n_]:
+            cs = []
+            for (c, xa) in anchors:
+                nodes = develop(cn, c, xa, reach2, budget)
+                cs.append(nodes)
+                for i in range(len(nodes)):
+                    h2 = hinge_dist2(cn, nodes, i, reach2, budget)
+                    if h2 is not None and (best is None or h2 < best):
+                        best = h2
+            chains[n_] = cs
+        clear.append(None if best is None else best / scale2)
+    pairs = {}
+    for i in range(len(pts)):
+        for j in range(i + 1, len(pts)):
+            diff = [p - q for p, q in zip(pts[i][1], pts[j][1])]
+            q2 = dot(diff, diff)
+            if q2 >= pair_lim2:
+                continue
+            if crowded[i] or crowded[j]:
+                pairs[(i, j)] = q2 / scale2
+                continue
+            m = None
+            for A in chains[i]:
+                for B in chains[j]:
+                    r = join_distance2(cn, A, B, pair_lim2 - Fraction(1, 10 ** 30), budget, False)
+                    if r is not None and (m is None or r < m):
+                        m = r
+            pairs[(i, j)] = None if m is None else m / scale2
+    loops = []
+    for n_, x, anchors in pts:
+        if crowded[n_]:
+            loops.append(None)
+            continue
+        cs = chains[n_]
+        m = None
+        for a in range(len(cs)):
+            for b in range(a, len(cs)):
+                r = join_distance2(cn, cs[a], cs[b], pair_lim2 - Fraction(1, 10 ** 30), budget, a == b)
+                if r is not None and (m is None or r < m):
+                    m = r
+        loops.append(None if m is None else m / scale2)
+    return {"clearance_sq": clear, "pairs_sq": pairs, "loops_sq": loops, "steps": budget.steps}
 
 
 def sqrt_down(x):

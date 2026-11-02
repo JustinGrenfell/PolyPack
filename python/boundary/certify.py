@@ -67,7 +67,8 @@ PIECES = ("ball", "cube")
 STATUSES = ("best_known", "proven")
 GENERAL_POLYTOPES = ("5cell", "16cell", "24cell", "120cell", "600cell")  # general.py (chains), balls only
 NCUBE_POLYTOPES = ("5cube", "6cube", "7cube", "8cube", "9cube", "10cube")  # ncube.py (lattice words in d - 1 axes, pruned by reach)
-ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})\Z")
+ND_POLYTOPES = tuple(f"{d}{f}" for f in ("simplex", "orthoplex", "demicube") for d in range(5, 11))  # ndpoly.py (chains in R^(d-1), balls only)
+ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube|(?:5|6|7|8|9|10)(?:simplex|orthoplex|demicube))/(ball|cube)/([1-9][0-9]{0,3})\Z")
 # pi to 50 decimals, truncated: a rational lower bound and (adding 1e-50) an upper bound
 PI_LO = Fraction("3.14159265358979323846264338327950288419716939937510")
 PI_HI = PI_LO + Fraction(1, 10 ** 50)
@@ -445,6 +446,8 @@ def check(problem, config, strict=True):
         return check_general(polytope, piece, P, config, strict)
     if polytope in NCUBE_POLYTOPES:
         return check_ncube(polytope, piece, P, config, strict)
+    if polytope in ND_POLYTOPES:
+        return check_nd(polytope, piece, P, config, strict)
     cfg = parse(problem, config)
     v = Verdict(cfg, strict)
     H, D = cfg.H, cfg.D
@@ -498,6 +501,18 @@ def check_ncube(polytope, piece, P, config, strict):
     except ncube.NCubeError as e:
         raise CertError(str(e)) from None
     v.ncube = True
+    return v
+
+
+def check_nd(polytope, piece, P, config, strict):
+    """The d-simplex, d-orthoplex and d-demicube, d = 5..10 (ndpoly.py): balls only; exact chains of cells in R^(d-1)."""
+    import ndpoly
+
+    try:
+        v = ndpoly.check(polytope, piece, P, config, to_fraction, strict=strict)
+    except ndpoly.NDError as e:
+        raise CertError(str(e)) from None
+    v.ndpoly = True
     return v
 
 
@@ -689,6 +704,10 @@ def summary(v):
         import ncube
 
         return ncube.summary(v)
+    if hasattr(v, "ndpoly"):
+        import ndpoly
+
+        return ndpoly.summary(v)
     out = {"checker": CHECKER, "version": VERSION, "strict": v.strict, "valid": v.ok}
     m = v.margins
     if v.cfg.piece == "ball":
@@ -860,6 +879,10 @@ def lower_bounds(piece, P, polytope="tesseract"):
         import ncube
 
         return ncube.exact_bounds(polytope, piece, P)
+    if polytope in ND_POLYTOPES:
+        import ndpoly
+
+        return ndpoly.exact_bounds(polytope, P)
     if piece == "ball":
         return [
             ("volume", "(P pi/48)^(1/3)", lambda x: x ** 3 * 48 <= P * PI_LO),

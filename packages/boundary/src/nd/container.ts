@@ -296,6 +296,48 @@ export class NDContainer {
     return lo;
   }
 
+  /** The cell's name for readers: "x3 = 0" (simplex), the sign vector "+-+-+" of the orthoplex facet sigma . x = 1, "+x2" or "-x2" and "w = -++-+" for the demicube's facets. */
+  facetLabel(c: number): string {
+    const { d, family } = this;
+    const sgn = (m: number) => Array.from({ length: d }, (_, i) => ((m >> i) & 1 ? "-" : "+")).join("");
+    if (family === "simplex") return `x${c + 1} = 0`;
+    if (family === "orthoplex") return sgn(c);
+    if (c < 2 * d) return `${c & 1 ? "+" : "-"}x${(c >> 1) + 1}`;
+    return `w = ${sgn(this.oddMasks[c - 2 * d])}`;
+  }
+
+  /**
+   * The container's vertices at edge s in the engine's ambient coordinates: e_j, +-e_i or the even sign vectors / 2, all scaled by s / sqrt 2. The
+   * simplex's centroid is (1/D) 1, not the origin: the ambient coordinates are the engine's, centres from toAmbient are in the same ones.
+   */
+  vertices(s = 1): Float64Array[] {
+    const { d, D, family } = this;
+    const f = s / E0;
+    const out: Float64Array[] = [];
+    if (family === "simplex") {
+      for (let j = 0; j < D; j++) {
+        const v = new Float64Array(D);
+        v[j] = f;
+        out.push(v);
+      }
+    } else if (family === "orthoplex") {
+      for (let i = 0; i < d; i++)
+        for (const sg of [-1, 1]) {
+          const v = new Float64Array(D);
+          v[i] = sg * f;
+          out.push(v);
+        }
+    } else {
+      for (let m = 0; m < 2 ** d; m++) {
+        if (popcount(m) % 2) continue;
+        const v = new Float64Array(D);
+        for (let i = 0; i < d; i++) v[i] = ((m >> i) & 1 ? -0.5 : 0.5) * f;
+        out.push(v);
+      }
+    }
+    return out;
+  }
+
   /** The ambient point of local coordinates u (n numbers, at edge s) of cell c. */
   toAmbient(c: number, u: ArrayLike<number>, s: number, uo = 0, out: Float64Array = new Float64Array(this.D)): Float64Array {
     const cl = this.cell(c);

@@ -175,9 +175,9 @@ const TURN_HELP: Record<SpaceName, string> = {
     "4D in 4D is drawn as a 3D slice: choose the axis, then move the slider to cut the container and the pieces across it. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset). From 5D the drawing is a projection onto two axes you choose, with a table of the pieces under it.",
 };
 
-/** The help line under the drawing of the d-cube boundaries (4D on 5D to 9D on 10D), which are not drawn like the tesseract's. */
+/** The help line under the drawing of the boundaries of the d-cube, simplex, orthoplex and demicube (4D on 5D to 9D on 10D), which are not drawn like the tesseract's. */
 const NCUBE_HELP =
-  "The chart shows the centres of the pieces projected onto two axes you choose, inside the projected d-cube, each facet in its own colour. The table lists every piece with its facet and centre.";
+  "The chart shows the centres of the pieces projected onto two axes you choose, inside the projected container, each facet in its own colour. The table lists every piece with its facet and centre.";
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
   evals: "Evaluation limit reached",
@@ -568,7 +568,7 @@ class SpaceMode {
     // a family that holds part of a space (an nD dimension) says what it is; the others use the API's text
     $("space-summary").textContent = this.scope && where ? `${where.dimension.summary} ${where.family.summary}` : SPACE_INFO[space].summary;
     $("space-turn-help").textContent =
-      space === "boundary" && this.scope?.values.every((v) => /^\d+cube$/.test(v)) ? NCUBE_HELP : TURN_HELP[space];
+      space === "boundary" && this.scope?.values.every((v) => /^\d+(cube|simplex|orthoplex|demicube)$/.test(v)) ? NCUBE_HELP : TURN_HELP[space];
     $("space-values-note").textContent =
       `The certified value is proven valid with ${certifiedBy(space)}. The site best is an entry sent to this site and checked by the server in floating point.`;
     $<HTMLAnchorElement>("space-docs").href = SPACE_INFO[space].docs;

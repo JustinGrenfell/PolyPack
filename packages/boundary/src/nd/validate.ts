@@ -181,8 +181,11 @@ export function anchorPiece(C: NDContainer, s: number, c: number, u: ArrayLike<n
   return { x, cell: c, moved: Math.sqrt(mv), outside, anchors };
 }
 
-/** Reach of the half-chains: half the diameter of a ball, with a hair for ties. */
-export const ND_REACH = 0.5 * (1 + 2e-9);
+/**
+ * Reach of the half-chains: half the diameter of a ball, with a hair for rounding. It must stay below the margins of the packings the server is to
+ * accept (records carry margins of 1e-12 and more): a hinge or a pair within the reach makes a tie, and ties are where the search cost explodes (4C.8).
+ */
+export const ND_REACH = 0.5 * (1 + 1e-12);
 
 function validateBalls(C: NDContainer, cfg: NDConfig, tol: number, maxReasons: number, budget: NDBudget): string[] {
   const reasons: string[] = [];
@@ -292,4 +295,68 @@ export function validateND(problem: NDProblem, config: unknown, opts: NDValidate
   }
   if (opts.stats) opts.stats.steps = budget.steps;
   return geo.length ? { ok: false, score: null, reasons: geo } : { ok: true, score: cfg.s, reasons: [] };
+}
+
+export interface NDMeasure {
+  /** Geodesic distance of each centre to the hinges (Infinity when above the reach 1/2), and the 'crowded' balls (within 1/2 of a hinge of their own cell, not developed). */
+  clearance: number[];
+  /** The shortest straight path between each pair of centres closer than 1 in R^D (Infinity when none is shorter than 1), and the shortest loop at each centre. */
+  pairs: { i: number; j: number; dist: number }[];
+  loops: number[];
+  steps: number;
+}
+
+/**
+ * The distances the rule is made of, for the cross-check against the exact certifier and the docs' measurements (no verdict): the
+ * clearance of each centre, the pair distances below 1 and the loops below 1. A centre within 1/2 of a hinge of its own cell is not
+ * developed (its pairs and loop are reported as the chord and Infinity).
+ */
+export function measureND(problem: NDProblem, config: NDConfig, opts: { maxWork?: number } = {}): NDMeasure {
+  const C = getND(problem.polytope);
+  const { s, pieces } = config;
+  const P = pieces.length;
+  const budget = newNDBudget(opts.maxWork ?? ND_MAX_WORK);
+  const eta = ndSnap(s, 0);
+  const at = pieces.map((p) => anchorPiece(C, s, p.cell, p.u, eta));
+  const chains: NDNode[][][] = [];
+  const clearance: number[] = [];
+  const crowded: boolean[] = [];
+  for (let i = 0; i < P; i++) {
+    const roots = at[i].anchors.map((an) => develop(C, s, an.cell, an.x, 0, budget));
+    let h = Infinity;
+    for (const r of roots) h = Math.min(h, hingeDistance(C, s, r, ND_REACH, budget).dist);
+    if (h < 0.5) {
+      crowded.push(true);
+      chains.push([]);
+      clearance.push(h);
+      continue;
+    }
+    crowded.push(false);
+    const cs = at[i].anchors.map((an) => develop(C, s, an.cell, an.x, ND_REACH, budget));
+    chains.push(cs);
+    for (const c of cs) h = Math.min(h, hingeDistance(C, s, c, ND_REACH, budget).dist);
+    clearance.push(h);
+  }
+  const pairs: NDMeasure["pairs"] = [];
+  for (let i = 0; i < P; i++)
+    for (let j = i + 1; j < P; j++) {
+      let q = 0;
+      for (let r = 0; r < C.D; r++) q += (at[i].x[r] - at[j].x[r]) ** 2;
+      if (!(q < 1)) continue;
+      if (crowded[i] || crowded[j]) {
+        pairs.push({ i, j, dist: Math.sqrt(q) });
+        continue;
+      }
+      let best = Infinity;
+      for (const A of chains[i]) for (const B of chains[j]) best = Math.min(best, joinDistance(C, s, A, B, Math.min(best, 1), budget, false).dist);
+      pairs.push({ i, j, dist: best });
+    }
+  const loops: number[] = [];
+  for (let i = 0; i < P; i++) {
+    let best = Infinity;
+    for (let a = 0; a < chains[i].length; a++)
+      for (let b = a; b < chains[i].length; b++) best = Math.min(best, joinDistance(C, s, chains[i][a], chains[i][b], Math.min(best, 1), budget, a === b).dist);
+    loops.push(best);
+  }
+  return { clearance, pairs, loops, steps: budget.steps };
 }
