@@ -441,6 +441,11 @@ class Adversarial(unittest.TestCase):
                 C.check(pid, cfg, strict=True)
         with self.assertRaises(C.CertError):
             C.check("boundary/5cell/sphere/1", ok, strict=True)
+        # an s too large for the reading slack is refused with a reason in strict mode (not accepted), and judged in plain mode
+        huge = {"s": 1000.0, "pieces": [engine_cfg(0, [0, 0, 0], [1, 0, 0, 0])]}
+        with self.assertRaisesRegex(C.CertError, "too large for a strict check"):
+            C.check(pid, huge, strict=True)
+        self.assertTrue(C.check(pid, huge, strict=False).ok)
         # a centre outside its cell is reported, not accepted
         far = {"s": 3.0, "pieces": [engine_cfg(0, [5, 5, 5], [1, 0, 0, 0])]}
         v = C.check(pid, far, strict=True)
