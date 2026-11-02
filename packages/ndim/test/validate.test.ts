@@ -20,6 +20,7 @@ import {
   unitVolume,
   type NdProblem,
 } from "../src";
+import "./preload";
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;

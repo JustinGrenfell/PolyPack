@@ -74,16 +74,26 @@ export async function loadNdProblem(p: Pick<NdProblemId, "d" | "piece" | "contai
 }
 
 /**
+ * Multiply-adds of one overlapping pair of polytopes, which GJK answers with EPA (and an LP for the direction) for the
+ * depth: measured at about 45 ms in 6D and 60 to 105 ms in 7D to 10D, whatever the polytope (a piled-up problem), which is
+ * about 3e6 d at 3e-6 ms per operation. Lower dimensions are much cheaper (5D: 10 ms) and ignored.
+ */
+const epaOps = (d: number): number => (d >= 6 ? 3e6 * d : 0);
+
+/**
  * Work of a check in multiply-adds, by the sizes alone: every vertex of every piece against every facet of the container
- * (P nV nF d; a ball piece P nF d, a ball container P nV d), and about P^2/2 pair tests of cost 40 nV d each. The
- * estimate of the server's heavy queue and budget; the cap is on the measured time.
+ * (P nV nF d; a ball piece P nF d, a ball container P nV d), about P^2/2 pair tests of cost 40 nV d each, and, for
+ * polytope pieces, the depth of the pairs that overlap: the check stops at NDIM_MAX_REASONS reasons, so at most that many
+ * pairs pay for EPA (epaOps). The estimate of the server's heavy queue and budget; the cap is on the measured time.
  */
 export function ndCheckOps(p: NdProblemId): number {
   const nV = (shape: string) => (shape === ND_BALL ? 1 : (ND_INFO.get(ndCode(p.d, shape))?.nV ?? 1));
   const nF = (shape: string) => (shape === ND_BALL ? 1 : (ND_INFO.get(ndCode(p.d, shape))?.nF ?? 1));
   const walls = p.container === ND_BALL ? p.P * nV(p.piece) * p.d : p.P * nV(p.piece) * nF(p.container) * p.d;
-  const pairs = ((p.P * (p.P - 1)) / 2) * 40 * nV(p.piece) * p.d;
-  return walls + pairs;
+  const nPairs = (p.P * (p.P - 1)) / 2;
+  const pairs = nPairs * 40 * nV(p.piece) * p.d;
+  const depth = p.piece === ND_BALL ? 0 : Math.min(nPairs, NDIM_MAX_REASONS) * epaOps(p.d);
+  return walls + pairs + depth;
 }
 
 /** Checks of at least this many multiply-adds (ndCheckOps) are heavy: the server queues them, one at a time (about 50 ms of work). */

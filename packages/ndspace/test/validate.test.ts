@@ -14,6 +14,7 @@ import {
   parseNdConfig,
 } from "../src/validate";
 import { cubePose, gridP, gridPacking } from "./helpers";
+import "./preload";
 
 beforeAll(async () => {
   await loadPolytope("8:421");
@@ -185,6 +186,17 @@ describe("checking a configuration", () => {
     await loadNdProblem({ d: 8, piece: "421", container: "421" });
     const k = ndKernel({ d: 8, piece: "421", container: "421", P: 2 });
     expect(k.P).toBe(2);
+  });
+
+  it("counts the depth (EPA) of overlapping pairs: piled-up problems of 7D to 10D are heavy, as small low-dimensional ones are not", () => {
+    // measured: a piled-up pair takes 60 to 105 ms in 7D to 10D, three or more of them 0.2 to 0.4 s (docs/spaces/NDIM.md)
+    for (const d of [7, 8, 9, 10])
+      for (const P of [2, 5, 20])
+        for (const piece of ["cube", "ortho", "simplex", "demi"])
+          expect(ndIsHeavy({ d, piece, container: "cube", P }), `${d}D ${piece} P=${P}`).toBe(true);
+    for (const d of [4, 5]) expect(ndIsHeavy({ d, piece: "cube", container: "cube", P: 20 }), `${d}D`).toBe(false);
+    expect(ndIsHeavy({ d: 10, piece: "ball", container: "cube", P: 20 })).toBe(false);
+    expect(ndIsHeavy({ d: 10, piece: "cube", container: "cube", P: 1 })).toBe(false);
   });
 
   it("checks no input for more than the cap, in the worst problems of every dimension", () => {

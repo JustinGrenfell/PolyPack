@@ -26,6 +26,7 @@ import {
   pieceWallGap,
   type NdProblem,
 } from "../src";
+import "./preload";
 
 beforeAll(async () => {
   await loadPolytope("8:421");

@@ -17,6 +17,7 @@ import {
   parseNdId,
 } from "../src/light";
 import { ndProblemOf } from "../src/validate";
+import "./preload";
 
 describe("the nD in nD catalogue", () => {
   it("names the polytopes of every dimension as the ndim package's catalogue does", () => {

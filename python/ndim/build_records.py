@@ -158,35 +158,13 @@ def cayley_upstream(S_upper, D, d):
 
 
 def robust_pose(t, R, d):
-    """The pose [t, k, flip] of a rotation matrix: the flip and Cayley parameters of smallest size whose matrix reproduces R
-    to 1e-12 (floatgeom.pose_of_matrix does not check this: for a matrix with an eigenvalue -1 under some flips the solve is
-    numerically singular and can return parameters of another rotation)."""
-    R = np.array(R, dtype=float)
-    best = None
-    for mask in range(1 << d):
-        if bin(mask).count('1') % 2:
-            continue
-        D = np.array([-1.0 if mask >> i & 1 else 1.0 for i in range(d)])
-        C = D[:, None] * R
-        I = np.eye(d)
-        try:
-            S = (C - I) @ np.linalg.inv(C + I)
-        except np.linalg.LinAlgError:
-            continue
-        params = [0.5 * (S[i, j] - S[j, i]) for i in range(d) for j in range(i + 1, d)]
-        size = max(abs(x) for x in params)
-        if not size <= MAX_CAYLEY or (best is not None and size >= best[0]):
-            continue
-        back = np.array(G.cayley_matrix(params, d, mask))
-        if np.abs(back - R).max() < 1e-12:
-            best = (size, params, mask)
-    if best is None:
-        raise ValueError('no Cayley form within the bound')
-    return [float(x) for x in t] + [float(x) for x in best[1]] + [best[2]]
+    """The pose [t, k, flip] of a rotation matrix (floatgeom.pose_of_matrix verifies the parameters it returns)."""
+    return [float(x) for x in G.pose_of_matrix([float(x) for x in t], np.array(R, dtype=float).tolist())]
 
 
-def convert(rec, up):
-    """The PolyPack configuration {s, pieces} of an upstream record, or raises."""
+def convert(rec, up, hints=None):
+    """The PolyPack configuration {s, pieces} of an upstream record, or raises. When a dict is passed as hints it is filled with
+    the record's separating-plane normals {(i, j): [normal]} in PolyPack's frame."""
     d = rec['dim']
     pk, ck = rec['piece'], rec['container']
     EP, QP = frames(up, pk)
@@ -198,6 +176,12 @@ def convert(rec, up):
     qp, qc = QP[sgn], QC[sgn]
     m = d * (d - 1) // 2
     pieces = []
+    if hints is None:
+        hints = {}
+    # the record's own separating planes [i, j, u_1..u_d, t] (u.x < t on piece i, > t on piece j) in the world frame of the
+    # upstream container; x' = Q_C x / E_P in PolyPack's, so the normal is Q_C u (certify tests it exactly, as any proposal)
+    for pl in rec.get('planes') or []:
+        hints.setdefault((int(pl[0]), int(pl[1])), []).append((qc @ np.array(pl[2:2 + d], dtype=float)).tolist())
     for row in rec['pieces']:
         c = np.array(row[:d], dtype=float)
         R = cayley_upstream(row[d:d + m], row[d + m:d + m + d], d)
@@ -227,8 +211,9 @@ def process(job):
     problem = {'d': d, 'piece': f'{d}:{MAP[pk][1]}', 'container': f'{d}:{MAP[ck][1]}'}
     out = {'file': path, 'd': d, 'piece': MAP[pk][1], 'container': MAP[ck][1], 'P': rec['n']}
     try:
-        config = convert(rec, up)
-        res = certify.certify_config(problem, config, clearance=0.0)
+        hints = {}
+        config = convert(rec, up, hints)
+        res = certify.certify_config(problem, config, clearance=0.0, hints=hints)
     except Exception as e:  # noqa: BLE001
         out.update(ok=False, error=f'{type(e).__name__}: {e}', seconds=time.time() - t0)
         return out

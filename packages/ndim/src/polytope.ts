@@ -7,17 +7,13 @@
  * (orthoplex, the cross-polytope), demi (demicube, d >= 5), 24cell, 120cell, 600cell (d = 4), 221 and 122 (d = 6, the
  * Gosset polytopes 2_21 and 1_22), 321 (d = 7), 421 (d = 8).
  *
- * The data of 8:421 (240 vertices, 19,440 facets, 2 MB of source) is loaded on demand: await loadPolytope("8:421") once;
- * getPolytope then returns it. The facts about every entry (counts, radii, volume) are in `INFO` and always available.
+ * The simplex, hypercube, orthoplex and demicube of every dimension are computed from formulas (./generate.ts) when
+ * first used, and so is 8:421 (240 vertices, 19,440 facets; it takes a fraction of a second). The other tables (the 24-, 120- and
+ * 600-cell, 2_21, 1_22, 3_21) are modules loaded on demand, and so is 8:421: await loadPolytope(code) once; getPolytope
+ * then returns it. The facts about every entry (counts, radii, volume) are in `INFO` and always available.
  */
 import { INFO } from "./data/info";
-import { D4 } from "./data/d4";
-import { D5 } from "./data/d5";
-import { D6 } from "./data/d6";
-import { D7 } from "./data/d7";
-import { D8 } from "./data/d8";
-import { D9 } from "./data/d9";
-import { D10 } from "./data/d10";
+import { generatePolytope } from "./generate";
 
 /** Facts about a polytope that do not need its coordinates. */
 export interface PolytopeInfo {
@@ -76,11 +72,12 @@ function build(data: PolytopeData): Polytope {
   return p;
 }
 
-const EAGER: PolytopeData[] = [...D4, ...D5, ...D6, ...D7, ...D8, ...D9, ...D10];
-const eagerByCode = new Map(EAGER.map((e) => [e.code, e]));
+/** Entries whose tables are loaded with loadPolytope (the other entries are computed from formulas, ./generate.ts). */
+export const LAZY_CODES: readonly string[] = INFO.map((i) => i.code).filter((c) => !generatable(c));
 
-/** Entries whose data is loaded with loadPolytope. */
-export const LAZY_CODES: readonly string[] = ["8:421"];
+function generatable(code: string): boolean {
+  return /^\d+:(simplex|cube|ortho|demi)$/.test(code);
+}
 
 /** The facts about a code; throws for an unknown code. */
 export function polytopeInfo(code: string): PolytopeInfo {
@@ -91,25 +88,40 @@ export function polytopeInfo(code: string): PolytopeInfo {
 
 /** Whether getPolytope(code) works now (the code exists and, for the lazy ones, has been loaded). */
 export function isLoaded(code: string): boolean {
-  return cache.has(code) || eagerByCode.has(code);
+  return cache.has(code) || (POLYTOPE_INFO.has(code) && generatable(code));
 }
 
 /** The polytope with its coordinates and facets. Throws for an unknown code, and for a lazy one that is not loaded yet. */
 export function getPolytope(code: string): Polytope {
   const hit = cache.get(code);
   if (hit) return hit;
-  const e = eagerByCode.get(code);
-  if (e) return build(e);
   polytopeInfo(code);
+  if (generatable(code)) return build({ code, ...generatePolytope(code)! });
   throw new Error(`${code} is loaded on demand: await loadPolytope(${JSON.stringify(code)}) first`);
 }
 
-/** Loads a polytope (the lazy ones from their module) and returns it. */
+/** Loads a polytope (the tables of the lazy ones from their module, 8:421 from its formula) and returns it. */
 export async function loadPolytope(code: string): Promise<Polytope> {
   if (isLoaded(code)) return getPolytope(code);
-  polytopeInfo(code);
-  if (code === "8:421") return build((await import("./data/d8-421")).default);
-  throw new Error(`no data module for ${code}`);
+  const info = polytopeInfo(code);
+  if (code === "8:421") return build({ code, ...generatePolytope(code)! });
+  let table: PolytopeData[];
+  switch (info.d) {
+    case 4:
+      table = (await import("./data/d4")).D4;
+      break;
+    case 6:
+      table = (await import("./data/d6")).D6;
+      break;
+    case 7:
+      table = (await import("./data/d7")).D7;
+      break;
+    default:
+      throw new Error(`no data for ${code}`);
+  }
+  const data = table.find((e) => e.code === code);
+  if (!data) throw new Error(`no data for ${code}`);
+  return build(data);
 }
 
 /** Codes of the catalogue in dimension d. */

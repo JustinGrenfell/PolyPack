@@ -282,10 +282,10 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
       scoring: SCORING,
       improvement: `an entry is kept only when its score is below the site leader's by more than a relative ${SCORE_TIE} and below the research record's s by more than a relative ${POLYHEDRA_RECORD_MARGIN.toExponential()}: the records keep the wiki's clearance of 1e-7 between pieces and from the walls, and removing it is not a better packing; an entry of a problem without a record, or one below the record, must also be valid with overlaps of at most ${SPACE_STRICT_TOL}`,
       work_limit:
-        "a check is stopped, with a reason, after 4 s of processor time; checks of large containers (the 4_21 polytope has 19,440 facets) or many pieces share the server's queue of heavy checks, one at a time, and are refused with 503 when it is full",
+        "a check is stopped, with a reason, after 8 s of processor time; checks of large containers (the 4_21 polytope has 19,440 facets) or many pieces share the server's queue of heavy checks, one at a time, and are refused with 503 when it is full",
     },
-    // no standalone viewer: phase E of the nD plan adds the board and the records page
-    viewer: "/#space=ndim",
+    // no viewer yet: the board does not show these problems (an empty path is "none"; pages show no link for it)
+    viewer: "",
     docs: spaceDocsUrl("NDIM.md"),
   },
 };

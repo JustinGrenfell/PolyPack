@@ -95,6 +95,51 @@ describe("Cayley rotations", () => {
   });
 });
 
+describe("poseOfMatrix verifies what it returns", () => {
+  const maxErr = (pose: number[], R: ArrayLike<number>, d: number) => {
+    const m = nParams(d);
+    const back = cayleyMatrix(pose.slice(d, d + m), d, pose[d + m]);
+    let e = 0;
+    for (let i = 0; i < d * d; i++) e = Math.max(e, Math.abs(back[i] - R[i]));
+    return e;
+  };
+  it("reproduces half turns about random 2-planes in 4 to 10 dimensions", () => {
+    const rnd = mulberry32(11);
+    for (let d = 4; d <= 10; d++)
+      for (let it = 0; it < 100; it++) {
+        const unit = (v: number[]) => {
+          const n = Math.hypot(...v);
+          return v.map((x) => x / n);
+        };
+        const u = unit(Array.from({ length: d }, () => rnd() - 0.5));
+        let v = Array.from({ length: d }, () => rnd() - 0.5);
+        const dp = v.reduce((a, x, k) => a + x * u[k], 0);
+        v = unit(v.map((x, k) => x - dp * u[k]));
+        const R = new Float64Array(d * d);
+        for (let i = 0; i < d; i++)
+          for (let j = 0; j < d; j++) R[i * d + j] = (i === j ? 1 : 0) - 2 * (u[i] * u[j] + v[i] * v[j]);
+        const pose = poseOfMatrix(new Float64Array(d), R, d);
+        expect(maxErr(pose, R, d), `d=${d} #${it}`).toBeLessThan(1e-12);
+      }
+  });
+  it("reproduces signed permutations of determinant 1 in 9 and 10 dimensions", () => {
+    const rnd = mulberry32(5);
+    for (const d of [8, 9, 10])
+      for (let it = 0; it < 150; it++) {
+        const perm = Array.from({ length: d }, (_, i) => i);
+        for (let i = d - 1; i > 0; i--) {
+          const j = Math.floor(rnd() * (i + 1));
+          [perm[i], perm[j]] = [perm[j], perm[i]];
+        }
+        const R = new Float64Array(d * d);
+        for (let i = 0; i < d; i++) R[i * d + perm[i]] = rnd() < 0.5 ? -1 : 1;
+        if (det(R, d) < 0) for (let j = 0; j < d; j++) R[j] = -R[j];
+        const pose = poseOfMatrix(new Float64Array(d), R, d);
+        expect(maxErr(pose, R, d), `d=${d} #${it}`).toBeLessThan(1e-12);
+      }
+  });
+});
+
 describe("readPose", () => {
   const d = 4;
   const m = nParams(d);

@@ -209,7 +209,7 @@ def plane_test(u_int, XA, XB):
     return bmin - amax
 
 
-def certify_config(problem, config, clearance=0.0):
+def certify_config(problem, config, clearance=0.0, hints=None):
     t0 = time.time()
     if not isinstance(problem, dict):
         raise CertError('problem must be an object {d, piece, container}')
@@ -333,7 +333,7 @@ def certify_config(problem, config, clearance=0.0):
                 else:
                     pair_min = min(pair_min, math.sqrt(float(d2)) - 1.0)
                 continue
-            gap = prove_pair(placed, XW, VF, NW, i, j, clr, NFL)
+            gap = prove_pair(placed, XW, VF, NW, i, j, clr, NFL, None if hints is None else hints.get((i, j)))
             if gap is None:
                 failures.append(('pair', i, j))
             else:
@@ -343,7 +343,7 @@ def certify_config(problem, config, clearance=0.0):
             'failures': failures[:20], 'seconds': round(time.time() - t0, 3)}
 
 
-def prove_pair(placed, XW, VF, NW, i, j, clr, NFL=None):
+def prove_pair(placed, XW, VF, NW, i, j, clr, NFL=None, hints=None):
     """Proves pieces i and j (both polytopes) strictly separated by an explicit rational plane; returns the gap proved
     along the plane's unit normal (a float lower bound, rounded down) or None. Floating point proposes the directions:
     the line between the centres, the facet normals of both pieces when they have few facets (ranked by their float
@@ -398,7 +398,35 @@ def prove_pair(placed, XW, VF, NW, i, j, clr, NFL=None):
         return best[0][0]
     if best[0] is not None and best[0][1]:
         return best[0][0]
+    for h in hints or ():
+        if attempt(h, XW[i], XW[j]):
+            return best[0][0]
+    lp = lp_direction(A, B)
+    if lp is not None and attempt(lp, XW[i], XW[j]):
+        return best[0][0]
     return None
+
+
+LP_SCALE = 1e6
+
+
+def lp_direction(A, B):
+    """The max-margin direction between two vertex sets by a linear program (scipy's HiGHS, when installed; None
+    otherwise): u with |u_k| <= 1e6 maximising m subject to u.a + m <= c <= u.b - m for every a in A, b in B. Where the gap is
+    1e-7 or less the closest points of GJK are not accurate enough and this direction still is."""
+    try:
+        from scipy.optimize import linprog
+    except ImportError:
+        return None
+    d = len(A[0])
+    # |u_k| <= 1e6, not 1, and a feasibility tolerance of 1e-9, not the default 1e-7: the margin of a gap of 1e-7 is not lost
+    rows = [list(a) + [-1.0, 1.0] for a in A] + [[-x for x in b] + [1.0, 1.0] for b in B]
+    res = linprog([0.0] * (d + 1) + [-1.0], A_ub=rows, b_ub=[0.0] * len(rows),
+                  bounds=[(-LP_SCALE, LP_SCALE)] * d + [(None, None), (None, None)], method='highs',
+                  options={'primal_feasibility_tolerance': 1e-9, 'dual_feasibility_tolerance': 1e-9})
+    if res.status != 0 or res.x is None or not res.x[d + 1] > 0:
+        return None
+    return [float(x) for x in res.x[:d]]
 
 
 def exact_plane(XA, XB, u):

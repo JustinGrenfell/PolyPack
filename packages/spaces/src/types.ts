@@ -70,7 +70,7 @@ export interface SpaceInfo {
   records: number;
   /** The space's domain, when its problems are given by one (domain.ts); the listing then holds its records only. */
   domain?: SpaceDomainInfo;
-  /** Path of the static viewer, e.g. "/spaces/surface.html". */
+  /** Path of the static viewer, e.g. "/spaces/surface.html"; empty when the space has none yet. */
   viewer: string;
   /** URL of the space's notes on GitHub. */
   docs: string;

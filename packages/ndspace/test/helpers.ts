@@ -1,6 +1,7 @@
 /** Test packings of the nD in nD space: a grid of balls or unit hypercubes in a hypercube, a hair apart. */
 import { ND_P_RANGE, type NdProblemId } from "../src/catalogue";
 import type { NdConfigShape } from "../src/validate";
+import "./preload";
 
 /** The identity pose of a hypercube centred at t: centre, zero Cayley parameters, no flip. */
 export const cubePose = (t: number[]): number[] => [...t, ...new Array((t.length * (t.length - 1)) / 2).fill(0), 0];
