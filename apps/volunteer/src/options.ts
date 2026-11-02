@@ -116,8 +116,8 @@ Usage: node polypack-volunteer.mjs [options]
 Optional, off by default: the other kinds of problem (see ${DEFAULT_BASE}/dimensions.html).
 The problems above are Flat (2D in 2D): polygons in polygons. These options add curved (2D in 2D
 at constant curvature); surface, sphere and torus (2D on 3D: on the surface of a polyhedron,
-on a whole sphere, on a flat torus); boundary (3D on 4D: unit balls and cubes on the boundary of
-a tesseract); polyhedra (3D in 3D: solids in a solid); and balls (3D in 3D: unit balls in a ball
+on a whole sphere, on a flat torus); boundary (3D on 4D: unit balls and Platonic solids on the boundary of
+a regular 4-polytope); polyhedra (3D in 3D: solids in a solid); and balls (3D in 3D: unit balls in a ball
 or in one of 186 solids, and each of those solids in a ball); and ndim (4D to 10D: convex polytopes or balls in a
 polytope or ball). The API calls these kinds spaces.
 Without these options the client never asks for them.

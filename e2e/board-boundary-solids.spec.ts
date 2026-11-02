@@ -124,7 +124,7 @@ test("a short run packs a solid, the three views draw it, and the server takes i
   expect(errors).toEqual([]);
 });
 
-test("another solid is drawn in the view last used, and the dimensions page counts the solids", async ({ page }) => {
+test("another solid is drawn in the view last used; the dimensions page counts the solids and the Records page lists them", async ({ page }) => {
   const errors = pageErrors(page);
   // two test packings, as site entries (the server's rule judges them first)
   await seed(page, "boundary/tesseract/icosahedron/2");
@@ -143,5 +143,14 @@ test("another solid is drawn in the view last used, and the dimensions page coun
   // the dimensions page counts the 3D on 4D problems and opens the table of the solids
   await page.goto("/dimensions.html");
   await expect(page.locator('#dimension-groups > section[data-dimension="3-on-4"]')).toContainText("816");
+  // the Records page offers the solids under Piece and lists a solid that has a site entry (and no research record)
+  await page.goto("/records.html#space=boundary&polytope=tesseract&piece=icosahedron");
+  await expect(page.locator("#pick-piece")).toHaveValue("icosahedron");
+  await expect(page.locator("#pick-piece option")).toHaveText(SOLIDS);
+  const row = page.locator("#rec-rows tr").filter({ hasText: "2.137616" });
+  await expect(row).toHaveCount(1);
+  await expect(row.locator("td").first()).toHaveText("2");
+  await page.goto("/records.html#space=boundary&polytope=24cell&piece=octahedron");
+  await expect(page.locator("#table-note")).toContainText("No problem of this family has a record or an entry yet");
   expect(errors).toEqual([]);
 });
