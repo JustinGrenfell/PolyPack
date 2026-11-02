@@ -52,7 +52,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
   const R = BOUNDARY_SERVER_RULE;
   if (isNCubeName(problem.polytope))
-    return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, raw);
+    return ncubeFormErrors({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, raw);
   if (!isObject(raw)) return ["config must be an object"];
   const errors: string[] = [];
   const num = (v: unknown, path: string, max: number, positive = false): number => {
@@ -104,7 +104,7 @@ export function serverForm(problem: BoundaryProblem, raw: unknown): string[] {
 export function serverRule(problem: BoundaryProblem, config: unknown, bound: number): Validation {
   const R = BOUNDARY_SERVER_RULE;
   if (isNCubeName(problem.polytope))
-    return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece, P: problem.P }, config, bound);
+    return ncubeServerRule({ polytope: problem.polytope, piece: problem.piece as "ball" | "cube", P: problem.P }, config, bound);
   const fail = (reasons: string[], score: number | null = null): Validation => ({ valid: false, score, reasons });
   if (problem.P > R.maxP)
     return fail([`P = ${problem.P} is above the largest P of the boundary catalogue (${R.maxP})`]);

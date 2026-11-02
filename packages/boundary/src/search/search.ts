@@ -247,7 +247,7 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
   const poly = getPolytope(problem.polytope);
   const charts = chartsOf(poly);
   const model = modelOf(problem, opts.ballMetric);
-  const plan = PLANS[problem.piece];
+  const plan = PLANS[problem.piece === "ball" ? "ball" : "cube"];
   const P = problem.P;
   const rand = mulberry32(opts.seed);
   const clock = opts.now ?? (() => performance.now() / 1000);

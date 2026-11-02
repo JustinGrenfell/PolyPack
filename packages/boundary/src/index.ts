@@ -1,14 +1,16 @@
 /** The boundary space: (d-1)-dimensional pieces on the boundary of a convex d-polytope ("3D on 4D"). */
 export * from "./types";
 export { BALL_RADIUS } from "./units";
-export { ISO_IDENTITY, isoApply, isoCompose, isoFromAffine, isoInverse, isoLinear, isoToAffine, quaternionToMatrix } from "./linalg";
+export { ISO_IDENTITY, isoApply, isoCompose, isoFromAffine, isoInverse, isoLinear, isoToAffine, matrixToQuaternion, quaternionToMatrix } from "./linalg";
 export type { Iso3, V3 } from "./linalg";
 export { convexHull } from "./hull";
 export type { HullFacet, HullRidge } from "./hull";
 export { boundaryVolume, buildPolytope, cellExcess, compareNormals, facetPlane, fromAmbient, getPolytope, isPolytopeName, tesseractVertices, toAmbient } from "./polytope";
 export { BOUNDARY_DOMAIN_MAX_P, BOUNDARY_PROBLEM_COUNT, boundaryDomain } from "./domain";
-export { BOUNDARY_BALL_MS, BOUNDARY_HEAVY_MS, CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds, boundaryCheckMs, boundaryIsHeavy, containerFacts } from "./bounds";
+export { BOUNDARY_BALL_MS, BOUNDARY_HEAVY_MS, CONTAINER_MAX_P, CONTAINER_PIECES, ballBounds, boundaryCheckMs, pieceBounds, boundaryIsHeavy, containerFacts } from "./bounds";
 export type { ContainerFacts } from "./bounds";
+export { POLYTOPE_PIECES, isPolytopePiece, pieceShape, rotationOnto } from "./pieces";
+export type { PieceShape } from "./pieces";
 export { RAW_EDGE, rawVertices, unitVertices } from "./containers";
 export { MAX_P, formatBoundaryId, isPieceCount, isPieceName, parseBoundaryId, standardPiece } from "./ids";
 export {

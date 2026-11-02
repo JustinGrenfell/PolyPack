@@ -17,7 +17,8 @@
  */
 import { NCUBE_MAX_P, ncubeCheckMs } from "./ncube/bounds";
 import { NCUBE_NAMES, isNCubeName } from "./ncube/lattice";
-import type { ContainerName, PieceName, PolytopeName } from "./types";
+import { pieceShape } from "./pieces";
+import type { ContainerName, PieceName, PolytopeName, PolytopePieceName } from "./types";
 
 const PHI = (1 + Math.sqrt(5)) / 2;
 
@@ -89,19 +90,46 @@ export function ballBounds(
     : { volume, onePiece, value: onePiece, kind: "one piece" };
 }
 
-/** Which pieces each container takes (balls on all six; the tesseract's axis-aligned cubes besides). */
+/**
+ * The proven lower bounds on s of P Platonic pieces on a 4-polytope's boundary, and the larger (docs/spaces/BOUNDARY.md 4C.4).
+ *  - Volume: developments are injective on interiors with disjoint images, so P V_piece <= V_boundary s^3.
+ *  - One piece: the piece contains the ball of its inradius r about its centre, and that ball must be a valid ball; its centre needs
+ *    distance >= r from every hinge, and every point of a cell lies within s rho of its edges (rho the cell's midradius, 4A.4). So s >= r / rho.
+ * Each stored as a binary64 rounded down by a relative 1e-15, like the ball bounds. On the tesseract the cube is not listed here
+ * (its records' bounds are kernel-validate.ts boundaryBound); the other four pieces are.
+ */
+export function pieceBounds(
+  name: PolytopeName,
+  piece: PolytopePieceName,
+  P: number,
+): { volume: number; onePiece: number; value: number; kind: "volume" | "one piece" } {
+  const f = containerFacts(name);
+  const sh = pieceShape(piece);
+  const down = 1 - 1e-15;
+  const volume = Math.cbrt((P * sh.volume) / f.boundaryVolume) * down;
+  const onePiece = (sh.inradius / f.midradius) * down;
+  return volume > onePiece ? { volume, onePiece, value: volume, kind: "volume" } : { volume, onePiece, value: onePiece, kind: "one piece" };
+}
+
+const ALL_PIECES: readonly PieceName[] = ["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"];
+
+/**
+ * Which pieces each container takes. The five regular 4-polytopes besides the tesseract take balls and all five Platonic solids,
+ * freely rotated (so "cube" there is a rotated cube); the tesseract takes balls, its axis-aligned cubes (the records' problems) and
+ * the other four solids; the d-cubes (d = 5..10) take balls and axis-aligned cubes.
+ */
 export const CONTAINER_PIECES: Record<ContainerName, readonly PieceName[]> = {
   // the d-cubes (d = 5..10) take balls and axis-aligned cubes
   ...(Object.fromEntries(NCUBE_NAMES.map((n) => [n, ["ball", "cube"] as readonly PieceName[]])) as Record<
     (typeof NCUBE_NAMES)[number],
     readonly PieceName[]
   >),
-  tesseract: ["ball", "cube"],
-  "5cell": ["ball"],
-  "16cell": ["ball"],
-  "24cell": ["ball"],
-  "120cell": ["ball"],
-  "600cell": ["ball"],
+  tesseract: ALL_PIECES,
+  "5cell": ALL_PIECES,
+  "16cell": ALL_PIECES,
+  "24cell": ALL_PIECES,
+  "120cell": ALL_PIECES,
+  "600cell": ALL_PIECES,
 };
 
 /** The largest P of each container in the catalogue: the tesseract's 16, 24 for the others. */

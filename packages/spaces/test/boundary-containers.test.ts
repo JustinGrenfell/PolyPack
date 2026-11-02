@@ -35,21 +35,24 @@ const scaled = (c: any, f: number) => ({
 });
 
 describe("the boundary domain", () => {
-  it("is balls on six containers (P = 1 to 24; the tesseract 1 to 16), the tesseract's cubes (152 problems) and the six d-cubes (4,288)", () => {
+  it("is balls and the five Platonic solids on six containers (P = 1 to 24; the tesseract 1 to 16; 816 problems) and the six d-cubes (4,288)", () => {
     expect(SPACE_DOMAINS.boundary).toBe(boundaryDomain);
     // the d-cubes: balls and cubes for P up to 160, 384 and 400 (four times), see ncube/bounds.ts
     const NCUBE_PROBLEMS = 2 * (160 + 384 + 4 * 400);
-    expect(boundaryDomain.info.problems).toBe(32 + 5 * 24 + NCUBE_PROBLEMS);
+    // 4-polytopes: the tesseract's balls and aligned cubes (32) and its four other solids (4 x 16), balls on the five others and the five solids (5 x 6 x 24)
+    expect(boundaryDomain.info.problems).toBe(32 + 4 * 16 + 5 * 6 * 24 + NCUBE_PROBLEMS);
     expect(cat.domain).toBe(boundaryDomain);
     expect(cat.maxP).toBe(400);
     // the sample lists each problem once, small P first, and every id parses
     const ids = boundaryDomain.sample(100000);
-    expect(ids).toHaveLength(152 + NCUBE_PROBLEMS);
-    expect(new Set(ids).size).toBe(152 + NCUBE_PROBLEMS);
-    expect(ids.slice(0, 7)).toEqual([
+    expect(ids).toHaveLength(816 + NCUBE_PROBLEMS);
+    expect(new Set(ids).size).toBe(816 + NCUBE_PROBLEMS);
+    expect(ids.slice(0, 5)).toEqual([
       "boundary/tesseract/ball/1",
       "boundary/tesseract/cube/1",
-      ...NEW.slice(0, 5).map((n) => `boundary/${n}/ball/1`),
+      "boundary/tesseract/tetrahedron/1",
+      "boundary/tesseract/octahedron/1",
+      "boundary/tesseract/dodecahedron/1",
     ]);
     for (const id of ids) {
       const p = parseSpaceId("boundary", id);
@@ -58,8 +61,10 @@ describe("the boundary domain", () => {
     }
     // the fields the board's picker reads: the pieces and the P range depend on the polytope
     const piece = boundaryDomain.info.fields.find((f) => f.key === "piece")!;
-    expect(piece.dependent!.values!.tesseract).toEqual(["ball", "cube"]);
-    expect(piece.dependent!.values!["24cell"]).toEqual(["ball"]);
+    const SOLIDS = ["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"];
+    expect(piece.dependent!.values!.tesseract).toEqual(SOLIDS);
+    expect(piece.dependent!.values!["24cell"]).toEqual(SOLIDS);
+    expect(piece.dependent!.values!["6cube"]).toEqual(["ball", "cube"]);
     const P = boundaryDomain.info.fields.find((f) => f.key === "P")!;
     expect(P.dependent!.ranges!.tesseract).toEqual([1, 16]);
     expect(P.dependent!.ranges!["600cell"]).toEqual([1, 24]);
@@ -86,12 +91,13 @@ describe("the boundary domain", () => {
       }
   });
 
-  it("has no problem outside the domain: a cube off the tesseract, P above the container's largest, an unknown polytope", () => {
+  it("has no problem outside the domain: a Platonic solid on a d-cube, P above the container's largest, an unknown polytope", () => {
     for (const id of [
-      "boundary/24cell/cube/3",
+      "boundary/6cube/tetrahedron/3",
       "boundary/tesseract/ball/17",
       "boundary/600cell/ball/25",
       "boundary/tesseract/cube/17",
+      "boundary/5cell/icosahedron/25",
     ]) {
       const parsed = parseSpaceId("boundary", id);
       if (typeof parsed === "string") expect(parsed).toMatch(/takes ball/);
@@ -109,7 +115,9 @@ describe("the boundary domain", () => {
       polytope: "24cell",
       piece: "ball",
     });
-    expect(parseSearchProblem("boundary/24cell/cube/5")).toBeNull();
+    // a rotated cube is a problem of the 24-cell now; a Platonic solid is none of a d-cube
+    expect(parseSearchProblem("boundary/24cell/cube/5")).toMatchObject({ polytope: "24cell", piece: "cube", P: 5 });
+    expect(parseSearchProblem("boundary/6cube/tetrahedron/5")).toBeNull();
   });
 });
 

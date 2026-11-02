@@ -100,7 +100,7 @@ describe("boundary problem ids", () => {
     expect(typeof parseSpaceId("boundary", 9)).toBe("string");
     // the message names the form and, when the id has four parts, what is wrong
     expect(parseSpaceId("boundary", "boundary/tesseract/ball/09")).toMatch(
-      /the form is boundary\/<polytope>\/<piece>\/<P>, polytope tesseract or 5cell or 16cell or 24cell or 120cell or 600cell or 5cube or 6cube or 7cube or 8cube or 9cube or 10cube, piece ball or cube\. .*without leading zeros/,
+      /the form is boundary\/<polytope>\/<piece>\/<P>, polytope tesseract or 5cell or 16cell or 24cell or 120cell or 600cell or 5cube or 6cube or 7cube or 8cube or 9cube or 10cube, piece ball or cube or tetrahedron or octahedron or dodecahedron or icosahedron\. .*without leading zeros/,
     );
     expect(parseSpaceId("boundary", "boundary/tesseract/sphere/9")).toMatch(/Unknown piece "sphere"/);
     expect(parseSpaceId("sphere", "boundary/tesseract/ball/9")).toMatch(/starts with "sphere\/"/);

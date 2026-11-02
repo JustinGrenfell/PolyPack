@@ -32,9 +32,14 @@ export type { NCubeName };
 export type ContainerName = PolytopeName | NCubeName;
 export const CONTAINERS: readonly ContainerName[] = [...POLYTOPES, ...NCUBE_NAMES];
 
-/** Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. */
-export type PieceName = "ball" | "cube";
-export const PIECES: readonly PieceName[] = ["ball", "cube"];
+/**
+ * Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. For d = 4 these are the five
+ * Platonic solids (pieces.ts). On the tesseract "cube" is the axis-aligned cube of its records; on the other 4-polytopes it is a
+ * freely rotated cube; on the d-cubes (d = 5..10) the axis-aligned (d-1)-cube.
+ */
+export type PolytopePieceName = "tetrahedron" | "cube" | "octahedron" | "dodecahedron" | "icosahedron";
+export type PieceName = "ball" | PolytopePieceName;
+export const PIECES: readonly PieceName[] = ["ball", "cube", "tetrahedron", "octahedron", "dodecahedron", "icosahedron"];
 
 /**
  * A problem: P pieces of one kind on one polytope. Its id is written

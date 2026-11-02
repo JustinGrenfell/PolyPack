@@ -67,7 +67,8 @@ PIECES = ("ball", "cube")
 STATUSES = ("best_known", "proven")
 GENERAL_POLYTOPES = ("5cell", "16cell", "24cell", "120cell", "600cell")  # general.py (chains), balls only
 NCUBE_POLYTOPES = ("5cube", "6cube", "7cube", "8cube", "9cube", "10cube")  # ncube.py (lattice words in d - 1 axes, pruned by reach)
-ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube)/([1-9][0-9]{0,3})\Z")
+ID_RE = re.compile(r"^boundary/(tesseract|5cell|16cell|24cell|120cell|600cell|5cube|6cube|7cube|8cube|9cube|10cube)/(ball|cube|tetrahedron|octahedron|dodecahedron|icosahedron)/([1-9][0-9]{0,3})\Z")
+PLATONIC_PIECES = ("tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron")  # platonic.py (rotated solids; the tesseract's cube stays here)
 # pi to 50 decimals, truncated: a rational lower bound and (adding 1e-50) an upper bound
 PI_LO = Fraction("3.14159265358979323846264338327950288419716939937510")
 PI_HI = PI_LO + Fraction(1, 10 ** 50)
@@ -441,6 +442,8 @@ def check(problem, config, strict=True):
     """Decides validity exactly. Returns a Verdict; raises CertError only for malformed input or a
     configuration outside the certifier's scope (rotated cubes)."""
     polytope, piece, P = problem_fields(problem)
+    if is_platonic(polytope, piece):
+        return check_platonic(polytope, piece, P, config, strict)
     if polytope in GENERAL_POLYTOPES:
         return check_general(polytope, piece, P, config, strict)
     if polytope in NCUBE_POLYTOPES:
@@ -458,6 +461,32 @@ def check(problem, config, strict=True):
     else:
         _check_cubes(cfg, v)
     return v
+
+
+def is_platonic(polytope, piece):
+    """Problems of rotated Platonic pieces (platonic.py): every piece but the ball on the five general containers, and the tesseract's solids but
+    its axis-aligned cube (whose records the lattice words below certify)."""
+    if piece not in PLATONIC_PIECES:
+        return False
+    return polytope in GENERAL_POLYTOPES or (polytope == "tesseract" and piece != "cube")
+
+
+def check_platonic(polytope, piece, P, config, strict):
+    """Rotated Platonic pieces (platonic.py): exact charts and chains of cells, parts compared by an exact separating-axis test."""
+    import platonic
+
+    try:
+        v = platonic.check_pieces(polytope, piece, P, config, to_fraction, strict=strict)
+    except (platonic.PlatonicError, general_errors()) as e:
+        raise CertError(str(e)) from None
+    v.platonic = True
+    return v
+
+
+def general_errors():
+    import general
+
+    return (general.GeneralError, general.ChainLimit)
 
 
 def check_general(polytope, piece, P, config, strict):
@@ -689,6 +718,10 @@ def summary(v):
         import ncube
 
         return ncube.summary(v)
+    if hasattr(v, "platonic"):
+        import platonic
+
+        return platonic.summary(v)
     out = {"checker": CHECKER, "version": VERSION, "strict": v.strict, "valid": v.ok}
     m = v.margins
     if v.cfg.piece == "ball":
@@ -852,6 +885,10 @@ def problem_P(problem):
 def lower_bounds(piece, P, polytope="tesseract"):
     """The proven lower bounds on s (BOUNDARY.md 5) as (kind, exact text, check), where check(x)
     decides exactly whether the rational x is <= the bound."""
+    if is_platonic(polytope, piece):
+        import platonic
+
+        return platonic.exact_bounds(polytope, piece, P)
     if polytope in GENERAL_POLYTOPES:
         import general
 

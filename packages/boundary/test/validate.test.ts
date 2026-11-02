@@ -279,7 +279,7 @@ describe("adversarial configurations", () => {
     expect(r(problem("cube", 1), { s: 2 })).toMatch(/list of pieces/);
     expect(r(problem("cube", 1), { s: 2, pieces: [null] })).toMatch(/Piece 0 must be an object/);
     expect(r({ polytope: "cube" as never, piece: "ball", P: 1 }, ok)).toMatch(/Unknown polytope/);
-    expect(r({ polytope: "tesseract", piece: "tetrahedron" as never, P: 1 }, ok)).toMatch(/Unknown piece/);
+    expect(r({ polytope: "tesseract", piece: "sphere" as never, P: 1 }, ok)).toMatch(/Unknown piece/);
     expect(r({ polytope: "tesseract", piece: "ball", P: 0 }, ok)).toMatch(/whole number from 1 to 9999/);
     expect(r({ polytope: "tesseract", piece: "ball", P: 10000 }, ok)).toMatch(/whole number from 1 to 9999/);
     expect(r({ polytope: "tesseract", piece: "ball", P: 1.5 }, ok)).toMatch(/whole number from 1 to 9999/);
