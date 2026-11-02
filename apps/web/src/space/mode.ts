@@ -45,6 +45,7 @@ import {
   problemFacts,
   scoreLabel,
   roundSize,
+  submittingText,
   searchKind,
   shownText,
 } from "./model";
@@ -1289,7 +1290,7 @@ class SpaceMode {
     this.submitting = true;
     this.renderSubmit();
     out.className = "note";
-    out.textContent = "Submitting…";
+    out.textContent = submittingText(handle.problem.search);
     // the method with its settings, the seed and the start of the run that found it, as much as fits
     const named = handle.methodName(result.method);
     const settings = Object.keys(result.params).length ? `${named} ${JSON.stringify(result.params)}` : named;

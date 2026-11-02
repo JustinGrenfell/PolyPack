@@ -73,7 +73,11 @@ export function mountNcubeView(host: HTMLElement, p: BoundaryProblem, label = "D
   let ax = 0;
   let ay = 1;
   let config: { s: number; pieces: NPiece[] } | null = null;
+  // until the user picks axes, the chart uses the two axes that the fewest pieces have their facet on, so that the pieces
+  // of the other facets show in full instead of as dots on the edge
+  let touched = false;
   const fx = labelledSelect("Horizontal axis", axes, String(ax), (v) => {
+    touched = true;
     ax = Number(v);
     if (ax === ay) {
       ay = (ax + 1) % d;
@@ -82,6 +86,7 @@ export function mountNcubeView(host: HTMLElement, p: BoundaryProblem, label = "D
     draw();
   }, { "data-nd": "axis-x" });
   const fy = labelledSelect("Vertical axis", axes, String(ay), (v) => {
+    touched = true;
     ay = Number(v);
     if (ax === ay) {
       ax = (ay + 1) % d;
@@ -167,6 +172,14 @@ export function mountNcubeView(host: HTMLElement, p: BoundaryProblem, label = "D
   return {
     show(c: SpaceConfig | null) {
       config = c ? readNcubeConfig(c, d) : null;
+      if (config && !touched) {
+        const use = Array.from({ length: d }, () => 0);
+        for (const q of config.pieces) use[Math.floor(q.cell / 2)]++;
+        const order = use.map((n, k) => [n, k]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        [ax, ay] = [order[0][1], order[1][1]].sort((a, b) => a - b);
+        fx.select.value = String(ax);
+        fy.select.value = String(ay);
+      }
       renderTable();
       draw();
     },

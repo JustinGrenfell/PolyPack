@@ -523,3 +523,14 @@ THIRD_PARTY_NOTICES.md), the same way as 3D in 3D (`docs/spaces/POLYHEDRA.md` §
 Tests: `python/ndim/test_ndim.py` (`ImportedRecords`: a sample of nine records of every dimension certified again exactly, a
 tampered record refused, the counts), `packages/spaces/test/ndim-records.test.ts` (the index, the credits, and every record read
 back and valid at tolerance 0 by the float validator).
+
+## 13. On the site (phase E)
+
+The nD in nD space is on the site as seven dimensions, **4D in 4D** to **10D in 10D**, one for each value of `d`; the API keeps one space, `ndim`. The d-cubes of [BOUNDARY.md](BOUNDARY.md) 4B are the other new dimensions, **4D on 5D** to **9D on 10D**, in the space `boundary`. "3D on 4D" is unchanged. Not in Tighter.
+
+- **Addresses.** `#space=ndim/<d>/<piece>/<container>/<P>` opens that problem in its dimension, `#space=ndim` opens 4D in 4D, and `/records.html#space=ndim&d=6` and `/dimensions.html#space=ndim&d=6` open the records of 6D in 6D. Every earlier address of `boundary` keeps its meaning.
+- **Board.** 4D in 4D is a 3D slice by x_k = c (choose k, move c over the container's extent); the container and each piece are cut by the hyperplane, a polytope to the hull of its vertices on it and of its edges' crossings, a ball to a ball of radius sqrt(r^2 - (c - x_k)^2). From 5D the board shows a table of the pieces (number, shape, centre, how far it is turned) and a chart of their projection onto two chosen axes. A run and a submission work as in the other spaces, through `ndKernel` and `POST /api/spaces/submit`. An entry whose check the server counts as heavy (`ndIsHeavy`, §10) waits in the server's queue, and the board says so while it waits and then shows the server's answer; a full queue is a 503 and nothing is stored. [BOARD.md](BOARD.md) has the details.
+- **Records.** The Records page and the dimensions page list the problems of each dimension, with titles such as "4D: 24-cells in a 600-cell" and the score s ("container scale s", or "container diameter" for a ball container). The 4D to 6D records show where they come from (the wiki's higher-polytope tab, found by Alejandro Zarzuelo, with the credit as given there, converted and certified again here); 7D to 10D have no record yet.
+- **Volunteer client.** `ndim` is opt-in: a default run draws flat problems only. It is searched with `--dimensions ndim` or as part of `--dimensions all` ([../VOLUNTEER.md](../VOLUNTEER.md)); its problems are 0.02 % of `all`.
+- **Loading.** The default board loads none of the nD code or data. The polytope tables are the ndim package's lazy chunks, loaded when a dimension that needs them is shown; [CALC] built on 2026-11-01, the drawings are chunks of 9.7 kB (4D in 4D, with 3.5 kB more for the hull code), 4.4 kB (shared helpers) and 4.1 kB (the d-cubes), and the default board's files grew by 2.7 kB (1.0 kB gzipped).
+

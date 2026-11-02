@@ -15,7 +15,8 @@ import {
   tabModel,
 } from "../src/records-model";
 import { parseSpaceAddress, spaceAddress } from "../src/space-address";
-import { pickFromDomain } from "../src/space/model";
+import { parseSearchProblem } from "@polypack/spaces/search";
+import { isQueuedCheck, pickFromDomain, submitAnswer, submittingText } from "../src/space/model";
 import { facetName, ncubeDimension, readNcubeConfig, worldCentre } from "../src/space/render/ncube";
 import { SPACE_FIELDS } from "../src/spaces-model";
 
@@ -184,5 +185,25 @@ describe("the d-cube's configuration", () => {
       expect(readNcubeConfig(bad, 5), JSON.stringify(bad)).toBeNull();
     // a tesseract configuration is not a 5-cube's
     expect(readNcubeConfig({ s: 2, pieces: [{ cell: 0, u: [0, 0, 0] }] }, 5)).toBeNull();
+  });
+});
+
+describe("an entry whose check the server queues", () => {
+  it("says it may wait, and shows the server's answer", () => {
+    const small = parseSearchProblem("ndim/4/cube/cube/3")!;
+    const big = parseSearchProblem("ndim/8/421/421/20")!;
+    expect(isQueuedCheck(small)).toBe(false);
+    expect(isQueuedCheck(big)).toBe(true);
+    expect(submittingText(small)).toBe("Submitting…");
+    expect(submittingText(big)).toMatch(/one at a time.*wait for its turn/);
+    // the answers of a queued check: kept, valid but not kept, a full queue, a timeout
+    expect(submitAnswer(200, { valid: true, score: 3.5, leader: true, id: 7 }, "ndim")).toMatchObject({ kind: "kept" });
+    expect(submitAnswer(200, { valid: true, score: 3.5, leader: false, id: null, best_score: 3.4 }, "ndim").text).toMatch(
+      /^✓ Valid, score 3\.500000, but not kept/,
+    );
+    const busy = submitAnswer(503, { reasons: ["the server is busy checking other entries; try again in a few seconds"] }, "ndim");
+    expect(busy.kind).toBe("busy");
+    expect(busy.text).toBe("✗ The server is busy checking other entries; try again in a few seconds. Nothing was stored; try again later.");
+    expect(submitAnswer(422, { reasons: ["the check took more than 8 s of processor time"] }, "ndim")).toMatchObject({ kind: "invalid" });
   });
 });

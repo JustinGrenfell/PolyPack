@@ -757,8 +757,8 @@ describe("space metadata", () => {
   it("names a viewer and the notes on GitHub for every space", () => {
     for (const s of SPACE_NAMES) {
       const i = SPACE_INFO[s];
-      // the balls space has no standalone viewer: the board draws its problems; ndim has none yet
-      expect(i.viewer).toBe(s === "ndim" ? "" : s === "balls" ? `/#space=${s}` : `/spaces/${s}.html`);
+      // the balls and ndim spaces have no standalone viewer: the board draws their problems
+      expect(i.viewer).toBe(s === "ndim" || s === "balls" ? `/#space=${s}` : `/spaces/${s}.html`);
       expect(i.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/[A-Z_]+\.md$/);
       expect(i.conventions.configuration).toBeTruthy();
       expect(i.conventions.validity).toMatch(/1e-9/);

@@ -322,7 +322,7 @@ async function show(wish: RecordsState): Promise<void> {
   $("source-note").textContent = source ?? "";
   const sc = $("score-note");
   sc.replaceChildren(info ? `Score: ${sentence(info.score)}` : "");
-  const viewer = safeHref(info?.viewer ?? "");
+  const viewer = safeHref(where && familyKey(where.family) !== where.family.space ? `/#space=${where.family.start}` : (info?.viewer ?? ""));
   if (viewer) sc.append(" ", link(viewer, "Open the viewer", ` of ${where?.family.name ?? space}`), ".");
   $("series-note").textContent = seriesNote(
     info,

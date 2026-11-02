@@ -10,7 +10,7 @@ import { renderNofoldNote } from "@polypack/surface/nofold-note";
 import { addOptions } from "./option-groups";
 import { safeHref } from "./atlas-model";
 import { foldGain, gainText, plainNofoldLabel, readFoldExtra } from "./boundary-model";
-import { DIMENSIONS, type Dimension, type Family, familyFilters, familyOfSpace } from "./dimension-table";
+import { DIMENSIONS, type Dimension, type Family, familyFilters, familyKey, familyOfSpace } from "./dimension-table";
 import { recordsSource, scopedDomainCount } from "./records-model";
 import { el } from "./shapes-ui";
 import { isBoardSpace, spaceAddress } from "./space-address";
@@ -67,6 +67,9 @@ function link(href: string, text: string, hidden: string, external: boolean): HT
   a.append(el("span", hidden, "visually-hidden"));
   return a;
 }
+
+/** The problem a card's Board link names: the family's own where a space backs several families, else the board's start of the space. */
+const startOf = (f: Family | undefined): string | undefined => (f && familyKey(f) !== f.space ? f.start : undefined);
 
 interface CardLinks {
   records?: string;
@@ -129,8 +132,9 @@ function spaceCard(s: SpaceInfo, family?: Family): HTMLLIElement {
     {
       records: listed ? stateHash({ space: s.space, filters }) : undefined,
       // a space the board can show opens there, at the problem the board starts the family with
-      board: listed && isBoardSpace(s.space) ? `/${spaceAddress(s.space, family?.start)}` : undefined,
-      viewer: s.viewer,
+      board: listed && isBoardSpace(s.space) ? `/${spaceAddress(s.space, startOf(family))}` : undefined,
+      // a family of its own opens the board at its own problem: that is its Board link, so it has no second one
+      viewer: family && familyKey(family) !== family.space ? undefined : s.viewer,
       docs: s.docs,
     },
   );
@@ -152,7 +156,7 @@ function tableCard(f: Family): HTMLLIElement {
       ],
       { records: "/browse.html", board: "/" },
     );
-  if (f.available) return card(f.space, f.name, f.summary, [], { board: `/${spaceAddress(f.space, f.start)}` });
+  if (f.available) return card(f.space, f.name, f.summary, [], { board: `/${spaceAddress(f.space, startOf(f))}` });
   const li = card(f.space, f.name, f.summary, [], {});
   li.classList.add("soon");
   return li;

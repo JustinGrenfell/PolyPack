@@ -284,8 +284,8 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
       work_limit:
         "a check is stopped, with a reason, after 8 s of processor time; checks of large containers (the 4_21 polytope has 19,440 facets) or many pieces share the server's queue of heavy checks, one at a time, and are refused with 503 when it is full",
     },
-    // no viewer yet: the board does not show these problems (an empty path is "none"; pages show no link for it)
-    viewer: "",
+    // no standalone viewer: the board draws every problem (#space=ndim opens 4D in 4D; #space=ndim/<d>/... the dimension of its id)
+    viewer: "/#space=ndim",
     docs: spaceDocsUrl("NDIM.md"),
   },
 };

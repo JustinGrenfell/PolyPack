@@ -138,7 +138,12 @@ export function pickers(
   const domain = new Map<string, SpaceDomainField>((info?.domain?.fields ?? []).map((f) => [f.key, f]));
   return SPACE_FIELDS[space].map((spec) => {
     const d = domain.get(spec.key);
-    let values = d?.values ? [...d.values] : fieldValues(problems, spec);
+    // a field whose values depend on the dimension (nD in nD: the shapes of each) offers those of the family's dimension
+    const own =
+      scope && scope.values.length === 1 && d?.dependent?.on === scope.field
+        ? d.dependent.values?.[scope.values[0]]
+        : undefined;
+    let values = own ? [...own] : d?.values ? [...d.values] : fieldValues(problems, spec);
     // a family that holds part of a space (an nD dimension, the d-cubes) offers its own values of that field only
     if (scope && scope.field === spec.key) values = values.filter((v) => scope.values.includes(v));
     return {

@@ -18,6 +18,7 @@ import type { CertifiedStatus, SpaceConfig, SpaceName, SpaceProblemStatus } from
 import { SPACE_RECORD_MARGIN, improvesSpaceBest } from "@polypack/spaces";
 import { getProblem as getPolyhedraProblem, getSolid as getPolyhedraSolid } from "@polypack/polyhedra";
 import { ballsProblemOf } from "@polypack/balls/catalogue";
+import { ndIsHeavy } from "@polypack/ndspace";
 import {
   AUTO,
   AUTO_TEXT,
@@ -150,6 +151,20 @@ export const ruleOf = (p: LoadedSpaceProblem): SpaceRule => ({
   certified: p.certified?.score ?? null,
   ...(p.status === "no_record" ? { noRecord: true } : {}),
 });
+
+/**
+ * True when the server queues the check of an entry of this problem (nD in nD: by the size of the check, as the server
+ * decides it; apps/server/src/spaces.ts). A queued check runs when its turn comes, one at a time, so the answer can take
+ * a few seconds; a full queue answers 503 and keeps nothing.
+ */
+export const isQueuedCheck = (p: SearchProblem): boolean =>
+  p.space === "ndim" && ndIsHeavy({ d: p.d, piece: p.piece, container: p.container, P: p.P });
+
+/** What the board says while an entry is on its way. */
+export const submittingText = (p: SearchProblem): string =>
+  isQueuedCheck(p)
+    ? "Submitting… The server checks large entries one at a time, so this one may wait for its turn."
+    : "Submitting…";
 
 /** The board's words for a problem without a research record or a site entry yet. */
 export const NO_RECORD_TEXT = "No record yet: run the optimizer or submit one.";

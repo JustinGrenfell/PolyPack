@@ -230,7 +230,7 @@ describe("GET /api/spaces", () => {
     ]);
     for (const s of r.spaces) {
       // the balls space has no standalone viewer: its problems are drawn on the board
-      expect(s.viewer).toBe(s.space === "ndim" ? "" : s.space === "balls" ? `/#space=${s.space}` : `/spaces/${s.space}.html`);
+      expect(s.viewer).toBe(s.space === "ndim" || s.space === "balls" ? `/#space=${s.space}` : `/spaces/${s.space}.html`);
       expect(s.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/\w+\.md$/);
       expect(s.conventions.configuration).toBeTruthy();
     }
