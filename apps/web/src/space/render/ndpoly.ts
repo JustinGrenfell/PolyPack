@@ -1,6 +1,6 @@
 /**
  * The board's drawing of a (d-1)D on dD packing on the simplex, orthoplex or demicube, d = 5 to 10 (4D on 5D to 9D on 10D):
- * balls on the boundary of the container (boundary/<d><simplex|orthoplex|demicube>/ball/<P>, docs/spaces/BOUNDARY.md 4C). A
+ * balls on the boundary of the container (boundary/<d><simplex|orthoplex|demicube>/ball/<P>, docs/spaces/BOUNDARY.md 4D). A
  * configuration is { s, pieces: [{ cell, u }] }: the cell is a facet of the container (named by `facetLabel`) and u the ball's centre in
  * the facet's frame, its centre at the origin.
  *

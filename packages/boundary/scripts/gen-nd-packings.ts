@@ -1,5 +1,5 @@
 /**
- * Test packings of balls on the simplex, orthoplex and demicube (d = 5..10; no records: BOUNDARY.md 4C.7). For each of the 18 containers:
+ * Test packings of balls on the simplex, orthoplex and demicube (d = 5..10; no records: BOUNDARY.md 4D.7). For each of the 18 containers:
  *  - P = 1: one ball at the centre of a cell, at the edge from which it is valid (ndCentreEdge);
  *  - the exact layout (P balls at cell centres, valid from the derived edge ndPairEdge): P = d + 1 on the simplex, 2 on the orthoplex,
  *    2 d on the demicube;

@@ -1,6 +1,6 @@
 /**
  * Half-chains, windows, joins and hinge distances on the boundary of the simplex, orthoplex and demicube (d = 5..10); the float
- * engine of docs/spaces/BOUNDARY.md section 4C.2 to 4C.4. The exact twin is python/boundary/ndpoly.py.
+ * engine of docs/spaces/BOUNDARY.md section 4D.2 to 4D.4. The exact twin is python/boundary/ndpoly.py.
  *
  * Development. The cell c_0 (the anchor) holds the source point u. A chain is a sequence of cells c_0, c_1, ..., c_k, each glued to the
  * previous one across a ridge. The cell c_(j+1) is unfolded into the hyperplane of c_j by the reflection
@@ -23,7 +23,7 @@
  * Windows. A ray from u with direction e (in the anchor's hyperplane) crosses the ridges of a chain in order, each inside the closed ridge,
  * exactly when e is in the window of the chain, a polyhedral cone: for each step (cell p, crossed neighbour f, S_k = s h_k - n_k . a_p),
  * with z the direction in p's frame, n_f . z >= 0 and S_f (n_k . z) - S_k (n_f . z) <= 0 for every other neighbour k of p
- * (derived in 4C.2: the ray hits the plane of f at tau = S_f / (n_f . z) and satisfies the facet k there). Directions are carried from
+ * (derived in 4D.2: the ray hits the plane of f at tau = S_f / (n_f . z) and satisfies the facet k there). Directions are carried from
  * the end cell's frame back along the chain by the reflections (z_(j) = R_j z_(j+1)), so no window is stored.
  *
  * Joins. Two half-chains, one from each source, ending in the same cell c, with sources a1, a2 as seen in c's hyperplane, give the
@@ -41,11 +41,23 @@ export class NDLimitError extends Error {}
 export interface NDBudget {
   steps: number;
   max: number;
+  /** Multiply-adds spent (an estimate from the loops' sizes) and their cap. */
+  ops: number;
+  maxOps: number;
 }
-export const newNDBudget = (max: number): NDBudget => ({ steps: 0, max });
+export const newNDBudget = (max: number, maxOps = Infinity): NDBudget => ({ steps: 0, max, ops: 0, maxOps });
 function spend(b: NDBudget, k = 1): void {
   b.steps += k;
   if (b.steps > b.max) throw new NDLimitError(`the check needs more than ${b.max} search steps`);
+}
+/**
+ * Charges the multiply-adds of a loop that is not one step each: the cost of a step grows with the container (a demicube cell has up to
+ * 274 neighbours at d = 10 and a chain's window F rows per ridge crossed), so the steps alone do not bound the time (4D.8). The count is
+ * the loops' sizes, not a clock: the same on every machine.
+ */
+function spendOps(b: NDBudget, k: number): void {
+  b.ops += k;
+  if (b.ops > b.maxOps) throw new NDLimitError(`the check needs more than ${b.maxOps} operations`);
 }
 
 export interface NDNode {
@@ -83,8 +95,12 @@ function mirror(cl: NDCell, k: number, D: number, m: Float64Array): number {
   return mm;
 }
 
-/** Relative slack below which a ridge counts as not strictly ahead of the source. */
-const AHEAD = 1e-15;
+/**
+ * Relative slack below which a ridge counts as not strictly ahead of the source. It must stay below 4 eta (anchorPiece's band,
+ * eta >= 2^-52 max(1, s), so 4 eta >= 8.8e-16 max(1, s)): a centre whose slack toward a neighbour is in (AHEAD, 4 eta] is developed
+ * into it, a centre within 4 eta of the ridge also anchors in it, and none falls between the two (4D.6).
+ */
+const AHEAD = 8e-16;
 
 /**
  * The half-chains from the point x0 (ambient, in the hyperplane of cell c0, edge s) of reach `reach`: every chain a straight path of
@@ -118,6 +134,7 @@ export function develop(
     // S_k = s h_k - n_k . a for every neighbour, computed once per node
     const S = new Float64Array(F);
     for (let k = 0; k < F; k++) S[k] = s * cl.hn[k] - dot(cl.nn, k * D, a, 0, D);
+    spendOps(budget, F * D);
     for (let k = 0; k < F; k++) {
       if (cl.nbr[k] === parentCell) continue;
       const Sk = S[k];
@@ -132,6 +149,7 @@ export function develop(
       for (let j = 0; j < D; j++) nu[j] = nk[k * D + j] - c1 * cl.n[j];
       const f = Sk / nu2;
       let extra2 = 0;
+      spendOps(budget, F * D);
       for (let l = 0; l < F; l++) {
         if (l === k) continue;
         const q = dot(nk, l * D, nu, 0, D);
@@ -146,6 +164,7 @@ export function develop(
       }
       if (d2 + extra2 > reach2) continue;
       spend(budget);
+      spendOps(budget, 4 * D * D);
       // the child: unfold neighbour k's cell into H_c
       const mm = mirror(cl, k, D, m);
       const qv = new Float64Array(D);
@@ -215,6 +234,19 @@ export function inWindow(
   return true;
 }
 
+/** Joins shorter than this are the trivial loop of a centre on a ridge, for one ball; for two balls they are one point (4D.2). */
+export const ndZeroLength = (s: number): number => 1e-10 * Math.max(1, s);
+
+/** The multiply-adds of inWindow for the chain ending at node idx: per ridge crossed, a reflection and the cell's F facet tests. */
+function windowOps(C: NDContainer, nodes: readonly NDNode[], idx: number): number {
+  let ops = 0;
+  for (let cur = idx; nodes[cur].parent >= 0; cur = nodes[cur].parent) {
+    const pc = C.cell(nodes[nodes[cur].parent].cell);
+    ops += (2 * pc.nbr.length + 6) * C.D;
+  }
+  return ops;
+}
+
 export interface NDJoin {
   dist: number;
   a: number;
@@ -224,6 +256,8 @@ export interface NDJoin {
 /**
  * The shortest straight path from the source of `A` to the source of `B` found by joining half-chains, if its length is below `limit`
  * (Infinity otherwise). With `same` the two sets are one ball's: the pairs of distinct half-chains (a loop). `C` and `s` as in develop.
+ * With `own` (the default) the sets belong to one ball and a join shorter than 1e-10 max(1, s) is the trivial loop of a centre on a ridge, skipped.
+ * For two different balls (`own` false) such a join is an overlap and is kept (4D.2, 4D.6).
  */
 export function joinDistance(
   C: NDContainer,
@@ -234,6 +268,7 @@ export function joinDistance(
   budget: NDBudget,
   same: boolean,
   tol = 1e-12,
+  own = true,
 ): NDJoin {
   const D = C.D;
   const byCell = new Map<number, number[]>();
@@ -246,19 +281,21 @@ export function joinDistance(
   const wn = new Float64Array(D);
   let best: NDJoin = { dist: Infinity, a: -1, b: -1 };
   const lim2 = limit * limit;
-  const zero2 = (1e-10 * Math.max(1, s)) ** 2;
+  const zero2 = ndZeroLength(s) ** 2;
   for (let i = 0; i < A.length; i++) {
     const l = byCell.get(A[i].cell);
     if (!l) continue;
     for (const j of l) {
       if (same && j <= i) continue;
       let len2 = 0;
+      spendOps(budget, D);
       for (let r = 0; r < D; r++) {
         w[r] = B[j].a[r] - A[i].a[r];
         len2 += w[r] * w[r];
       }
-      if (!(len2 < lim2) || len2 < zero2 || len2 >= best.dist * best.dist) continue;
+      if (!(len2 < lim2) || (own && len2 < zero2) || len2 >= best.dist * best.dist) continue;
       spend(budget);
+      spendOps(budget, windowOps(C, A, i) + windowOps(C, B, j));
       if (!inWindow(C, s, A, i, w, true, tol)) continue;
       for (let r = 0; r < D; r++) wn[r] = -w[r];
       if (!inWindow(C, s, B, j, wn, true, tol)) continue;
@@ -293,6 +330,7 @@ function nearest2(
 ): { d2: number; x: Float64Array | null } {
   // a row the whole ball of radius sqrt(cap) about a satisfies cannot matter (rows are unit vectors)
   const rad = Math.sqrt(cap);
+  spendOps(budget, rows0.length * D);
   const rows = rows0.filter((r) => dot(r.v, 0, a, 0, D) - r.b > -rad - tolV);
   type Res = { d2: number; x: Float64Array | null };
   const NONE: Res = { d2: Infinity, x: null };
@@ -311,6 +349,7 @@ function nearest2(
     spend(budget);
     const E: Row[] = [...eqs, ...active.map((i) => rows[i])];
     const m = E.length;
+    spendOps(budget, (rows.length + m * m) * D + 2 * m * m * m);
     // Gram matrix G, its inverse by Gauss-Jordan; lambda = G^-1 r with r_i = v_i . a - b_i, x0 = a - sum lambda_i v_i
     const G: number[][] = [];
     for (let i = 0; i < m; i++) {
@@ -387,6 +426,17 @@ const unitRow = (v: Float64Array, b: number): Row => {
   for (let j = 0; j < v.length; j++) u[j] = v[j] / nm;
   return { v: u, b: b / nm };
 };
+
+/** The multiply-adds of windowRows: per ridge crossed, F rows, each carried back through the later reflections and normalised. */
+function windowRowsOps(C: NDContainer, nodes: readonly NDNode[], idx: number): number {
+  let ops = 0;
+  let i = 0;
+  for (let cur = idx; nodes[cur].parent >= 0; cur = nodes[cur].parent, i++) {
+    const F = C.cell(nodes[nodes[cur].parent].cell).nbr.length;
+    ops += F * ((3 * (i + 1) + 6) * C.D);
+  }
+  return ops;
+}
 
 /** The rows (v . x <= b) of the window of the chain ending at node idx, in the frame of its end cell, about the source a. */
 function windowRows(C: NDContainer, s: number, nodes: readonly NDNode[], idx: number): Row[] {
@@ -477,16 +527,23 @@ export function hingeDistance(
     const F = cl.nbr.length;
     const S = new Float64Array(F);
     for (let k = 0; k < F; k++) S[k] = s * cl.hn[k] - dot(cl.nn, k * D, nd.a, 0, D);
+    spendOps(budget, F * D + 4 * cl.hinges.length);
     let wrows: Row[] | null = null;
     for (let p = 0; p < cl.hinges.length; p += 2) {
       const k = cl.hinges[p];
       const l = cl.hinges[p + 1];
       // the hinge lies in both ridge planes: farther than either plane
       if (S[k] * S[k] > reach2 * cl.nu2[k] || S[l] * S[l] > reach2 * cl.nu2[l]) continue;
+      spendOps(budget, 3 * D + 10);
       const lb = flatDist2(cl, S, k, l, D);
       if (!(lb <= reach2)) continue;
       spend(budget);
-      if (!wrows) wrows = windowRows(C, s, nodes, idx);
+      if (!wrows) {
+        spendOps(budget, windowRowsOps(C, nodes, idx));
+        wrows = windowRows(C, s, nodes, idx);
+      }
+      // the rows of this hinge: the cell's other facets, normalised, and the window's
+      spendOps(budget, 4 * (F + wrows.length) * D);
       const eqs = [
         ...cellEqs(cl),
         unitRow(cl.nn.subarray(k * D, k * D + D), s * cl.hn[k]),

@@ -602,7 +602,7 @@ export const BOUNDARY_ENERGY_MS: Record<string, number> = {
   "24cell": 0.25,
   "600cell": 0.15,
   "120cell": 0.8,
-  // the simplex, orthoplex and demicube of dimensions 5 to 10 (nd/model.ts, BOUNDARY.md 4C.8): [CALC] measured 2026-11-02 the same way,
+  // the simplex, orthoplex and demicube of dimensions 5 to 10 (nd/model.ts, BOUNDARY.md 4D.8): [CALC] measured 2026-11-02 the same way,
   // on random starts squeezed by 10% at P = 4 and 12, the larger of the two, rounded up
   "5simplex": 0.1,
   "6simplex": 0.1,

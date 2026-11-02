@@ -108,7 +108,7 @@ function ndimDimension(d: number): Dimension {
   };
 }
 
-/** The d-cubes' P ranges (docs/spaces/BOUNDARY.md 4B); the simplex, orthoplex and demicube take up to 24 balls (4C). */
+/** The d-cubes' P ranges (docs/spaces/BOUNDARY.md 4B); the simplex, orthoplex and demicube take up to 24 balls (4D). */
 const NCUBE_MAX_P: Record<number, number> = { 5: 160, 6: 384, 7: 400, 8: 400, 9: 400, 10: 400 };
 
 /**

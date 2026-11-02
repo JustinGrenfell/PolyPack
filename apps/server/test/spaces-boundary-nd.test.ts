@@ -2,7 +2,7 @@
  * Balls on the d-simplex, d-orthoplex and d-demicube (d = 5 to 10: 4D on 5D to 9D on 10D) through the server's spaces routes (the real
  * catalogues, an in-memory store): the domain in the listing, problems without records and their bounds, submissions of the certified test
  * packings (python/boundary/fixtures/nd_packings.json), the strict check a problem without a record needs, malformed input, the heavy-check
- * queue and the cap on the work (docs/spaces/BOUNDARY.md 4C).
+ * queue and the cap on the work (docs/spaces/BOUNDARY.md 4D).
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -152,6 +152,8 @@ describe("POST /api/spaces/submit: the simplex, orthoplex and demicube", () => {
     });
     expect(rotated.status).toBe(400);
     expect(rotated.body.reasons.join(" ")).toMatch(/no rotation q/);
+    expect(rotated.body.reasons.join(" ")).toMatch(/is a ball and has no rotation q/);
+    expect(rotated.body.reasons.join(" ")).not.toMatch(/axis-aligned/);
     expect((await submit(p.id, { s: p.config.s, pieces: rest })).status).toBe(422);
     expect((await submit("boundary/8orthoplex/ball/25", p.config)).status).toBe(400);
     expect((await submit("boundary/8orthoplex/cube/24", p.config)).status).toBe(400);
@@ -174,15 +176,15 @@ describe("POST /api/spaces/submit: the simplex, orthoplex and demicube", () => {
 });
 
 describe("the heavy-check classification and the cap on the work", () => {
-  it("queues the checks of 50 ms or more by their estimated cost: the 6-demicube from P = 3, the 7-demicube from P = 2, the 8-demicube always, the 10-demicube from P = 13", () => {
+  it("queues the checks of 50 ms or more by their estimated cost: the 6-demicube from P = 3, the 7-demicube from P = 2, the 8-demicube always, the 10-demicube from P = 10", () => {
     const heavy = (polytope: string, P: number) => boundaryIsHeavy({ polytope: polytope as never, piece: "ball", P });
     expect(heavy("6demicube", 2)).toBe(false);
     expect(heavy("6demicube", 3)).toBe(true);
     expect(heavy("7demicube", 1)).toBe(false);
     expect(heavy("7demicube", 2)).toBe(true);
     expect(heavy("8demicube", 1)).toBe(true);
-    expect(heavy("10demicube", 12)).toBe(false);
-    expect(heavy("10demicube", 13)).toBe(true);
+    expect(heavy("10demicube", 9)).toBe(false);
+    expect(heavy("10demicube", 10)).toBe(true);
     for (const n of ND_NAMES.filter((x) => !/^(6|7|8|10)demicube$/.test(x))) expect(heavy(n, 24), n).toBe(false);
     expect(boundaryCheckMs({ polytope: "8demicube", piece: "ball", P: 24 })).toBe(125 * 24);
     expect(ND_MAX_WORK).toBe(60_000);

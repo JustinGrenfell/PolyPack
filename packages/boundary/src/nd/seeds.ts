@@ -1,7 +1,7 @@
 /**
- * Structured starts of the nD kernel (kernel.ts, capability "seeds"), docs/spaces/BOUNDARY.md 4C.7.
+ * Structured starts of the nD kernel (kernel.ts, capability "seeds"), docs/spaces/BOUNDARY.md 4D.7.
  *
- * Exact layouts (valid at the edge they are built for, derived in 4C.7):
+ * Exact layouts (valid at the edge they are built for, derived in 4D.7):
  *  - one ball at a cell's centre: the centre of a simplex or orthoplex cell is at distance s / sqrt(d (d - 2)) from the hinges, so from
  *    s = sqrt(d (d-2)) / 2 (the one-ball bound); the centre of a demicube facet (a (d-1)-demicube) is s/2 from its nearest hinges
  *    for d >= 6, so from s = 1, and from s = sqrt 6 / 2 for d = 5;

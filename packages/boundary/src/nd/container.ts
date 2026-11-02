@@ -1,5 +1,5 @@
 /**
- * The simplex, orthoplex and demicube boundaries for d = 5..10 as cell complexes (docs/spaces/BOUNDARY.md section 4C.1).
+ * The simplex, orthoplex and demicube boundaries for d = 5..10 as cell complexes (docs/spaces/BOUNDARY.md section 4D.1).
  *
  * The container is a convex d-polytope P of unit edge centred at its vertex centroid, P = { x : n_c . x <= h_c for every cell c },
  * n_c the unit outward normal of the cell (facet) c. The boundary is the union of the cells; each cell is a (d-1)-dimensional

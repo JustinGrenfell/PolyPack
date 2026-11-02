@@ -1,4 +1,4 @@
-"""Tests of the nD certifier (ndpoly.py): balls on the boundary of the d-simplex, d-orthoplex and d-demicube, d = 5..10 (BOUNDARY.md 4C).
+"""Tests of the nD certifier (ndpoly.py): balls on the boundary of the d-simplex, d-orthoplex and d-demicube, d = 5..10 (BOUNDARY.md 4D).
 
   * the containers: facet and ridge counts against the literature, every ridge point on both planes, the vertex sets read by brute force
     (exact rank) against the engine-independent combinatorics (neighbours, hinge pairs) for d = 5, 6 (7 for the hinges of a few cells);
@@ -357,6 +357,72 @@ class Adversarial(unittest.TestCase):
         print(f"\nadversarial: {len(chosen)} cases, engine accepts {accepted}, refuses {refused}, exact strict valid {strict_ok}; worst exact margin among accepted {worst_accepted:.2e}; {time.time() - t0:.0f} s")
         self.assertGreater(accepted, 20)
         self.assertGreater(refused, 20)
+
+
+class Coincident(unittest.TestCase):
+    """Two different balls at one point overlap (4D.2); only a ball's own zero-length loop (a centre on a ridge) is skipped."""
+
+    def test_stacked_balls_are_refused(self):
+        for poly, s in [("5simplex", 6.0), ("5simplex", 2.7), ("7orthoplex", 6.0), ("10orthoplex", 4.48), ("6demicube", 3.0), ("9demicube", 1.0001)]:
+            n = int("".join(ch for ch in poly if ch.isdigit())) - 1
+            for P in (2, 24):
+                conf = {"s": s, "pieces": [{"cell": 0, "u": [0.0] * n} for _ in range(P)]}
+                for strict in (False, True):
+                    v = N.check(poly, "ball", P, conf, tf, strict=strict)
+                    self.assertFalse(v.ok, (poly, s, P, strict))
+                with self.assertRaises(C.CertError, msg=(poly, s, P)):
+                    C.certify(f"boundary/{poly}/ball/{P}", conf)
+
+    def test_nearly_coincident_balls_are_refused_with_their_distance(self):
+        for poly in ("5simplex", "7orthoplex", "6demicube"):
+            n = int("".join(ch for ch in poly if ch.isdigit())) - 1
+            for off in (0.0, 1e-15, 1e-12, 2e-10, 1e-9, 1e-6):
+                u2 = [0.0] * n
+                u2[0] = off
+                conf = cfg(6.0, [(0, [0.0] * n), (0, u2)])
+                self.assertFalse(N.check(poly, "ball", 2, conf, tf, strict=False).ok, (poly, off))
+                m = N.measure(poly, 2, conf, tf)
+                self.assertEqual(len(m["pairs_sq"]), 1)
+                self.assertLess(list(m["pairs_sq"].values())[0], 1, (poly, off))
+
+    def test_the_same_point_under_two_cell_names_is_refused(self):
+        for poly in ("6orthoplex", "5simplex", "6demicube"):
+            cn = N.get_cont(poly)
+            s = 6.0
+            c = 0
+            for g in sorted({x for x in cn.cell(c).nbr})[:3]:
+                common = [v for v in cn.vertices(c) if v in cn.vertices(g)]
+                self.assertGreaterEqual(len(common), cn.D - 2)
+                xb = [sum(float(v[j]) for v in common) / len(common) for j in range(cn.D)]
+                x = [t_ * s / math.sqrt(2) for t_ in xb]
+                pcs = []
+                for cc in (c, g):
+                    o = cn.centre_float(cc)
+                    fr = cn.frame_float(cc)
+                    pcs.append((cc, [sum(f[j] * (x[j] - s * o[j]) for j in range(cn.D)) for f in fr]))
+                self.assertFalse(N.check(poly, "ball", 2, cfg(s, pcs), tf, strict=False).ok, (poly, g))
+
+    def test_a_ball_on_a_ridge_alone_is_not_its_own_overlap(self):
+        # the 5-orthoplex's cells 0 and 1 share a ridge; a ball on it (read from either cell) has the trivial loop of length 0 only
+        cn = N.get_cont("5orthoplex")
+        s = 6.0
+        common = [v for v in cn.vertices(0) if v in cn.vertices(1)]
+        xb = [sum(float(v[j]) for v in common) / len(common) for j in range(cn.D)]
+        x = [t_ * s / math.sqrt(2) for t_ in xb]
+        o, fr = cn.centre_float(0), cn.frame_float(0)
+        u = [sum(f[j] * (x[j] - s * o[j]) for j in range(cn.D)) for f in fr]
+        self.assertTrue(N.check("5orthoplex", "ball", 1, cfg(s, [(0, u)]), tf, strict=False).ok)
+
+
+class GapCases(unittest.TestCase):
+    """The 22 pairs 0.9 apart across a ridge that the float validator once accepted (4D.6): the exact certifier refuses them all."""
+
+    def test_refused(self):
+        data = load("nd_gap_cases.json")["cases"]
+        self.assertEqual(len(data), 22)
+        for c in data:
+            v = N.check(c["polytope"], "ball", 2, {"s": c["s"], "pieces": c["pieces"]}, tf, strict=False)
+            self.assertFalse(v.ok, (c["label"], c["polytope"], c["s"]))
 
 
 class Packings(unittest.TestCase):

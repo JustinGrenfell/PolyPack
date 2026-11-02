@@ -7,7 +7,7 @@ name `boundary`.
 P balls of diameter 1 (radius 1/2) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
 edge s. Since 2026-11-01 balls can also be packed on the boundary of the other five regular
 4-polytopes, the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell (section 4A). Also since 2026-11-01 balls and
-axis-aligned cubes (of dimension d - 1) can be packed on the boundary of the d-cube, d = 5 to 10 (4D on 5D to 9D on 10D, section 4B), and, since 2026-11-02, balls on the boundary of the d-simplex, d-orthoplex and d-demicube for the same d (section 4C). The score is the smallest s,
+axis-aligned cubes (of dimension d - 1) can be packed on the boundary of the d-cube, d = 5 to 10 (4D on 5D to 9D on 10D, section 4B), and, since 2026-11-02, balls on the boundary of the d-simplex, d-orthoplex and d-demicube for the same d (section 4D). The score is the smallest s,
 the polytope's edge. Since 2026-10-27 balls have diameter 1; before, radius 1, and every ball score was twice as large (cube scores are unchanged). The sections below are stated in the site's units; the certifier and the ball code may work in radius-1 units internally (a factor of 2, exact) and convert at their edges. Every record is certified by an exact checker
 (`python/boundary/certify.py`, exact arithmetic only), so its validity is proven, not just
 tested. Records: `data/boundary/records.json`, from the PolyPack research prototype (2026-10-24),
@@ -665,32 +665,32 @@ For example P = 160 cubes on the 5-cube: exactly 2 (the tiling), and one ball: 0
 - **Aligned cubes only**, as on the tesseract: a turned cube might do better and would need parts and exact rotations in n dimensions (`parts.ts`, `polyhedron.ts` are 3-dimensional).
 - **The corner cap.** The validator refuses a configuration whose search needs more than 4,000,000 steps; the worst pair of the kind above costs about 26,000 at d = 10 (measured, not a bound), but a few hundred balls crowded at a common corner of d = 10 could reach it.
 - **The vertex rule** (section 3) is argued, not proved, in every d.
-- Not covered here: the simplex, orthoplex and demicube boundaries for d >= 5, whose dihedral angles are not right angles. Balls on them are section 4C (2026-11-02); polytope pieces on them are not built.
+- Not covered here: the simplex, orthoplex and demicube boundaries for d >= 5, whose dihedral angles are not right angles. Balls on them are section 4D (2026-11-02); polytope pieces on them are not built.
 
 
-## 4C. Balls on the d-simplex, d-orthoplex and d-demicube: (d-1)D on dD, d = 5 to 10
+## 4D. Balls on the d-simplex, d-orthoplex and d-demicube: (d-1)D on dD, d = 5 to 10
 
 Added 2026-11-02. Under Dimensions each of **4D on 5D**, **5D on 6D**, ..., **9D on 10D** now holds four containers: the d-cube of section 4B and the
 **d-simplex**, the **d-orthoplex** and the **d-demicube**, whose boundaries are made of (d-1)-simplices, or of (d-1)-simplices and (d-1)-demicubes,
-meeting at angles that are not right angles. Pieces are balls of diameter 1 only; polytope pieces on these boundaries are a later phase (4C.10).
+meeting at angles that are not right angles. Pieces are balls of diameter 1 only; polytope pieces on these boundaries are a later phase (4D.10).
 The rule is 4.2's, which is dimension-free; what changes is how the shortest paths are found. Section 4B's lattice is gone (only the cube has one), so the engine is
 the chain development of 4A taken to R^(d-1), with one change that makes it cheap: **pairs and loops are found by joining two half-chains of
-reach 1/2** (4C.2). Code: `packages/boundary/src/nd/`; exact certifier: `python/boundary/ndpoly.py`. Nothing is shown in Tighter.
+reach 1/2** (4D.2). Code: `packages/boundary/src/nd/`; exact certifier: `python/boundary/ndpoly.py`. Nothing is shown in Tighter.
 
-### 4C.1 The containers
+### 4D.1 The containers
 
 Each container has unit edge scaled by the score s, and is built (`nd/container.ts`; `ndpoly.py` repeats it in exact arithmetic) from the classical
 coordinates of edge sqrt 2 [EST: Coxeter, *Regular Polytopes*, 7.2 and 8.7 (the demicube); the facet counts below are the literature's], divided by sqrt 2:
 
-| container (d = 5 ... 10) | vertices | cells (facets) | ridges | cell types | cos of the dihedral angle |
+| container (d = 5 ... 10) | vertices | cells (facets) | ridges | cell types | cos of the dihedral angle (-n . n') |
 |---|---|---|---|---|---|
 | d-simplex | e_0 ... e_d in R^(d+1) | d + 1 = 6, 7, 8, 9, 10, 11 | C(d+1, 2) = 15, 21, 28, 36, 45, 55 | (d-1)-simplex | 1/d |
-| d-orthoplex | +-e_i in R^d | 2^d = 32, 64, 128, 256, 512, 1024 | d 2^(d-1) = 80, 192, 448, 1024, 2304, 5120 | (d-1)-simplex | (d-2)/d |
-| d-demicube | (+-1/2)^d, an even number of minus signs | 2d + 2^(d-1) = 26, 44, 78, 144, 274, 532 | 2^(d-1) d + 2d (d-1) = 120, 252, 532, 1136, 2448, 5300 | 2d (d-1)-demicubes and 2^(d-1) (d-1)-simplices | 0 (demicube, demicube); 1/sqrt d (demicube, simplex) |
+| d-orthoplex | +-e_i in R^d | 2^d = 32, 64, 128, 256, 512, 1024 | d 2^(d-1) = 80, 192, 448, 1024, 2304, 5120 | (d-1)-simplex | -(d-2)/d |
+| d-demicube | (+-1/2)^d, an even number of minus signs | 2d + 2^(d-1) = 26, 44, 78, 144, 274, 532 | 2^(d-1) d + 2d (d-1) = 120, 252, 532, 1136, 2448, 5300 | 2d (d-1)-demicubes and 2^(d-1) (d-1)-simplices | 0 (demicube, demicube); -1/sqrt d (demicube, simplex) |
 
 The simplex lies in the hyperplane sum x = 1 of R^(d+1) (its coordinates in the engine are the barycentric ones), the others in R^d. The 5-demicube's facets are 16 5-cells (4-simplices)
 and 10 16-cells (4-demicubes); in general the demicube's (d-1)-simplex facets are all surrounded by demicube facets (a simplex facet has d ridges, each shared with a
-demicube facet), and two simplex facets never share a ridge. The simplex-to-demicube dihedral cosine 1/sqrt d is irrational for d != 9 (4C.2, 4C.4). [CALC; the tests read the vertex set by brute force and compare the cells, their neighbours and their hinges for d = 5, 6, 7.]
+demicube facet), and two simplex facets never share a ridge. The simplex-to-demicube dihedral cosine -1/sqrt d is irrational for d != 9 (4D.2, 4D.4). [CALC; the tests read the vertex set by brute force and compare the cells, their neighbours and their hinges for d = 5, 6, 7.]
 
 - **Cells.** Simplex: cell i is the facet x_i = 0 (vertices e_j, j != i); normal (1 - (d+1) e_i) / sqrt(d (d+1)), offset 1 / sqrt(d (d+1)) (base units). Orthoplex: cell c is the facet
   sigma . x = 1 with sigma_i = -1 exactly when bit i of c is set (vertices sigma_i e_i); cells c and c xor 2^k are adjacent. Demicube: cell 2 i + (a > 0) is the facet x_i = a/2 (a = +-1),
@@ -703,7 +703,7 @@ demicube facet), and two simplex facets never share a ridge. The simplex-to-demi
 - **Ids.** `boundary/<d><simplex|orthoplex|demicube>/ball/<P>`, d = 5 ... 10, P = 1 to 24, no leading zeros: 18 x 24 = 432 problems (`boundary/5simplex/ball/1` ... `boundary/10demicube/ball/24`). Cubes are not a problem on these containers.
   Python's `ID_RE` (`certify.py`) names them and keeps its `\Z`.
 
-### 4C.2 Developments, windows and joins
+### 4D.2 Developments, windows and joins
 
 **The development map** [CALC]. Let c and c' be adjacent cells with outward unit normals n and n' and offsets h, h' (n . x <= h on the polytope), and q a point of their ridge. The reflection
     sigma(x) = x - 2 (m . (x - q)) / (m . m) m,   m = n + n',
@@ -712,7 +712,7 @@ is an involution and an isometry of R^D; it fixes the ridge pointwise (m . (x - 
 (use n . m = n' . m = (m . m)/2, true for unit normals), i.e. sigma(c') is outside the half-space of c's facet c'. (The other reflection through the ridge, with normal n - n', folds c' back over c.) On H_c, sigma coincides
 with the rotation of the plane (n, n') that takes n to n' (4A.3's gluing); the tests compare them. Because sigma is an affine reflection, an exact development is a product of such maps, with no rotation matrix of d - 1 dimensions to write:
 **with the containers' coordinates every reflection is rational for the simplex, the orthoplex and the demicube's ridges between two demicube facets, and for the demicube's ridges between a demicube facet and a simplex facet exactly when d = 9**;
-for d = 5, 6, 7, 8, 10 the cosine 1/sqrt d of that dihedral angle is irrational, sigma(x) of a rational x is not rational, and the exact certifier works in Q(sqrt k), k the squarefree part of d (4C.4). [CALC, checked exactly on all d = 5 ... 10 (`test_ndpoly.py Developments.test_rationality`); the first guess, that every reflection is rational, is true for two of the three families.]
+for d = 5, 6, 7, 8, 10 the cosine -1/sqrt d of that dihedral angle is irrational, sigma(x) of a rational x is not rational, and the exact certifier works in Q(sqrt k), k the squarefree part of d (4D.4). [CALC, checked exactly on all d = 5 ... 10 (`test_ndpoly.py Developments.test_rationality`); the first guess, that every reflection is rational, is true for two of the three families.]
 
 **Half-chains.** From a centre u of cell c_0, a node is a cell c reached by a sequence of ridges, with a = T^(-1) u, the source as seen in the hyperplane of c (the development T of c into the hyperplane of c_0 is the composition of the reflections; a child's a
 is sigma(a), sigma an involution). A ray from u crosses the ridge of the neighbour g of c only if u is strictly inside the half-space of g as seen from the developed cell: S_g = h_g - n_g . a > 0 (all in the scale s), and then the path is at least as long as the distance from a to the ridge, which is at least
@@ -734,25 +734,25 @@ they follow are kept, and the join of those two chains is found with |w| = L. *H
 added equality (the nearest point lies on a violated constraint's plane, because the normal-cone vector of the polytope at the nearest point has a positive inner product with some active constraint's normal, which the projection violates), recursively; a branch is cut as soon as the distance of its projection plus the largest violation measured inside its flat exceeds the cap (the reach), and rows whose half-space contains the whole ball of the cap about a are dropped.
 A hinge is looked at only when both its ridge planes and the flat they span (a 2x2 system) are within the reach. [CALC; checked against random walks: walking just past the nearest point meets a hinge, just short of it does not, d = 5, 6, 9.]
 
-**Finiteness** [SPEC]. That the enumeration stops for every input is not proved. The reach bound, the cell's structure and the cap keep it small in practice (4C.8); a failure of finiteness could cost time, never soundness: a check that exceeds its step budget is refused.
+**Finiteness** [SPEC]. That the enumeration stops for every input is not proved. The reach bound, the cell's structure and the cap keep it small in practice (4D.8); a failure of finiteness could cost time, never soundness: a check that exceeds its step budget is refused.
 
-### 4C.3 Rules
+### 4D.3 Rules
 
-4.2 unchanged, for the (d-1)-ball of diameter 1: valid exactly when every centre lies in its closed anchor cell, is at geodesic distance >= 1/2 from the hinges, every two centres are >= 1 apart and every geodesic loop at a centre is >= 1 long. (The engine tests loops, as joins of two different half-chains of one centre; [CALC] none shorter than 1 occurs in any of the 414 cross-check cases or the 72 packings.) A centre within the snap distance eta = max(2^-52 max(1, s), min(1e-14 max(1, s), tol/10)) of a ridge plane is moved onto it (the distance moved is charged to the verdict) and belongs to both cells, as 4A.
+4.2 unchanged, for the (d-1)-ball of diameter 1: valid exactly when every centre lies in its closed anchor cell, is at geodesic distance >= 1/2 from the hinges, every two centres are >= 1 apart and every geodesic loop at a centre is >= 1 long. **Two different balls at one point overlap**: a join of length 0 between the half-chains of two different centres is a path of length 0, so it counts (the engine refuses two centres whose chord in R^D is below 1e-10 max(1, s), before any join; the exact certifier takes a join of length exactly 0 for a pair as a distance 0). Only a ball's own joins of length 0 are skipped (the trivial loop of a centre on a ridge, where its two anchor lists meet with w = 0). [CALC] Before this was fixed (review 2026-11-02), two or 24 balls stacked at one point were accepted by the engine, the server and the certifier, and the server kept such an entry as the leader. (The engine tests loops, as joins of two different half-chains of one centre; [CALC] none shorter than 1 occurs in any of the 414 cross-check cases or the 72 packings.) A centre within the snap distance eta = max(2^-52 max(1, s), min(1e-14 max(1, s), tol/10)) of a ridge plane is moved onto it (the distance moved is charged to the verdict) and belongs to both cells, as 4A.
 
-### 4C.4 The exact certifier
+### 4D.4 The exact certifier
 
 `python/boundary/ndpoly.py`, reached through `certify.py` (`boundary/<d><family>/ball/<P>` ids). Exact only: Fractions for the simplex and orthoplex; for the demicube the field Q(sqrt k), k the squarefree part of d (5, 6, 7, 2 for 8, 1 for 9, 10), implemented as integers (n + m sqrt k)/q, sign decided exactly. It shares no code with the engine and repeats only its conventions (cell order, frames). The base polytope has edge sqrt 2 and outward normals N_c of one common squared length kappa (d(d+1), d, d), so no square root of a
 norm is taken; a ball of diameter 1 on the polytope of edge s has diameter sqrt 2 / s in base units, and every test compares a squared base length with 2/s^2 times a rational.
 
 - **Reading a configuration.** As 4A.3: the ambient point s o_c + sum u_k f_k (floats, as the engine computes it) is written as an affine combination of n + 1 independent vertices of the cell with dyadic weights (rounded to 2^-60, summing to 1), and the exact point is the same combination of the exact vertices; the cell's frame is recomputed in Python floats from the same Gram-Schmidt. A point outside its closed cell by less than 1e-12 s is moved onto the facet planes it violates; more is an error.
-- **Reading discrepancy** [CALC]. The exact point differs from the engine's float point by at most **1.6e-16 s** (6 random centres per container, 108 in all, `Reading.test_the_exact_point_is_within_1e_15_of_the_engines`). Over the cross-check (`fixtures/nd_crosscheck.json`, 144 random layouts of 1 to 3 balls on all 18 containers) the engine's clearances, pair distances and loops differ from the exact ones by at most **9.4e-16** (386 values), and
+- **Reading discrepancy** [CALC]. The exact point differs from the engine's float point by **2.1e-16 s at most in the measurements, and 4e-15 s at most by a first-order rounding estimate** [CALC]. Measured: 720 centres (40 per container, half of them near a vertex, s from 0.6 to 1e4) gave at most 2.12e-16 s (the 7-demicube; 1.89e-16 on the 8- and 1.66e-16 on the 10-demicube), and the unit test (`Reading.test_the_exact_point_is_within_1e_15_of_the_engines`, 108 random centres) checks 1e-15 s. The estimate: the engine's point s o_c + sum u_k f_k adds n + 1 terms of size at most s per coordinate, each rounded to 2^-53 (relative), so a coordinate is off by at most (n + 2) 2^-53 s to first order and the point by sqrt(D) times that: 3.9e-15 s at d = 10 (n = 9, D = 10); the exact reading adds about 1e-17 s (dyadic weights of 2^-60). These are an estimate and a sample, not a proof. Over the cross-check (`fixtures/nd_crosscheck.json`, 144 random layouts of 1 to 3 balls on all 18 containers) the engine's clearances, pair distances and loops differ from the exact ones by at most **9.4e-16** (386 values), and
   the same distances are found or not found (a distance is reported only below its threshold: 261 clearances below 1/2, 125 pair distances below 1, no loop below 1); the chain code accumulates a few more roundings than the reading, which is why the strict slack below is generous.
-- **Strict validity** asks for room for those differences: a pair distance or a loop must exceed 1 by more than `READING_PAIR` = 2e-13 s, a clearance 1/2 by more than `READING_CLEAR` = 1e-13 s (250 to 600 times the measured discrepancy). The reach is widened to match, and the plain (non-strict) test uses reach exactly 1/2.
+- **Strict validity** asks for room for those differences: a pair distance or a loop must exceed 1 by more than `READING_PAIR` = 2e-13 s, a clearance 1/2 by more than `READING_CLEAR` = 1e-13 s (470 times the measured 2.1e-16 s, and 25 times the first-order estimate 4e-15 s). The reach is widened to match, and the plain (non-strict) test uses reach exactly 1/2.
 - **Fail closed.** A check that needs more than `MAX_STEPS` = 2,000,000 steps (nodes created, projections solved, join candidates) or more than `MAX_NODES` = 20,000 chains from one centre raises `NDError` ("the exact check needs more than ..."); `certify.py` turns it into a `CertError`, never a verdict.
 - **Cost.** All 72 test packings are certified strictly in 31 s: at most 0.15 s each on the simplex and orthoplex, 0.7 to 3 s on the demicube for 24 balls, and 17 s for the slowest, one ball at the centre of an 8-demicube facet (5,391 steps; the big demicubes' hundreds of ridges per cell and Q(sqrt k) arithmetic make a step cost milliseconds).
 
-### 4C.5 Lower bounds
+### 4D.5 Lower bounds
 
 Both bounds are proved, stored as the largest binary64 value not above the exact one, decided in integer arithmetic (`nd/bounds.ts`; the exact check is `ndpoly.exact_bounds`, which agrees with the engine on all 432 stored values, both directions: the value passes, the next float up fails).
 
@@ -765,19 +765,19 @@ Both bounds are proved, stored as the largest binary64 value not above the exact
   So **s >= sqrt(d (d-2)) / 2** on the simplex and orthoplex: 1.936492, 2.449490, 2.958040, 3.464102, 3.968627, 4.472136 for d = 5 ... 10; and **s^2 >= 2 (n-1) / (n^2 - 5 n + 8)** on the demicube: 1.224745, 1.000000, 0.845154, 0.738549, 0.661438, 0.603023.
   *The demicube's bound is not tight for d >= 7.* The centre of a demicube facet has clearance exactly s/2 (the demicube-demicube hinges x_i = a, x_j = b are s/2 from it), so one ball fits from s = 1 for d >= 6 (and from sqrt 6 / 2 for d = 5, the same as the bound there), and a hill-climbing search (6,000 steps from random starts, d = 6 and 7) found no point of a facet with a larger
   clearance; whether the sharper bound s >= 1 holds for d >= 7 is open [SPEC]. The test packings of one ball therefore sit at s = 1 on the demicubes d >= 7 (the exact layout), and at the bound on the others.
-- Nothing else is claimed. The 24-ball packings of 4C.7 are 1.7 to 2.5 times the bound; no optimality is claimed for any problem.
+- Nothing else is claimed. The 24-ball packings of 4D.7 are 1.7 to 2.5 times the bound; no optimality is claimed for any problem.
 
-### 4C.6 Checks around the certifier
+### 4D.6 Checks around the certifier
 
 - **Engine against certifier.** `fixtures/nd_crosscheck.json` (`scripts/gen-nd-crosscheck.ts`): 144 seeded random layouts, 8 per container, of 1 to 3 balls (later balls placed at the end of a random geodesic of length 0.7 to 1.2 from an earlier one, so that most pairs cross ridges), with the engine's clearance, pair distances and loops; the exact ones agree to 9.4e-16 (386 values) and every verdict agrees.
 - **Adversarial cases** (270, same file): per container, ball 2 at the end of a geodesic of length 1 + delta from ball 1 (delta = 1e-3, 1e-6, 1e-9, 1e-12, -1e-12, -1e-9, -1e-6), a ball moved away from its cell's centre until its clearance is 1/2 + delta (bisection on the engine's measure; delta = 1e-3, 1e-9, 1e-12, -1e-12, -1e-9, -1e-3), and a ball exactly on a ridge with a second one 0.9 and 1.05 away across it.
-  The check: **the float validator at tolerance 0 never accepts what the exact certifier refuses** (an engine-accepted configuration has exact margin >= -2e-14, the reading error; none had a negative one), and an exact strict verdict implies the engine's acceptance. All 270 were run once by hand: the engine accepts 54, refuses 216, and the exact certifier finds 54 strictly valid, the same ones (161 s).
+  The check: **the float validator at tolerance 0 never accepts what the exact certifier refuses** (an engine-accepted configuration has exact margin >= -2e-14, the reading error; none had a negative one), and an exact strict verdict implies the engine's acceptance. The claim holds for the cases below only because the ridge snap and the development's prune meet: a centre whose slack toward a neighbour is in (4 eta, 1e-15 max(1, s)] once got that neighbour neither as an anchor nor as a chain (the band opened at tolerance 0 and, for s above about 4,000, at 1e-11), and a second ball across the ridge went unseen; the prune now stops at 8e-16 max(1, s), below 4 eta (eta >= 2^-52 max(1, s)) at every tolerance. [CALC] The 22 review cases (pairs 0.9 apart across a ridge, `fixtures/nd_gap_cases.json`) were accepted 34 times by `validateND` over the tolerances 0, 1e-11 and 1e-9 before, and 0 times after. The claim is up to the reading error (exact margin >= -2e-14), as stated. All 270 were run once by hand: the engine accepts 54, refuses 216, and the exact certifier finds 54 strictly valid, the same ones (161 s).
   The test (`Adversarial`) runs 214 of them, all but the 7- to 10-demicube pair and hinge cases, which are slow in exact arithmetic, in 14 s: 42 accepted, 172 refused, 42 strictly valid.
 - **Development maps and walks** (`nd.test.ts`): the reflection is an isometry, an involution, fixes the ridge, lays the neighbour on the far side and agrees with the rotation; the join search finds, for 12 random geodesic walks per container (hinge-free, lengths 0.3 to 1), a path at most as long as the walk, and walking the join's direction ends at the other centre; walking the hinge search's nearest point just past it meets a hinge.
 - **Known distances** (`nd.test.ts`): a cell's centre is s / sqrt(d(d-2)) from the hinges (simplex, orthoplex), s/2 (demicube facets, d >= 6) and s / sqrt 6 (5-demicube); two simplex cells' centres are s sqrt(2/(n(n+1))) apart; two adjacent demicube facets' s / sqrt 2.
 - **Fail-closed**: a step budget cuts a check off with "work limit" for every budget below the steps it needs, and accepts at exactly that many; the exact certifier raises at its own limits.
 
-### 4C.7 Test packings
+### 4D.7 Test packings
 
 No records: the 432 problems ship with lower bounds and test packings only (`python/boundary/fixtures/nd_packings.json`, 72 packings, 4 per container; the cheap constructions of this phase, no long run):
 
@@ -810,10 +810,10 @@ Each is scaled about the centres of the cells (4.4's argument: lam_k = 1 + k 1e-
 | 9demicube | 274 | 0.661438 | 0.873506 | 1.000000 | 18, 1.414214 | 1.414214 | 2.075661 | 2.38 |
 | 10demicube | 532 | 0.603023 | 0.823943 | 1.000000 | 20, 1.414214 | 1.414214 | 2.044584 | 2.48 |
 
-### 4C.8 The server, the work, the kernel and the search
+### 4D.8 The server, the work, the kernel and the search
 
 - **Rule** (`ndServerRule`): P at most 24, the form (cell 0 to C - 1, u of d - 1 numbers at most 1e4 in absolute value, no `q`), s at least the problem's bound less 1e-9 relative, then `validateND` at tolerance 1e-9 with 20 reasons and the step budget; an entry on a problem without a record must also pass at 1e-11 (section 12).
-- **Work budget.** A check counts steps: a node created, a projection solved, a join candidate examined. It stops after **ND_MAX_WORK = 60,000** steps and refuses the configuration with a plain reason ("the check reached its work limit ... too many balls crowd the (d-3)-faces"): sound, incomplete. [CALC, Apple Silicon, one core] A step costs 5 to 26 microseconds, so a refused check costs at most about a second and a half. Measured on the test packings (touching, tolerance 1e-9):
+- **Work budget.** A check counts steps: a node created, a projection solved, a join candidate examined. It stops after **ND_MAX_WORK = 60,000** steps and refuses the configuration with a plain reason ("the check reached its work limit ... too many balls crowd the (d-3)-faces"): sound, incomplete. The steps alone do not bound the time, because a step costs very different amounts: [CALC, Apple Silicon, one core, load average 14] 2 to 260 microseconds a step in the measurements (`dos_time`): a demicube cell has 144 neighbours at d = 9 and 274 at d = 10, and the per-node loops over the neighbours, the hinge scans and the windows' rows were not counted. A refused near-tie held the event loop for 3.3 s (9-demicube) and a valid one for 4.1 s (10-demicube, two balls, two passes) before the second cap. The check therefore also counts **multiply-adds** (`spendOps` in `chains.ts`: the sizes of the neighbour loops, the window rows, the projections' Gram matrices, the join candidates and their windows; a count of loop sizes, not a clock, so the verdict is the same on every machine) and stops after **ND_MAX_OPS = 3e7** of them (twice that on the 8-demicube, whose two facet-centre balls with every hinge tied need 4.1e7 and are valid), with the same reason. The count is 1 to 7 ms per million on this machine, so one pass is cut off after about 0.1 s (0.4 s on the 8-demicube) and the server's two passes (1e-9, then the strict 1e-11) hold the event loop for at most about twice that. [CALC, same loaded machine] Worst event-loop hold in one POST through `createApp` (`dos_server`): 4.1 s before, 0.14 s after; worst check in the scans (`dos_time`: 2,984 ms before on the 9-demicube; `dos_scan`: 2,872 ms before) 0.42 s (8-demicube) and 0.08 s after. No valid test packing comes near the caps (at most 2.0e7 operations, the 8-demicube P = 1 packing; the 24-ball packings at most 5.8e6). Measured on the test packings (touching, tolerance 1e-9):
 
   | container | P = 1: steps / ms | layout: P: steps / ms | P = 4 | P = 24 |
   |---|---|---|---|---|
@@ -837,27 +837,27 @@ Each is scaled about the centres of the cells (4.4's argument: lam_k = 1 + k 1e-
   | 10demicube | 1: 20 / 1.4 | 20: 40 / 1.2 | 4: 80 / 5.3 | 24: 97 / 2.7 |
   The slowest checks are balls at the centre of a demicube facet with the edge at 1 + 1e-9 (the P = 1 packings and the P = 4 on the 6-demicube): dozens of hinges at the same distance 1/2 s from the centre, so many chains survive the pruning (the 6-demicube: 988 and 2,608 steps; the 8-demicube: 5,392 steps, 41 ms). Seeded runs of the search gave at most 7,824 steps (6-demicube, P = 12) and 19 ms.
   **Ties are the cost.** A ball whose hinges are *exactly* 1/2 away is the worst case, and the centre of a demicube facet at s = 1 has dozens of them at that distance: the engine's reach is 1/2 (1 + 1e-12), so a hinge within 5e-13 of 1/2 ties, and every chain around it survives the pruning. One ball at the centre of a facet, steps (time) at s - 1 = 1e-10 / 1e-12 / 1e-13: the 6-demicube 988 (2 ms) / 68,948 (167 ms) / 68,948 (294 ms);
-  the 7-demicube 1,934 (11 ms) / over 5,000,000 (25 s) / 204,110 (1.3 s); the 8-demicube 5,392 (38 ms) / over 5,000,000 (66 s) / over 5,000,000 (58 s). With the cap of 60,000 steps the server **refuses** such a ball for its work limit (sound, incomplete); a margin of 1e-10 and more is decided at once. The reach was therefore kept below the 1e-12 margins of the packings the server is to accept.
-- **Heavy queue.** `boundaryIsHeavy` estimates a check at ND_BALL_MS per ball: three times the largest cost per ball measured (0.08 ms on the simplex and orthoplex, 5.5 on the 6-demicube, 9.5 on the 7-, 41 on the 8-, 0.6 on the 9-, 1.4 on the 10-demicube), rounded up: 0.3, 17, 30, 125, 2 and 4 ms (the 5-demicube 0.3). A check of 50 ms or more waits in the server's heavy queue, one at a time, and is charged its estimate:
-  **the 6-demicube from P = 3, the 7-demicube from P = 2, the 8-demicube always, the 10-demicube from P = 13**; nothing else.
+  the 7-demicube 1,934 (11 ms) / over 5,000,000 (25 s) / 204,110 (1.3 s); the 8-demicube 5,392 (38 ms) / over 5,000,000 (66 s) / over 5,000,000 (58 s). With the caps (60,000 steps, 3e7 operations) the server **refuses** such a ball for its work limit (sound, incomplete); a margin of 1e-10 and more is decided at once. The reach was therefore kept below the 1e-12 margins of the packings the server is to accept.
+- **Heavy queue.** `boundaryIsHeavy` estimates a check at ND_BALL_MS per ball: three times the largest cost per ball measured (0.08 ms on the simplex and orthoplex, 5.5 on the 6-demicube, 9.5 on the 7-, 41 on the 8-, 0.6 on the 9-, 1.4 on the 10-demicube), rounded up: 0.3, 17, 30, 125, 2 and 5 ms (3 x 1.4 = 4.2) (the 5-demicube 0.3). A check of 50 ms or more waits in the server's heavy queue, one at a time, and is charged its estimate:
+  **the 6-demicube from P = 3, the 7-demicube from P = 2, the 8-demicube always, the 10-demicube from P = 10**; nothing else. The heavy queue serialises the checks; it does not shorten one: the time of a single check is bounded by the two caps above.
 - **Kernel** (section 14). `boundaryKernel` returns `ndKernel` for these containers: n variables per piece, the energy of `nd/model.ts` (squared violations of the clearance, of every pair and loop below 1, found by the engine, with an analytic gradient in the displacements through the developments' linear parts; the size derivative is a central difference at fixed local coordinates plus the centres' own motion), weights, focus and the search's
   finish (`finalizeState` with shrink). A ball nearer than 1/2 to a hinge of its own cell is not developed (its pair terms use the chord in R^D, a lower bound). Seeds: the exact layout where one is derived (P = 1; simplex P <= d + 1; demicube P <= 2d; orthoplex P = 2) and a sequential random layout otherwise (balls added at random points, accepted when they conflict with none, the edge raised 6% after a failed round). Random starts put the balls on distinct cells at 1.1 times the layout edge, the demicube's balls on its facets, not its simplex cells.
   The kernel contract (`checkKernel`) passes on 8 containers spread over the three families and d = 5 ... 10; an energy evaluation with its gradient costs 0.02 to 0.1 ms per ball on the simplex and orthoplex, 0.05 to 1.7 ms on the demicube (`BOUNDARY_ENERGY_MS` in `apps/web/src/space/model.ts`).
 - **Search.** `searchBoundary` on these problems seeds and finishes (no optimiser: the problem sets ship without records); the generic methods run on the kernel for anything more.
 - **Tighter** must not see these containers: the game's slices and id patterns do not name `boundary` (`apps/web/test/tighter-boundary-excluded.test.ts` pins that for the 432 ids as it does for the others).
 
-### 4C.9 On the site
+### 4D.9 On the site
 
 The Problem set menu's option of each of these dimensions is now "4D on 5D: Polytope boundaries" ... "9D on 10D: Polytope boundaries" (value `boundary-<d>cube`, unchanged, so old links keep working; their address and the Records page's tab still open the d-cube first, the family's `open` filter). A family's picker offers its four containers (the d-cube
 first, then the simplex, orthoplex and demicube); balls only on the last three. The board draws a packing as a table of the balls (index, facet, centre in the facet, centre in x1 ... xD) and a chart of the centres projected onto two axes the user picks, each ball in the colour of its facet, inside the outline of the projected container (`apps/web/src/space/render/ndpoly.ts`); a ball in a demicube facet
 x_i = const is a disk when neither axis is i.
 
-### 4C.10 Limitations
+### 4D.10 Limitations
 
 - **Balls only.** Polytope pieces on these boundaries are a later phase: the engine's chains, windows and joins are for points; a polytope piece needs its parts clipped by the windows in d - 1 dimensions (the 3-dimensional `parts.ts` and `polyhedron.ts` do not go there) and an exact separating-axis test in Q(sqrt k).
-- **No records**, test packings only (4C.7); the 24-ball packings are loose (1.7 to 2.5 times the bound), the optima are unknown.
-- **The demicube's one-ball bound** is the proved one (4C.5), not the sharp one for d >= 7; the other bounds are the volume bound and the one-ball bound only.
-- **Finiteness of the chain enumeration** is not proved (4C.2); the budget makes it safe. A configuration with many balls crowded against hinges is refused with a reason rather than decided (sound, incomplete); packings with margins of 1e-12 and more are decided.
+- **No records**, test packings only (4D.7); the 24-ball packings are loose (1.7 to 2.5 times the bound), the optima are unknown.
+- **The demicube's one-ball bound** is the proved one (4D.5), not the sharp one for d >= 7; the other bounds are the volume bound and the one-ball bound only.
+- **Finiteness of the chain enumeration** is not proved (4D.2); the budget makes it safe. A configuration with many balls crowded against hinges is refused with a reason rather than decided (sound, incomplete); packings with margins of 1e-12 and more are decided.
 - **The exact certifier is slow on the big demicubes** (seconds to tens of seconds per check at d = 7 ... 10), because its numbers are Python integers in Q(sqrt k); the engine takes milliseconds.
 - **The vertex rule** (section 3) is argued, not proved, in every d.
 - Not covered: the Gosset polytopes (2_21, 1_22, 3_21, 4_21) of dimensions 6 to 8, and the 4-polytopes' rotated Platonic pieces (4A.8).
@@ -993,7 +993,7 @@ its field `previous`.
   single-cube insertion in the research (no fit found). The certifier refuses rotated cubes.
 - The tesseract is the only container with research records, and the only one with cubes. The five others take balls (section 4A); their
   problems have lower bounds and test packings, and nothing better is known. Their Platonic pieces are not built (4A.8).
-- The d-simplex, d-orthoplex and d-demicube (d = 5 to 10, section 4C) take balls only; their problems have lower bounds and test packings, no records, and the demicube's one-ball bound is not known to be sharp for d >= 7.
+- The d-simplex, d-orthoplex and d-demicube (d = 5 to 10, section 4D) take balls only; their problems have lower bounds and test packings, no records, and the demicube's one-ball bound is not known to be sharp for d >= 7.
 - The cube nofold value 2 for P = 9..16 is taken from the wiki's table, not re-derived here.
 - The certifier's soundness rests on the arguments of section 4 and on Python's exact integers
   and fractions (and, for Q(sqrt 2, sqrt 3), on the sign rule of 4.6). Its records are also
@@ -1020,7 +1020,7 @@ its field `previous`.
 - The d-cubes (section 4B): `packages/boundary/src/ncube/` (`lattice.ts` words and the reach search, `validate.ts`, `bounds.ts`, `move.ts`, `model.ts`, `kernel.ts`, `seeds.ts`, `rule.ts`, `search.ts`),
   `python/boundary/ncube.py` (the exact certifier), `python/boundary/test_ncube.py` and `packages/boundary/test/ncube.test.ts` (tests), `python/boundary/build_ncube_packings.py` (the test packings),
   `packages/boundary/scripts/gen-ncube-crosscheck.ts` and `gen-ncube-bounds.ts` (the fixtures `ncube_crosscheck.json`, `ncube_bounds.json`).
-- The simplex, orthoplex and demicube (section 4C): `packages/boundary/src/nd/` (`names.ts`, `container.ts` the cell complexes, `chains.ts` half-chains, windows, joins and the hinge distance, `move.ts` the walks, `validate.ts`, `bounds.ts`, `model.ts`, `kernel.ts`, `seeds.ts`, `rule.ts`, `search.ts`),
+- The simplex, orthoplex and demicube (section 4D): `packages/boundary/src/nd/` (`names.ts`, `container.ts` the cell complexes, `chains.ts` half-chains, windows, joins and the hinge distance, `move.ts` the walks, `validate.ts`, `bounds.ts`, `model.ts`, `kernel.ts`, `seeds.ts`, `rule.ts`, `search.ts`),
   `python/boundary/ndpoly.py` (the exact certifier), `python/boundary/test_ndpoly.py` and `packages/boundary/test/nd.test.ts` (tests), `python/boundary/build_nd_packings.py` (certifies the test packings),
   `packages/boundary/scripts/gen-nd-crosscheck.ts`, `gen-nd-bounds.ts` and `gen-nd-packings.ts` (the fixtures `nd_crosscheck.json`, `nd_bounds.json`, `nd_packings_raw.json`), `apps/web/src/space/render/ndpoly.ts` (the board's chart and table), `apps/server/test/spaces-boundary-nd.test.ts`.
 
@@ -1076,7 +1076,7 @@ validations.
 - [SURFACE.md](SURFACE.md) section 2.3: the distance form for disks, which section 4.2 lifts one
   dimension up.
 - H. S. M. Coxeter, *Regular Polytopes*, 3rd ed. (Dover, 1973), 7.2 and 8.7: the simplex, the orthoplex (cross polytope) and the demicube (half-cube) in every dimension, their
-  vertices and facets, used by section 4C (the facet counts are the book's; the combinatorics were also read from the vertex sets by brute force).
+  vertices and facets, used by section 4D (the facet counts are the book's; the combinatorics were also read from the vertex sets by brute force).
 
 ## 12. On the site: the API and its rule
 
@@ -1104,7 +1104,7 @@ describes them all. Everything below goes through the spaces registry, `packages
 **The server's rule** for a configuration:
 
 1. The id must be a problem of the domain, in its one written form (no leading zeros): balls and cubes on the tesseract, P = 1 to 16, balls on
-   the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24, balls and cubes on the d-cubes (section 4B), balls on the d-simplex, d-orthoplex and d-demicube, d = 5 to 10, P = 1 to 24 (section 4C). P is at most 64 for the space and at most the
+   the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24, balls and cubes on the d-cubes (section 4B), balls on the d-simplex, d-orthoplex and d-demicube, d = 5 to 10, P = 1 to 24 (section 4D). P is at most 64 for the space and at most the
    catalogue's largest P (24) for a submission.
 2. The configuration must be well formed, or the answer is 400 with what is wrong: s a finite
    number in (0, 1e4]; `pieces` a list; each piece `{cell, u}` with `cell` an integer from 0 to C - 1 (C = 8 on the tesseract, 5, 16, 24, 120, 600 on the others)

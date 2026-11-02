@@ -30,7 +30,7 @@ import { ndFormErrors, ndServerRule } from "./rule";
 import { ndExactLayout, ndSequentialLayout } from "./seeds";
 import { type NDProblem, validateND } from "./validate";
 
-/** Energy evaluations one finish() and one validate() cost (measured, BOUNDARY.md 4C.8). */
+/** Energy evaluations one finish() and one validate() cost (measured, BOUNDARY.md 4D.8). */
 export const ND_FINISH_COST = 500;
 export const ND_VALIDATE_COST = 300;
 

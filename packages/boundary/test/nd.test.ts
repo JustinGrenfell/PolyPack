@@ -1,5 +1,5 @@
 /**
- * Balls on the boundary of the d-simplex, d-orthoplex and d-demicube, d = 5..10 (docs/spaces/BOUNDARY.md section 4C): the containers'
+ * Balls on the boundary of the d-simplex, d-orthoplex and d-demicube, d = 5..10 (docs/spaces/BOUNDARY.md section 4D): the containers'
  * combinatorics, the development maps, the half-chain engine against random walks, known distances, the bounds, the float validator, the server
  * rule, the kernel contract and the seeds. The exact certifier (python/boundary/ndpoly.py) has its own tests and reads the engine's
  * numbers written by scripts/gen-nd-crosscheck.ts; here the engine reads the certifier's test packings (fixtures/nd_packings.json).
@@ -648,8 +648,8 @@ describe("the server rule, the registry and the heavy queue", () => {
     expect(boundaryIsHeavy({ polytope: "8demicube", piece: "ball", P: 1 })).toBe(true);
     expect(boundaryIsHeavy({ polytope: "7simplex", piece: "ball", P: 24 })).toBe(false);
     expect(boundaryIsHeavy({ polytope: "10orthoplex", piece: "ball", P: 24 })).toBe(false);
-    expect(boundaryIsHeavy({ polytope: "10demicube", piece: "ball", P: 12 })).toBe(false);
-    expect(boundaryIsHeavy({ polytope: "10demicube", piece: "ball", P: 13 })).toBe(true);
+    expect(boundaryIsHeavy({ polytope: "10demicube", piece: "ball", P: 9 })).toBe(false);
+    expect(boundaryIsHeavy({ polytope: "10demicube", piece: "ball", P: 10 })).toBe(true);
     expect(BOUNDARY_HEAVY_MS).toBe(50);
   });
 });

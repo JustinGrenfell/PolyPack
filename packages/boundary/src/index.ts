@@ -71,7 +71,7 @@ export type { NDCell } from "./nd/container";
 export { type NDBudget, type NDJoin, type NDNode, NDLimitError, develop as ndDevelop, directionAtAnchor as ndDirectionAtAnchor, hingeDistance as ndHingeDistance, inWindow as ndInWindow, joinDistance as ndJoinDistance, newNDBudget } from "./nd/chains";
 export { ND_MAX_CROSSINGS, walkND } from "./nd/move";
 export { ND_BALL_MS, ndBallVolume, ndBound, ndCentreEdge, ndPairEdge, ndBoundKind, ndBoundaryVolume, ndCheckMs, ndCounts, ndProblemBound } from "./nd/bounds";
-export { ND_MAX_WORK, ND_REACH, anchorPiece as ndAnchorPiece, measureND, ndSnap, readNDConfig, validateND } from "./nd/validate";
+export { ND_MAX_OPS, ND_MAX_WORK, ND_REACH, ndMaxOps, anchorPiece as ndAnchorPiece, measureND, ndSnap, readNDConfig, validateND } from "./nd/validate";
 export type { NDAnchored, NDConfig, NDMeasure, NDProblem, NDValidateOptions } from "./nd/validate";
 export { ND_SERVER_RULE, ndFormErrors, ndServerRule } from "./nd/rule";
 export { ND_FINISH_COST, ND_VALIDATE_COST, ndKernel } from "./nd/kernel";

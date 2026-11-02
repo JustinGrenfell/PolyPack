@@ -1,6 +1,6 @@
 /**
  * The engine's distances on configurations of balls on the simplex, orthoplex and demicube (d = 5..10), for python/boundary/test_ndpoly.py
- * to compare with the exact certifier (docs/spaces/BOUNDARY.md 4C.6). Seeded random layouts of 1 to 3 balls on each of the 18 containers:
+ * to compare with the exact certifier (docs/spaces/BOUNDARY.md 4D.6). Seeded random layouts of 1 to 3 balls on each of the 18 containers:
  * the first ball at a random point of a random cell (nearer the cell's boundary on every third case), each next ball at the end of a random
  * geodesic of length 0.7 to 1.2 from a random earlier ball (so that most pairs cross ridges and many are close to 1 apart). Per case: the
  * engine's clearance of each centre, the pair distances below 1 and the loops below 1 (measureND), and its verdict at tolerance 0.

@@ -1,11 +1,11 @@
 """Builds python/boundary/fixtures/nd_packings.json: the test packings of balls on the simplex, orthoplex and demicube, d = 5..10
-(no records; BOUNDARY.md 4C.7), each certified strictly valid by the exact certifier ndpoly.py.
+(no records; BOUNDARY.md 4D.7), each certified strictly valid by the exact certifier ndpoly.py.
 
 Input: fixtures/nd_packings_raw.json, written by packages/boundary/scripts/gen-nd-packings.ts (exact layouts and short seeded
 searches, drawn in by the kernel's finish(): touching, valid at tolerance 0). Each is scaled about the centres of the cells as BOUNDARY.md
 section 4.4 does for the records: lam_k = 1 + k 1e-12 for k = 1, 2, ..., the first at which the scaled binary64 configuration
 certifies strictly valid with every margin (clearance over 1/2, pair distance and loop length over 1) at least MIN_MARGIN = 1e-12:
-the engine's floats are read to within about 1e-16 s of the point they mean (BOUNDARY.md 4C.4), and the strict test keeps a slack for that,
+the engine's floats are read to within about 1e-16 s of the point they mean (BOUNDARY.md 4D.4), and the strict test keeps a slack for that,
 so smaller margins would not bind the configuration as the engine reads it. The result is stored with its exact margins (rounded down).
 
     python3 python/boundary/build_nd_packings.py

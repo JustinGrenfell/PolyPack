@@ -1,5 +1,5 @@
 /**
- * Float validator of the simplex, orthoplex and demicube problems (d = 5..10, balls of diameter 1; docs/spaces/BOUNDARY.md section 4C),
+ * Float validator of the simplex, orthoplex and demicube problems (d = 5..10, balls of diameter 1; docs/spaces/BOUNDARY.md section 4D),
  * tolerance tol (default 1e-9). The rule is 4.2's, which is dimension-free: a configuration is valid exactly when
  *  - every centre lies in its closed anchor cell (within tol),
  *  - every centre is at geodesic distance >= 1/2 - tol from the hinges (the (d-3)-faces),
@@ -12,14 +12,24 @@
  * A centre within the snap distance eta of a ridge plane is moved onto it (the move is charged to the verdict: thresholds of that piece
  * are tightened by the distance it moved) and then belongs to both cells, which are both used as anchors, as in the 4-polytope engine.
  *
- * Work is capped. A check stops after opts.maxWork steps (default ND_MAX_WORK) and refuses the configuration with a plain reason: a
+ * Work is capped. A check stops after opts.maxWork steps (default ND_MAX_WORK) or opts.maxOps multiply-adds (default ndMaxOps: the steps
+ * do not bound the time, 4D.8) and refuses the configuration with a plain reason: a
  * packing that crowds balls against the hinges, or a container too small for its balls, is refused (sound, incomplete), never accepted.
  *
  * Untrusted input: numbers are read by index (holes are rejected) and every rejecting comparison is written so that NaN rejects.
  */
 import type { BoundaryVerdict } from "../types";
 import { MAX_S } from "../validate";
-import { type NDBudget, type NDNode, NDLimitError, develop, hingeDistance, joinDistance, newNDBudget } from "./chains";
+import {
+  type NDBudget,
+  type NDNode,
+  NDLimitError,
+  develop,
+  hingeDistance,
+  joinDistance,
+  ndZeroLength,
+  newNDBudget,
+} from "./chains";
 import { type NDContainer, getND } from "./container";
 import { type NDName, isNDName } from "./names";
 import { ndBoundaryVolume, ndBallVolume } from "./bounds";
@@ -29,12 +39,21 @@ export interface NDValidateOptions {
   maxReasons?: number;
   /** Search steps before the check gives up (default ND_MAX_WORK). */
   maxWork?: number;
-  /** Receives the steps used. */
-  stats?: { steps: number };
+  /** Multiply-adds before the check gives up (default ndMaxOps). */
+  maxOps?: number;
+  /** Receives the steps and the multiply-adds used. */
+  stats?: { steps: number; ops?: number };
 }
 
-/** Search steps one check may spend (chains.ts): BOUNDARY.md 4C.7 gives the measurements it comes from. */
+/** Search steps one check may spend (chains.ts): BOUNDARY.md 4D.7 gives the measurements it comes from. */
 export const ND_MAX_WORK = 60_000;
+/**
+ * Multiply-adds one check may spend (chains.ts spendOps): bounds the time of a refused check (4D.8). [CALC] 1 to 5 ms per million on this
+ * machine, so a pass is cut off after about 0.1 s. The 8-demicube gets twice the others': two balls at facet centres there (every hinge
+ * tied) need 4.1e7 and are valid.
+ */
+export const ND_MAX_OPS = 3e7;
+export const ndMaxOps = (polytope: NDName): number => (polytope === "8demicube" ? 2 * ND_MAX_OPS : ND_MAX_OPS);
 
 export interface NDProblem {
   polytope: NDName;
@@ -197,7 +216,7 @@ export function anchorPiece(
 
 /**
  * Reach of the half-chains: half the diameter of a ball, with a hair for rounding. It must stay below the margins of the packings the server is to
- * accept (records carry margins of 1e-12 and more): a hinge or a pair within the reach makes a tie, and ties are where the search cost explodes (4C.8).
+ * accept (records carry margins of 1e-12 and more): a hinge or a pair within the reach makes a tie, and ties are where the search cost explodes (4D.8).
  */
 export const ND_REACH = 0.5 * (1 + 1e-12);
 
@@ -254,8 +273,13 @@ function validateBalls(C: NDContainer, cfg: NDConfig, tol: number, maxReasons: n
       const lim = 1 - tol + at[i].moved + at[j].moved;
       if (!(q < 1 * 1)) continue;
       let best = Infinity;
-      for (const A of chains[i])
-        for (const B of chains[j]) best = Math.min(best, joinDistance(C, s, A, B, lim, budget, false).dist);
+      // two different balls at (nearly) one point overlap whatever the chains say (4D.2)
+      if (q < ndZeroLength(s) ** 2) best = Math.sqrt(q);
+      else {
+        for (const A of chains[i])
+          for (const B of chains[j])
+            best = Math.min(best, joinDistance(C, s, A, B, lim, budget, false, 1e-12, false).dist);
+      }
       if (best < lim)
         push(
           `Balls ${i} and ${j} overlap: their centres are ${fmt(best)} apart along the boundary; they must be at least 1 apart.`,
@@ -315,17 +339,20 @@ export function validateND(problem: NDProblem, config: unknown, opts: NDValidate
         `${cfg.pieces.length} balls have a total volume of ${fmt(cfg.pieces.length * pieceVolume)}, more than the ${fmt(volume)} of the ${problem.polytope}'s boundary at s = ${fmt(cfg.s)}.`,
       ],
     };
-  const budget = newNDBudget(maxWork);
+  const budget = newNDBudget(maxWork, opts.maxOps ?? ndMaxOps(problem.polytope));
   let geo: string[];
   try {
     geo = validateBalls(C, cfg, tol, maxReasons, budget);
   } catch (e) {
     if (!(e instanceof NDLimitError)) throw e;
     geo = [
-      `The check reached its work limit (${maxWork} search steps) before it could decide: too many balls crowd the (d-3)-faces of the ${problem.polytope}.`,
+      `The check reached its work limit (${e.message.replace("the check needs more than ", "")}) before it could decide: too many balls crowd the (d-3)-faces of the ${problem.polytope}.`,
     ];
   }
-  if (opts.stats) opts.stats.steps = budget.steps;
+  if (opts.stats) {
+    opts.stats.steps = budget.steps;
+    opts.stats.ops = budget.ops;
+  }
   return geo.length ? { ok: false, score: null, reasons: geo } : { ok: true, score: cfg.s, reasons: [] };
 }
 
@@ -375,14 +402,14 @@ export function measureND(problem: NDProblem, config: NDConfig, opts: { maxWork?
       let q = 0;
       for (let r = 0; r < C.D; r++) q += (at[i].x[r] - at[j].x[r]) ** 2;
       if (!(q < 1)) continue;
-      if (crowded[i] || crowded[j]) {
+      if (crowded[i] || crowded[j] || q < ndZeroLength(s) ** 2) {
         pairs.push({ i, j, dist: Math.sqrt(q) });
         continue;
       }
       let best = Infinity;
       for (const A of chains[i])
         for (const B of chains[j])
-          best = Math.min(best, joinDistance(C, s, A, B, Math.min(best, 1), budget, false).dist);
+          best = Math.min(best, joinDistance(C, s, A, B, Math.min(best, 1), budget, false, 1e-12, false).dist);
       pairs.push({ i, j, dist: best });
     }
   const loops: number[] = [];

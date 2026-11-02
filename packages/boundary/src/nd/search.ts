@@ -1,7 +1,7 @@
 /**
  * The boundary search for balls on the simplex, orthoplex and demicube (d = 5..10): the structured starts of the kernel (seeds.ts) finished by its
  * exact finishing (kernel.ts finish), best kept. It is not an optimizer of records: these problem sets ship without records
- * (BOUNDARY.md 4C), and the generic methods (packages/methods) run on the kernel for anything more. It exists so that a
+ * (BOUNDARY.md 4D), and the generic methods (packages/methods) run on the kernel for anything more. It exists so that a
  * boundary job on one of these problems has an engine with the contract of searchBoundary: seeded, budgeted in evaluations
  * (a finish costs ND_FINISH_COST), stoppable, reproducible from (problem, start, seed, evals) when no clock limit is set.
  */

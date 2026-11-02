@@ -30,7 +30,7 @@ export type { NCubeName, NDName };
  * "9D on 10D", ncube/), under the same problem ids `boundary/<container>/<piece>/<P>`. PolytopeName stays the 4-polytopes
  * (the Polytope objects of polytope.ts); a d-cube has no Polytope, its cells being lattice cubes handled in closed form.
  */
-// and, since 2026-11-02, the d-simplex, d-orthoplex and d-demicube for d = 5..10 (nd/, balls only; docs/spaces/BOUNDARY.md 4C)
+// and, since 2026-11-02, the d-simplex, d-orthoplex and d-demicube for d = 5..10 (nd/, balls only; docs/spaces/BOUNDARY.md 4D)
 export type ContainerName = PolytopeName | NCubeName | NDName;
 export const CONTAINERS: readonly ContainerName[] = [...POLYTOPES, ...NCUBE_NAMES, ...ND_NAMES];
 

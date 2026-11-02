@@ -1,9 +1,9 @@
 """Exact certifier for balls on the boundary of the d-simplex, d-orthoplex and d-demicube, d = 5..10 ("4D on 5D" to
-"9D on 10D"), with developments along chains of cells in R^(d-1). BOUNDARY.md section 4C.
+"9D on 10D"), with developments along chains of cells in R^(d-1). BOUNDARY.md section 4D.
 
 Problem boundary/<d><family>/ball/<P> (family simplex, orthoplex or demicube): P balls of diameter 1 on the boundary of the
 polytope of edge s; the score is s. The conventions are those of packages/boundary/src/nd/container.ts and
-docs/spaces/BOUNDARY.md 4C.1: cell ids, a cell's centre and its frame (Gram-Schmidt, run twice, on the projections of the standard
+docs/spaces/BOUNDARY.md 4D.1: cell ids, a cell's centre and its frame (Gram-Schmidt, run twice, on the projections of the standard
 basis onto the cell's tangent space), a configuration {s, pieces: [{cell, u}]} with u the centre in the cell's local frame at s.
 
 Exactness. Everything is decided in exact arithmetic: rationals for the simplex and orthoplex, and Q(sqrt k) for the
@@ -14,7 +14,7 @@ root of a norm is ever taken. A ball of diameter 1 on the polytope of edge s has
 test compares a squared base length with 2 / s^2 times a rational: no square root appears. Only the
 reported margins are converted to numbers.
 
-Developments (4C.2). The cell c' glued to c across a ridge is unfolded into the hyperplane of c by the reflection
+Developments (4D.2). The cell c' glued to c across a ridge is unfolded into the hyperplane of c by the reflection
     sigma(x) = x - 2 (m . (x - q)) / (m . m) m,    m = N_c + N_c',   q a point of the ridge,
 which fixes the ridge, maps the hyperplane of c' onto that of c and lays c' on the far side of the ridge. A node of a chain
 stores a = the source as seen in its own cell's hyperplane (a child's a is sigma(a)), and every window is carried back along
@@ -50,7 +50,7 @@ VERSION = "boundary-nd 1"
 CHECKER = "python/boundary/ndpoly.py"
 # pi to 50 decimals, truncated
 PI_LO = Fraction("3.14159265358979323846264338327950288419716939937510")
-# reading slack, relative to s (BOUNDARY.md 4C.4); set from the measured discrepancy
+# reading slack, relative to s (BOUNDARY.md 4D.4); set from the measured discrepancy
 READING_PAIR = Fraction(2, 10 ** 13)
 READING_CLEAR = Fraction(1, 10 ** 13)
 SNAP = Fraction(1, 10 ** 12)  # a centre outside its cell by less than this fraction of s is moved onto the facet planes it violates
@@ -614,8 +614,11 @@ def in_window(cn, nodes, idx, w, beyond):
     return True
 
 
-def join_distance2(cn, A, B, limit2, budget, same):
-    """The least squared length (base units) of a straight path joining the sources of the half-chain sets A and B, if <= limit2; else None."""
+def join_distance2(cn, A, B, limit2, budget, same, own=True):
+    """The least squared length (base units) of a straight path joining the sources of the half-chain sets A and B, if <= limit2; else None.
+
+    With `own` the sets are one ball's and a join of length exactly 0 is the trivial loop of a centre on a ridge, skipped. For two different
+    balls (`own` False) length 0 is one point: an overlap, kept (4D.2)."""
     by_cell = {}
     for j, nd in enumerate(B):
         by_cell.setdefault(nd.cell, []).append(j)
@@ -626,7 +629,7 @@ def join_distance2(cn, A, B, limit2, budget, same):
                 continue
             w = [bj - ai for ai, bj in zip(na.a, B[j].a)]
             len2 = dot(w, w)
-            if len2 > limit2 or sg(len2) == 0 or (best is not None and len2 >= best):
+            if len2 > limit2 or (own and sg(len2) == 0) or (best is not None and len2 >= best):
                 continue
             budget.spend()
             if not in_window(cn, A, i, w, True):
@@ -1008,7 +1011,7 @@ def check(polytope, piece, P, config, to_fraction, strict=True, extra=0):
     if polytope not in NAMES:
         raise NDError(f"unknown container {polytope!r}")
     if piece != "ball":
-        raise NDError(f"the {polytope} takes balls only, not {piece!r} (BOUNDARY.md section 4C)")
+        raise NDError(f"the {polytope} takes balls only, not {piece!r} (BOUNDARY.md section 4D)")
     if isinstance(P, bool) or not isinstance(P, int) or not 1 <= P <= MAX_P:
         raise NDError(f"P must be a whole number from 1 to {MAX_P}")
     cfg = parse_config(polytope, P, config, to_fraction)
@@ -1096,9 +1099,12 @@ def _check_balls(cn, cfg, v, extra=Fraction(0)):
                 continue
             npairs += 1
             m = None
+            if sg(dot(diff, diff)) == 0:
+                # one point: two different balls at the same place overlap whatever the chains say (4D.2)
+                m = Fraction(0)
             for A in chains[pts[i][0]]:
                 for B in chains[pts[j][0]]:
-                    r = join_distance2(cn, A, B, pair_search2, budget, False)
+                    r = join_distance2(cn, A, B, pair_search2, budget, False, False)
                     if r is not None and (m is None or r < m):
                         m = r
             if m is None:
@@ -1186,7 +1192,7 @@ def measure(polytope, P, config, to_fraction, reach=Fraction(1, 2) * (1 + Fracti
             m = None
             for A in chains[i]:
                 for B in chains[j]:
-                    r = join_distance2(cn, A, B, pair_lim2 - Fraction(1, 10 ** 30), budget, False)
+                    r = join_distance2(cn, A, B, pair_lim2 - Fraction(1, 10 ** 30), budget, False, False)
                     if r is not None and (m is None or r < m):
                         m = r
             pairs[(i, j)] = None if m is None else m / scale2
@@ -1233,7 +1239,7 @@ def summary(v):
 
 
 def exact_bounds(polytope, P):
-    """The proven lower bounds on s (BOUNDARY.md 4C.5) as (kind, text, check), check(x) deciding exactly that the rational x is not above the bound."""
+    """The proven lower bounds on s (BOUNDARY.md 4D.5) as (kind, text, check), check(x) deciding exactly that the rational x is not above the bound."""
     cn = get_cont(polytope)
     d, n = cn.d, cn.n
     ball_lo = ball_volume_lo(n)

@@ -1,6 +1,6 @@
 /**
  * The simplex, orthoplex and demicube as containers of the boundary space for d = 5..10 ("4D on 5D" to "9D on 10D",
- * docs/spaces/BOUNDARY.md section 4C): names, sizes and the helper that the registries share with the d-cubes.
+ * docs/spaces/BOUNDARY.md section 4D): names, sizes and the helper that the registries share with the d-cubes.
  *
  * A container name is `<d><family>`: "5simplex" .. "10simplex", "5orthoplex" .. "10orthoplex", "5demicube" .. "10demicube". The d-cubes of
  * section 4B keep their names ("5cube" .. "10cube"); with these, every dimension d = 5..10 has four containers.

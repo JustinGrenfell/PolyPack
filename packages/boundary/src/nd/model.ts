@@ -1,6 +1,6 @@
 /**
  * The penalty model of balls on the simplex, orthoplex and demicube (d = 5..10), the PieceModel of search/model.ts for the nD
- * containers; its engine is chains.ts (docs/spaces/BOUNDARY.md 4C). A state holds each ball's anchor cell and centre (n = d - 1 local
+ * containers; its engine is chains.ts (docs/spaces/BOUNDARY.md 4D). A state holds each ball's anchor cell and centre (n = d - 1 local
  * coordinates at the state's edge).
  *
  * Energy = sum over balls of w_i (1/2 - h_i)^2, h_i the geodesic distance of the centre to the hinges when it is below 1/2, plus sum
@@ -15,7 +15,7 @@
 import type { BoundaryConfig, BoundaryPiece } from "../types";
 import type { PieceModel, State, TermOptions } from "../search/model";
 import { ndBound, ndCentreEdge, ndPairEdge } from "./bounds";
-import { type NDNode, NDLimitError, develop, hingeDistance, joinDistance, newNDBudget } from "./chains";
+import { type NDNode, NDLimitError, develop, hingeDistance, joinDistance, ndZeroLength, newNDBudget } from "./chains";
 import { type NDContainer, getND } from "./container";
 import { type NDName, ndParse } from "./names";
 import { type NDAnchored, ND_REACH, anchorPiece, ndSnap } from "./validate";
@@ -128,7 +128,9 @@ export class NDBallModel implements PieceModel {
         let ell = Infinity;
         let ga: Float64Array | null = null;
         let gb: Float64Array | null = null;
-        if (crowded[i] || crowded[j]) {
+        let q0 = 0;
+        for (let r = 0; r < D; r++) q0 += (xi[r] - xj[r]) ** 2;
+        if (crowded[i] || crowded[j] || q0 < ndZeroLength(s) ** 2) {
           let q = 0;
           for (let r = 0; r < D; r++) q += (xi[r] - xj[r]) ** 2;
           ell = Math.sqrt(q);
@@ -146,7 +148,17 @@ export class NDBallModel implements PieceModel {
           let bj = -1;
           for (let p = 0; p < chains[i]!.length; p++)
             for (let q = 0; q < chains[j]!.length; q++) {
-              const r = joinDistance(C, s, chains[i]![p], chains[j]![q], Math.min(bestJ.dist, 1), budget, false);
+              const r = joinDistance(
+                C,
+                s,
+                chains[i]![p],
+                chains[j]![q],
+                Math.min(bestJ.dist, 1),
+                budget,
+                false,
+                1e-12,
+                false,
+              );
               if (r.dist < bestJ.dist) {
                 bestJ = r;
                 bi = p;

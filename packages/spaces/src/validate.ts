@@ -346,7 +346,7 @@ function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<
       u = Array.from({ length: dimU }, (_, k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
     const piece: BoundaryConfig["pieces"][number] = { cell: p.cell as number, u };
     if (p.q === undefined) return piece;
-    if (nc) {
+    if (nc && !ball) {
       r.errors.push(`pieces[${i}] has no rotation q (pieces on the ${String(id.fields.polytope)} stay axis-aligned)`);
       return piece;
     }
