@@ -1,5 +1,5 @@
 import { BALLS_CODES, ballsTitle } from "@polypack/balls/catalogue";
-import { ND_SHAPE_NAMES } from "@polypack/ndspace/catalogue";
+import { ND_SHAPE_NAMES, ndShapeTitle } from "@polypack/ndspace/catalogue";
 import { JOHNSON_SOLIDS, PROBLEM_ORDER, problemTitle } from "@polypack/polyhedra/catalogue";
 import {
   SURFACE_ARCHIMEDEAN,
@@ -327,7 +327,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       start: "ballinball",
     },
   ],
-  // ndim/<d>/<piece>/<container>/<P>: the nD spaces are listed by the generic table; the board does not show them yet
+  // ndim/<d>/<piece>/<container>/<P>: 4D in 4D to 10D in 10D, one dimension per family (dimension-table.ts)
   ndim: [
     {
       key: "d",
@@ -338,13 +338,21 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       order: ["4", "5", "6", "7", "8", "9", "10"],
       start: "4",
     },
-    { key: "piece", at: 2, label: "Piece", option: (v) => v, cell: (v) => v, order: ND_SHAPE_NAMES, start: "all" },
+    {
+      key: "piece",
+      at: 2,
+      label: "Piece",
+      option: ndShapeTitle,
+      cell: ndShapeTitle,
+      order: ND_SHAPE_NAMES,
+      start: "all",
+    },
     {
       key: "container",
       at: 3,
       label: "Container",
-      option: (v) => v,
-      cell: (v) => v,
+      option: ndShapeTitle,
+      cell: ndShapeTitle,
       order: ND_SHAPE_NAMES,
       start: "all",
     },

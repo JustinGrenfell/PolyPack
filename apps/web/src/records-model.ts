@@ -1,5 +1,14 @@
+import { ndTitle } from "@polypack/ndspace/catalogue";
 import type { CertifiedValue, SiteBest, SpaceDomainField, SpaceInfo, SpaceName } from "@polypack/spaces";
-import { DIMENSIONS, availableFamilies, familyOfSpace, isAvailable } from "./dimension-table";
+import {
+  DIMENSIONS,
+  type FamilyScope,
+  availableFamilies,
+  familyFilters,
+  familyKey,
+  familyOfFilters,
+  isAvailable,
+} from "./dimension-table";
 import {
   ALL,
   FieldSpec,
@@ -30,9 +39,14 @@ import {
 export const POLYGON_RECORDS = "/browse.html";
 export const RECORDS_PATH = "/records.html";
 
-/** The address of a kind's records: Flat is the page of the polygons, the others a hash of this page. */
-export const kindHref = (space: string): string =>
-  space === "polygon" ? POLYGON_RECORDS : `${RECORDS_PATH}#space=${encodeURIComponent(space)}`;
+/**
+ * The address of a kind's records: Flat is the page of the polygons, the others a hash of this page. `filters` fix fields
+ * of the table, as the dimension of an nD problem ("#space=ndim&d=5") or the d-cube ("#space=boundary&polytope=5cube").
+ */
+export const kindHref = (space: string, filters: Record<string, string> = {}): string =>
+  space === "polygon"
+    ? POLYGON_RECORDS
+    : `${RECORDS_PATH}#${new URLSearchParams({ space, ...filters }).toString()}`;
 
 export interface TabLink {
   text: string;
@@ -47,13 +61,17 @@ export interface TabLink {
  * current dimension, a link per available kind when it has more than one. `current` is "polygon"
  * for the classic page, or the space of the page.
  */
-export function tabModel(current: string): { dimensions: TabLink[]; kinds: TabLink[] } {
-  const here = familyOfSpace(current)?.dimension.id;
+export function tabModel(
+  current: string,
+  filters: Record<string, string> = {},
+): { dimensions: TabLink[]; kinds: TabLink[] } {
+  const there = familyOfFilters(current, filters);
+  const here = there?.dimension.id;
   const dimensions = DIMENSIONS.map((d): TabLink => {
     const first = availableFamilies(d)[0];
     return {
       text: d.label,
-      href: first ? kindHref(first.space) : "",
+      href: first ? kindHref(first.space, familyFilters(first)) : "",
       current: d.id === here,
       ...(isAvailable(d) ? {} : { soon: true }),
     };
@@ -62,7 +80,11 @@ export function tabModel(current: string): { dimensions: TabLink[]; kinds: TabLi
   const families = dimension ? availableFamilies(dimension) : [];
   const kinds =
     families.length > 1
-      ? families.map((f) => ({ text: f.short, href: kindHref(f.space), current: f.space === current }))
+      ? families.map((f) => ({
+          text: f.short,
+          href: kindHref(f.space, familyFilters(f)),
+          current: familyKey(f) === (there ? familyKey(there.family) : current),
+        }))
       : [];
   return { dimensions, kinds };
 }
@@ -107,11 +129,18 @@ export interface Picker {
  * record) offers every value the domain has, with the server's names and groups; the others offer
  * the values their records have.
  */
-export function pickers(space: SpaceName, problems: readonly ListedProblem[], info?: SpaceInfo): Picker[] {
+export function pickers(
+  space: SpaceName,
+  problems: readonly ListedProblem[],
+  info?: SpaceInfo,
+  scope?: FamilyScope | null,
+): Picker[] {
   const domain = new Map<string, SpaceDomainField>((info?.domain?.fields ?? []).map((f) => [f.key, f]));
   return SPACE_FIELDS[space].map((spec) => {
     const d = domain.get(spec.key);
-    const values = d?.values ? [...d.values] : fieldValues(problems, spec);
+    let values = d?.values ? [...d.values] : fieldValues(problems, spec);
+    // a family that holds part of a space (an nD dimension, the d-cubes) offers its own values of that field only
+    if (scope && scope.field === spec.key) values = values.filter((v) => scope.values.includes(v));
     return {
       spec,
       options: values.map((value) => {
@@ -170,7 +199,10 @@ export function seriesProblems(
 
 /** The family's name in a few words: "Cube, fold, square". */
 export const seriesTitle = (specs: readonly FieldSpec[], chosen: Filters): string =>
-  specs.map((f) => (f.key === "K" ? `K = ${f.cell(chosen[f.key] ?? "")}` : f.cell(chosen[f.key] ?? ""))).join(", ");
+  // nD in nD reads as a sentence: "4D: Hypercubes in an orthoplex"
+  specs.some((f) => f.key === "container") && /^\d+$/.test(chosen.d ?? "") && chosen.piece && chosen.container
+    ? ndTitle(Number(chosen.d), chosen.piece, chosen.container)
+    : specs.map((f) => (f.key === "K" ? `K = ${f.cell(chosen[f.key] ?? "")}` : f.cell(chosen[f.key] ?? ""))).join(", ");
 
 /** The hash that shows a problem's family. */
 export const seriesHash = (space: SpaceName, specs: readonly FieldSpec[], p: ListedProblem): string =>
@@ -178,15 +210,62 @@ export const seriesHash = (space: SpaceName, specs: readonly FieldSpec[], p: Lis
 
 // ---------- sizes ----------
 
-/** The range of P a family has in the kind's domain, or null when the kind has no domain. */
-export function domainPRange(info?: SpaceInfo): [number, number] | null {
+/**
+ * Where the research records of a family come from, in a sentence (the listing carries no credit of its own): the nD in nD
+ * records of 4D to 6D are the wiki's, re-certified (docs/spaces/NDIM.md section 12). Null for the kinds this does not add to.
+ */
+export function recordsSource(space: SpaceName, filters: Record<string, string>): string | null {
+  if (space !== "ndim") return null;
+  const d = Number(filters.d);
+  if (Number.isInteger(d) && d >= 7)
+    return "No research record yet: every problem of this dimension takes its first valid entry.";
+  return "Research records of 4D to 6D: the regular polytopes of the higher-polytope tab of polyhedrainpolyhedra.wiki, from alejandrozu/platonic-packing (MIT licence), found by Alejandro Zarzuelo. Credit as given there: soft-to-rigid method by Yohei Nakajima (2026); generalization to regular polytopes of dimensions 4-6, basin-hopping search and exact certification developed with Claude (Anthropic) under Alejandro Zarzuelo's direction. PolyPack converted them to its poses and certified them again with its own exact checker. The other pairs of shapes have no record yet.";
+}
+
+/**
+ * The range of P a family has in the kind's domain, or null when the kind has no domain. Where the range depends on
+ * another field (the nD dimension, the container), the chosen values of the family tell which.
+ */
+export function domainPRange(info?: SpaceInfo, chosen: Record<string, string> = {}): [number, number] | null {
   const f = info?.domain?.fields.find((x) => x.key === "P");
-  return f && typeof f.min === "number" && typeof f.max === "number" ? [f.min, f.max] : null;
+  if (!f) return null;
+  const dep = f.dependent?.ranges?.[chosen[f.dependent.on] ?? ""];
+  if (dep) return [dep[0], dep[1]];
+  return typeof f.min === "number" && typeof f.max === "number" ? [f.min, f.max] : null;
+}
+
+/**
+ * How many problems of a domain a scope holds, counted from the domain's fields as the server describes them (the fields
+ * in order, a dependent field taking the values or the range of the value picked before it); null without a domain.
+ */
+export function scopedDomainCount(info: SpaceInfo | undefined, scope: FamilyScope | null): number | null {
+  const fields = info?.domain?.fields;
+  if (!fields) return null;
+  const walk = (i: number, picked: Record<string, string>): number => {
+    if (i === fields.length) return 1;
+    const f = fields[i];
+    const dep = f.dependent && picked[f.dependent.on] !== undefined ? f.dependent : undefined;
+    const range = dep?.ranges?.[picked[dep.on]];
+    const last = i === fields.length - 1;
+    if (!f.values && !dep?.values && (range || (f.min !== undefined && f.max !== undefined))) {
+      const [lo, hi] = range ?? [f.min!, f.max!];
+      // a range is counted, not walked, when nothing follows it and no scope limits it
+      if (last && !(scope && scope.field === f.key)) return hi - lo + 1;
+      let sum = 0;
+      for (let v = lo; v <= hi; v++)
+        if (!(scope && scope.field === f.key) || scope.values.includes(String(v))) sum += walk(i + 1, { ...picked, [f.key]: String(v) });
+      return sum;
+    }
+    let values = dep?.values?.[picked[dep!.on]] ?? f.values ?? [];
+    if (scope && scope.field === f.key) values = values.filter((v) => scope.values.includes(v));
+    return values.reduce((sum, v) => sum + walk(i + 1, { ...picked, [f.key]: v }), 0);
+  };
+  return walk(0, {});
 }
 
 /** How many problems a family has: its domain's range of P, else the problems it lists. */
-export function seriesSize(info: SpaceInfo | undefined, listed: number): number {
-  const r = domainPRange(info);
+export function seriesSize(info: SpaceInfo | undefined, listed: number, chosen: Record<string, string> = {}): number {
+  const r = domainPRange(info, chosen);
   return r ? r[1] - r[0] + 1 : listed;
 }
 
@@ -201,8 +280,9 @@ export function seriesNote(
   series: readonly ListedProblem[],
   totalRecords: number,
   totalProblems: number,
+  chosen: Record<string, string> = {},
 ): string {
-  const size = seriesSize(info, series.length);
+  const size = seriesSize(info, series.length, chosen);
   const valued = series.filter(hasValue).length;
   const infeasible = series.filter((p) => problemStatus(p) === "infeasible").length;
   const parts = [

@@ -10,7 +10,8 @@ import { renderNofoldNote } from "@polypack/surface/nofold-note";
 import { addOptions } from "./option-groups";
 import { safeHref } from "./atlas-model";
 import { foldGain, gainText, plainNofoldLabel, readFoldExtra } from "./boundary-model";
-import { DIMENSIONS, type Dimension, type Family, familyOfSpace } from "./dimension-table";
+import { DIMENSIONS, type Dimension, type Family, familyFilters, familyOfSpace } from "./dimension-table";
+import { recordsSource, scopedDomainCount } from "./records-model";
 import { el } from "./shapes-ui";
 import { isBoardSpace, spaceAddress } from "./space-address";
 import {
@@ -102,24 +103,33 @@ function card(
   return li;
 }
 
-/** The card of a kind the server lists. */
-function spaceCard(s: SpaceInfo): HTMLLIElement {
+/**
+ * The card of a kind the server lists. A family that holds part of a space (an nD dimension, the d-cubes) is a card of its
+ * own: its name and sentence, the number of its problems, and links that open its part.
+ */
+function spaceCard(s: SpaceInfo, family?: Family): HTMLLIElement {
   const id = el("dd");
   id.append(el("code", s.problem_id));
   const listed = Object.hasOwn(SPACE_FIELDS, s.space);
+  const scope = family?.scope ?? null;
+  const filters = family ? familyFilters(family) : {};
+  const own = scope ? scopedDomainCount(s, scope) : null;
+  const source = recordsSource(s.space, filters);
+  const facts: [string, string | HTMLElement][] = [
+    ["Score", s.score],
+    ["Problems", own !== null ? own.toLocaleString("en-US") : problemsText(s)],
+    ["Problem id", id],
+  ];
+  if (source) facts.push(["Records", source]);
   return card(
     s.space,
-    nameOf(s),
-    s.summary,
-    [
-      ["Score", s.score],
-      ["Problems", problemsText(s)],
-      ["Problem id", id],
-    ],
+    family ? family.name : nameOf(s),
+    family?.scope ? family.summary : s.summary,
+    facts,
     {
-      records: listed ? stateHash({ space: s.space, filters: {} }) : undefined,
-      // a space the board can show opens there, at the problem the board starts that space with
-      board: listed && isBoardSpace(s.space) ? `/${spaceAddress(s.space)}` : undefined,
+      records: listed ? stateHash({ space: s.space, filters }) : undefined,
+      // a space the board can show opens there, at the problem the board starts the family with
+      board: listed && isBoardSpace(s.space) ? `/${spaceAddress(s.space, family?.start)}` : undefined,
       viewer: s.viewer,
       docs: s.docs,
     },
@@ -142,7 +152,7 @@ function tableCard(f: Family): HTMLLIElement {
       ],
       { records: "/browse.html", board: "/" },
     );
-  if (f.available) return card(f.space, f.name, f.summary, [], { board: `/${spaceAddress(f.space)}` });
+  if (f.available) return card(f.space, f.name, f.summary, [], { board: `/${spaceAddress(f.space, f.start)}` });
   const li = card(f.space, f.name, f.summary, [], {});
   li.classList.add("soon");
   return li;
@@ -166,7 +176,7 @@ function renderDimensions(list: SpaceInfo[]): void {
     // a kind is shown from the server when the server lists it, even before the board can show it
     const cards = d.families.map((f) => {
       const s = byName.get(f.space);
-      return s ? spaceCard(s) : tableCard(f);
+      return s ? spaceCard(s, f) : tableCard(f);
     });
     const soon = d.families.every((f) => !f.available && !byName.has(f.space));
     return section(d, cards, soon);
@@ -176,7 +186,7 @@ function renderDimensions(list: SpaceInfo[]): void {
     sections.push(
       section(
         { id: "other", label: "Other", summary: "Kinds not yet filed under a dimension." },
-        others.map(spaceCard),
+        others.map((s) => spaceCard(s)),
         false,
       ),
     );

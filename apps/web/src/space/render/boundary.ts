@@ -49,13 +49,30 @@ export function mountBoundaryView(host: HTMLElement, p: BoundaryDrawing, label =
   root.append(wait);
   host.replaceChildren(root);
 
-  // The d-cubes (5cube to 10cube, 4D on 5D to 9D on 10D) have no drawing yet: the table and the numbers are all there is.
+  // The d-cubes (5cube to 10cube, 4D on 5D to 9D on 10D) are drawn as a table and a chart (ncube.ts), not as the 3D views of the tesseract.
   if (/^\d+cube$/.test(p.polytope)) {
-    text.textContent = "There is no drawing of this container yet. Its packings are in the table and the numbers.";
+    let inner: SpaceView | null = null;
+    let gone = false;
+    let later: SpaceConfig | null | undefined;
+    void import("./ncube").then(
+      (m) => {
+        if (gone) return;
+        inner = m.mountNcubeView(host, p as Parameters<typeof m.mountNcubeView>[1], label);
+        if (later !== undefined) inner.show(later);
+      },
+      () => {
+        text.textContent = "The drawing could not be loaded. The connection may have dropped.";
+      },
+    );
     return {
-      show() {},
+      show(c) {
+        if (inner) inner.show(c);
+        else later = c;
+      },
       canShow: (q) => q.space === "boundary" && q.polytope === p.polytope && q.piece === p.piece,
       destroy() {
+        gone = true;
+        inner?.destroy();
         root.remove();
       },
     };

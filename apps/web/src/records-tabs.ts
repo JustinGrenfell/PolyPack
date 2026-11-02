@@ -7,8 +7,8 @@ import { el } from "./shapes-ui";
  * with an address of its own, so that a tab can be shared and the browser's Back button returns to
  * the last one.
  */
-export function renderTabs(host: HTMLElement, current: string): void {
-  const { dimensions, kinds } = tabModel(current);
+export function renderTabs(host: HTMLElement, current: string, filters: Record<string, string> = {}): void {
+  const { dimensions, kinds } = tabModel(current, filters);
   const list = (label: string, links: typeof dimensions, className: string) => {
     const nav = el("nav", "", className);
     nav.setAttribute("aria-label", label);

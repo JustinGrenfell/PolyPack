@@ -8,8 +8,10 @@
 import { describe, expect, it } from "vitest";
 import { NCUBE_NAMES, boundaryDomain } from "@polypack/boundary";
 import { SPACE_DOMAINS } from "@polypack/spaces";
+import { DIMENSIONS } from "../src/dimension-table";
 import { sliceOfId } from "../src/tighter/catalogue";
 import { spaceFields } from "../src/tighter/families";
+import { familyDimension } from "../src/tighter/frontier";
 import { SLICES } from "../src/tighter/slices";
 
 describe("Tighter and 3D on 4D", () => {
@@ -42,5 +44,26 @@ describe("Tighter and (d-1)D on dD, d = 5 to 10", () => {
       expect(spaceFields(id), id).toBeNull();
       expect(sliceOfId(id), id).toBeNull();
     }
+  });
+});
+
+describe("Tighter and the boundary's new Dimensions (3D on 4D, 4D on 5D to 9D on 10D)", () => {
+  it("deals no problem of the boundary space whatever the Dimension an id opens on the site", () => {
+    // the site files each id of the space under a Dimension (dimension-table.ts); the game has no family for any of them
+    const ids = boundaryDomain.sample(100000);
+    expect(ids).toHaveLength(152 + 4288);
+    for (const id of ids) {
+      const where = DIMENSIONS.flatMap((d) => d.families.map((f) => ({ d, f }))).find(
+        ({ f }) => f.space === "boundary" && f.scope!.values.includes(id.split("/")[1]),
+      );
+      expect(where, id).toBeDefined();
+      expect(spaceFields(id), id).toBeNull();
+      expect(sliceOfId(id), id).toBeNull();
+    }
+    // the game's families map to the first three Dimensions only: 3D on 4D and the d-cubes are not among them
+    const game = new Set(
+      (["polygon", "curved", "surface", "sphere", "torus", "polyhedra", "balls"] as const).map(familyDimension),
+    );
+    for (const id of ["3-on-4", "4-on-5", "5-on-6", "6-on-7", "7-on-8", "8-on-9", "9-on-10"]) expect(game.has(id as never), id).toBe(false);
   });
 });

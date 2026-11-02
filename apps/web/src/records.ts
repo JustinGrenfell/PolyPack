@@ -7,7 +7,7 @@
 import type { SpaceInfo, SpaceName } from "@polypack/spaces";
 import * as api from "./api";
 import { safeHref } from "./atlas-model";
-import { DIMENSIONS, familyOfSpace } from "./dimension-table";
+import { DIMENSIONS, type FamilyScope, familyKey, familyOfFilters, scopeHasId } from "./dimension-table";
 import { addOptions } from "./option-groups";
 import { drawRecordsChart } from "./records-chart";
 import {
@@ -29,6 +29,8 @@ import {
   seriesHash,
   seriesNote,
   seriesProblems,
+  recordsSource,
+  scopedDomainCount,
   seriesTitle,
   settleSeries,
 } from "./records-model";
@@ -109,22 +111,24 @@ function load(space: SpaceName): Promise<ListedProblem[] | null> {
 }
 
 /** The pickers are built again only for another kind, so that focus stays on the picker being used. */
-let pickersOf: SpaceName | null = null;
+let pickersOf: string | null = null;
 
 function renderPickers(
   space: SpaceName,
   problems: ListedProblem[],
   info: SpaceInfo | undefined,
   chosen: Record<string, string>,
+  family: string,
+  scope: FamilyScope | null,
 ): void {
   const form = $("pickers");
-  if (pickersOf === space) {
+  if (pickersOf === family) {
     for (const f of SPACE_FIELDS[space]) $<HTMLSelectElement>(`pick-${f.key}`).value = chosen[f.key];
     return;
   }
-  pickersOf = space;
+  pickersOf = family;
   form.replaceChildren();
-  for (const { spec, options } of pickers(space, problems, info)) {
+  for (const { spec, options } of pickers(space, problems, info, scope)) {
     const select = el("select");
     select.id = `pick-${spec.key}`;
     addOptions(select, options);
@@ -284,9 +288,11 @@ function renderTable(
 async function show(wish: RecordsState): Promise<void> {
   const space = wish.space;
   const info = infos.find((s) => s.space === space);
-  const where = familyOfSpace(space);
+  // a space that backs several dimensions shows the one its filters name: the nD dimension, or the d-cube
+  const where = familyOfFilters(space, wish.filters);
+  const scope = where?.family.scope ?? null;
   state = wish;
-  renderTabs($("records-tabs"), space);
+  renderTabs($("records-tabs"), space, wish.filters);
   document.title = `PolyPack — Records: ${where ? `${where.dimension.label}, ${where.family.name}` : space}`;
   $("kind-summary").textContent = where ? `${where.dimension.summary} ${where.family.summary}` : "";
   const known = loaded.get(space);
@@ -303,12 +309,17 @@ async function show(wish: RecordsState): Promise<void> {
   }
   $("status").textContent = "";
   $("records").hidden = false;
-  const list = pickers(space, problems, info);
-  const chosen = settleSeries(list, problems, wish.filters);
+  // only this family's problems are listed, charted and counted
+  const own = scope ? problems.filter((p) => scopeHasId(scope, p.id)) : problems;
+  const list = pickers(space, own, info, scope);
+  const chosen = settleSeries(list, own, wish.filters);
   follow({ space, filters: chosen, all: wish.all });
-  renderPickers(space, problems, info, chosen);
+  renderPickers(space, own, info, chosen, where ? familyKey(where.family) : space, scope);
   const specs = SPACE_FIELDS[space];
-  const series = seriesProblems(specs, problems, chosen);
+  const series = seriesProblems(specs, own, chosen);
+  const source = recordsSource(space, chosen);
+  $("source-note").hidden = !source;
+  $("source-note").textContent = source ?? "";
   const sc = $("score-note");
   sc.replaceChildren(info ? `Score: ${sentence(info.score)}` : "");
   const viewer = safeHref(info?.viewer ?? "");
@@ -316,11 +327,12 @@ async function show(wish: RecordsState): Promise<void> {
   $("series-note").textContent = seriesNote(
     info,
     series,
-    info?.records ?? problems.length,
-    info?.problems ?? problems.length,
+    scope ? own.length : (info?.records ?? problems.length),
+    scope ? (scopedDomainCount(info, scope) ?? own.length) : (info?.problems ?? problems.length),
+    chosen,
   );
   const points = chartPoints(series);
-  const domain = domainPRange(info);
+  const domain = domainPRange(info, chosen);
   const range: [number, number] = domain ?? (series.length ? [series[0].P, series[series.length - 1].P] : [1, 10]);
   const sameFamily = charted && charted.space === space && charted.title === seriesTitle(specs, chosen);
   if (!sameFamily) zoom = null;
@@ -329,7 +341,7 @@ async function show(wish: RecordsState): Promise<void> {
   for (const input of document.querySelectorAll<HTMLInputElement>("input[name=scope]"))
     input.checked = input.value === (wish.all ? "all" : "series");
   shownRows = ROWS_PER_PAGE;
-  renderTable(space, problems, series, info);
+  renderTable(space, own, series, info);
 }
 
 for (const input of document.querySelectorAll<HTMLInputElement>("input[name=scope]"))
@@ -339,7 +351,8 @@ for (const input of document.querySelectorAll<HTMLInputElement>("input[name=scop
 $("rec-more").addEventListener("click", () => {
   shownRows += ROWS_PER_PAGE;
   const space = state!.space;
-  const problems = loaded.get(space)!;
+  const scope = familyOfFilters(space, state!.filters)?.family.scope ?? null;
+  const problems = loaded.get(space)!.filter((p) => scopeHasId(scope, p.id));
   renderTable(
     space,
     problems,

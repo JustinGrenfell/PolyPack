@@ -4,6 +4,7 @@
  * board's space mode and the 3D on 4D viewer (src/boundary-viewer.ts) pick problems the same way.
  */
 import type { SpaceDomainInfo, SpaceName } from "@polypack/spaces";
+import type { FamilyScope } from "../dimension-table";
 import { type FieldSpec, SPACE_FIELDS, fieldValues } from "../spaces-model";
 
 /** The problem a space opens with when the address names none (the first listed one when it is missing). */
@@ -17,8 +18,8 @@ export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
   polyhedra: "polyhedra/cubincub/11",
   // 13 balls: twelve round a thirteenth in a ball of diameter 3 (the kissing arrangement)
   balls: "balls/ballinball/13",
-  // not shown on the board yet
-  ndim: "ndim/4/cube/cube/16",
+  // the first problem of 4D in 4D (the other dimensions start from the same shapes, with the nearest P)
+  ndim: "ndim/4/cube/cube/12",
 };
 
 /** Labels of the picker's fields, in the board's words ("Piece (N)", "Pieces (P)"). */
@@ -42,6 +43,8 @@ export interface PickField {
   /** Each value, its text and, where the values come in groups (the surface solids), its group. */
   options: { value: string; text: string; group?: string }[];
   value: string;
+  /** True for a field the family's scope fixes to one value (the dimension of an nD problem): it is kept, not shown. */
+  hidden?: boolean;
 }
 
 /** The picker's fields of a space: the id's fields as the dimensions page lists them, and P. */
@@ -143,11 +146,15 @@ function withParts(domain: SpaceDomainInfo, wish: Record<string, string>): Recor
  * the offered value nearest the wished one. The id is written from the domain's pattern; a field written from several
  * menus (polyhedra's piece and container make its code) is also read from a wish that names it whole, so that an old
  * address with the code opens the same problem.
+ *
+ * A `scope` (dimension-table.ts) limits one field to the values of a family: the dimension of an nD problem, or the
+ * polytopes of 3D on 4D. A field left with one value is marked hidden: the Problem set menu already says it.
  */
 export function pickFromDomain(
   space: SpaceName,
   domain: SpaceDomainInfo,
   wished: Record<string, string>,
+  scope?: FamilyScope | null,
 ): { fields: PickField[]; id: string } {
   const wish = withParts(domain, wished);
   const start = withParts(domain, fieldsOfId(space, DEFAULT_PROBLEM[space]));
@@ -158,7 +165,7 @@ export function pickFromDomain(
     const dep = f.dependent && picked[f.dependent.on] !== undefined ? f.dependent : undefined;
     const listed = dep?.values?.[picked[dep.on]];
     const range = dep?.ranges?.[picked[dep.on]];
-    const values =
+    let values =
       listed ??
       f.values ??
       (range
@@ -166,6 +173,8 @@ export function pickFromDomain(
         : f.min !== undefined && f.max !== undefined
           ? Array.from({ length: f.max - f.min + 1 }, (_, i) => String(f.min! + i))
           : []);
+    const scoped = !!scope && f.key === scope.field;
+    if (scope && scoped) values = values.filter((v) => scope.values.includes(v));
     let value = wish[f.key];
     if (value === undefined || !values.includes(value)) {
       if (f.values === undefined && value !== undefined && Number.isFinite(Number(value)) && values.length) {
@@ -179,6 +188,7 @@ export function pickFromDomain(
       label: PICK_LABELS[f.key] ?? f.label,
       options: values.map((v) => ({ value: v, text: f.titles?.[v] ?? v, ...(f.groups?.[v] ? { group: f.groups[v] } : {}) })),
       value,
+      ...(scoped && values.length === 1 ? { hidden: true } : {}),
     };
   });
   const chosen: Record<string, string> = Object.fromEntries(fields.map((f) => [f.key, f.value]));
