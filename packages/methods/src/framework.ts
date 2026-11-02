@@ -85,6 +85,11 @@ export interface MethodRunOptions {
   shouldStop?: (used: number, finishing?: boolean) => boolean;
   /** Called with every improvement of the best. */
   onImprove?: (best: Finished) => void;
+  /**
+   * Called each time the method hands back a state that finishes (ctx.offer): after finish has validated it, before it
+   * is kept. Counting changes no result; an exception thrown here ends the run.
+   */
+  onOffer?: () => void;
   /** Seconds, monotonic; default performance.now() / 1000. */
   now?: () => number;
 }
@@ -246,6 +251,7 @@ export function runMethod(kernel: SpaceKernel, name: string, o: MethodRunOptions
         throw new Stop("evals");
       const f = counted.finish(s);
       if (!f) return null;
+      o.onOffer?.();
       return keep(f) === "rejected" ? null : f.score;
     },
     best() {
