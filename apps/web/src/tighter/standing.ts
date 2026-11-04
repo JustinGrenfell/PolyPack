@@ -11,7 +11,8 @@ import {
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
-import { tidyRent } from "./economy";
+import { archiveOf, archivedCount } from "./archive";
+import { nextNoon, tidyRent } from "./economy";
 import {
   EvolveMethod,
   Funds,
@@ -205,6 +206,17 @@ const isSmall = (p: ProblemKey) => {
   return q.N + q.M + q.P <= SMALL_TOTAL;
 };
 
+/** Classes of problems that the rules' rewards tell apart on rent (ruleRewardFactor with no method). */
+export const RENT_CLASSES = 5;
+/** A problem's class: for a polygon one bit for circles and one for small, 4 for any other family. */
+export function rentClass(p: ProblemKey): number {
+  return isPolygon(p) ? (hasCircles(p) ? 1 : 0) | (isSmall(p) ? 2 : 0) : 4;
+}
+/** The rules' reward factor shared by every problem of a class (the method rule needs a run, which a past entry has not). */
+export function rentClassFactor(s: StandingState, c: number): number {
+  return c < 4 ? shapeRuleFactor(s, (c & 1) !== 0, (c & 2) !== 0) : 1;
+}
+
 /**
  * Whether the cycle's rule lets the dealer deal or offer this problem (circles only, small problems
  * only, ...). The dealer calls it on every candidate.
@@ -240,12 +252,19 @@ const SMALL_FRONTIER: readonly ProblemKey[] = FRONTIER.filter(isSmall);
 
 /** The rules' rewards on one improvement's points: the product of those finished that apply. */
 export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string | null): number {
+  let f = isPolygon(p) ? shapeRuleFactor(s, hasCircles(p), isSmall(p)) : 1;
+  if (s.rulesDone.includes("method") && method === "mc_compress") f *= RULE_REWARD;
+  return f;
+}
+
+/** What a completed rule multiplies the points of the problems it was about by. */
+const RULE_REWARD = 1.5;
+
+/** The polygon rules' rewards: circles only, and small problems only. */
+function shapeRuleFactor(s: StandingState, circles: boolean, small: boolean): number {
   let f = 1;
-  if (isPolygon(p)) {
-    if (s.rulesDone.includes("circles") && hasCircles(p)) f *= 1.5;
-    if (s.rulesDone.includes("small") && isSmall(p)) f *= 1.5;
-  }
-  if (s.rulesDone.includes("method") && method === "mc_compress") f *= 1.5;
+  if (s.rulesDone.includes("circles") && circles) f *= RULE_REWARD;
+  if (s.rulesDone.includes("small") && small) f *= RULE_REWARD;
   return f;
 }
 
@@ -273,9 +292,9 @@ export const DIMENSION_TEXT: Readonly<Record<DimensionId, { label: string; what:
   "3-on-4": { label: "3D on 4D", what: "solids packed on the surface of a 4D solid" },
 };
 
-/** Records the player leads, as far as the game has seen (queue and past). */
+/** Records the player leads, as far as the game has seen (queue, past and the archive). */
 export const heldCount = (s: GameState) =>
-  s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
+  s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length + archivedCount(s);
 
 /** Standing points a reset gives, and one more for finishing the cycle under a rule. */
 export const RESET_GAIN = 1;
@@ -451,10 +470,13 @@ export function resetCycle(s: GameState, now: number): number {
   s.owned = tree.owned;
   s.levels = tree.levels;
   // rent accrued and not paid is lost; with Rent back (Head start), the records held start earning now
-  s.economy.checks = {};
+  // and the first payday is the next noon
+  delete s.economy.paidUntil;
   delete s.economy.paydayAt;
-  if (s.owned.includes("rent"))
-    for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) s.economy.checks[p.key] = now;
+  if (s.owned.includes("rent")) {
+    s.economy.paidUntil = now;
+    s.economy.paydayAt = nextNoon(now);
+  }
   s.rp = Math.min(s.rp, waiting);
   st.cycleEarned = waiting;
   st.cycleStartedAt = now;

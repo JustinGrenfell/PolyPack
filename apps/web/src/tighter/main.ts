@@ -162,8 +162,11 @@ import {
   exportString,
   fromJson,
   importString,
+  toExportJson,
   toJson,
 } from "./save";
+import { Archive, archiveOf, archiveReady, attachArchive, idbStore, newArchiveId } from "./archive";
+import { recoverRecords } from "./recovery";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
 import {
@@ -443,6 +446,22 @@ function initialState(): GameState {
 let state = initialState();
 // collections and the first cycle's earnings, for a save from before records were an economy
 syncEconomy(state);
+// the records past the save's limit live in IndexedDB (archive.ts): they load right after the save,
+// from the database this save names (it is written with the save before any row is)
+state.archiveId ??= newArchiveId();
+attachArchive(state, new Archive(idbStore(state.archiveId)));
+try {
+  // ask the browser not to clear the archive when it is short of space
+  void navigator.storage?.persist?.().catch(() => undefined);
+} catch {
+  // not offered
+}
+const archiveLoaded: Promise<void> = (() => {
+  let known: Set<string> | null = null;
+  return archiveOf(state)!
+    .load((key) => (known ??= new Set([...state.queue, ...state.past].map((p) => p.key))).has(key))
+    .then(() => undefined);
+})();
 // auto-eval runs live and owes nothing for the time the page was closed; it starts off, so compute
 // starts only on a press
 state.settings.auto = false;
@@ -463,6 +482,8 @@ function saveNow(): void {
     state.pacer = compactPacer(state.pacer, now());
     localStorage.setItem(STORAGE_KEY, toJson(state));
   });
+  // the archive writes only the rows that changed
+  void archiveOf(state)?.flush();
   const warning = $("t-save-warning");
   warning.textContent = ok ? "" : SAVE_FAILED_TEXT;
   warning.hidden = ok;
@@ -481,7 +502,7 @@ document.addEventListener("visibilitychange", () => {
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
 /** A problem's points as earned, before standing and collections multiply them: what method match learns from. */
-const basePoints = (p: ProblemState) => state.economy.base[p.key] ?? p.rp;
+const basePoints = (p: ProblemState) => p.base ?? p.rp;
 /** A method the player owns and the cycle's rule allows. */
 const allowedMethod = (o: Owned, m: EvolveMethod): boolean =>
   methods(o).includes(m) && ruleAllowsMethod(state.standing, m);
@@ -2473,6 +2494,13 @@ function plainRanked(c: Candidate): Ranked {
   return rankCandidates([c], null, () => 0.5)[0];
 }
 
+/** A retaken problem comes back from the past, and keeps the base its entry still had. */
+function retakeFromPast(p: ProblemState): void {
+  const old = state.past.find((q) => q.key === p.key);
+  if (old?.base !== undefined) p.base = old.base;
+  state.past = state.past.filter((q) => q.key !== p.key);
+}
+
 /**
  * The problem a candidate becomes: an open problem starts bare; a site record, a retake or a
  * published value starts from a packing the server keeps (the leader's, or the best drawable one
@@ -2513,7 +2541,7 @@ async function materialize(c0: Candidate): Promise<ProblemState | null> {
   p.leader = c.leader ? { ...c.leader } : null;
   p.published = c.target;
   // a retaken problem comes back from the past
-  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  if (c.retake) retakeFromPast(p);
   return p;
 }
 
@@ -2536,7 +2564,7 @@ async function materializeSpace(c: Candidate & SpaceKey): Promise<ProblemState |
     p.leader = { ...read.leader };
   }
   // a retaken problem comes back from the past
-  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  if (c.retake) retakeFromPast(p);
   return p;
 }
 
@@ -2863,8 +2891,13 @@ function noteRival(key: string, leader: Leader | null): void {
  * A leader read from the server: settles a send whose answer was lost (its points confirmed, as its
  * answer would have) and tells the player when a record of theirs was beaten.
  */
-function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void {
+function noteLeader(p: ProblemState | PastProblem, leader: Leader | null, quiet = false): void {
   const r = applyLeader(p, leader, state, now());
+  // an archived record that is lost leaves the archive (a payday tells of all of them in one line)
+  if (r.lost) {
+    const a = archiveOf(state);
+    if (a?.get(p.key) === p) a.remove(p.key);
+  }
   if (r.reconciled && leader) {
     reveal(state, "points", "upgrades");
     event(
@@ -2876,10 +2909,11 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     const retake = inUse(owned(), "retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
     noteRival(p.key, leader);
-    event(
-      `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
-        (retake ? " It will be the first problem offered to you again (Retake)." : ""),
-    );
+    if (!quiet)
+      event(
+        `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
+          (retake ? " It will be the first problem offered to you again (Retake)." : ""),
+      );
   }
 }
 
@@ -2887,7 +2921,7 @@ function onLeaderEvent(e: LeaderboardEvent): void {
   const key = keyOf(poly(e.N, e.M, e.P));
   // our own entry, announced before its answer arrives; a rival's is seen in that answer instead
   if (!ownsGame || inFlight.has(key)) return;
-  const target = problem(state, key) ?? state.past.find((p) => p.key === key);
+  const target = problem(state, key) ?? state.past.find((p) => p.key === key) ?? archiveOf(state)?.get(key);
   if (!target) return;
   noteLeader(target, { score: e.score, name: e.name, id: e.id });
   persist();
@@ -2925,19 +2959,46 @@ async function refreshHeld(): Promise<void> {
   }
 }
 
-// ---------- rent: a payday once a day ----------
+/**
+ * Once per save, after the archive has loaded: records the save lost before the archive existed are
+ * looked up on the server (recovery.ts). A failed try is repeated at a later load.
+ */
+let recovering = false;
+async function findLostRecords(): Promise<void> {
+  if (recovering || !ownsGame || state.archiveRecovered || !state.name) return;
+  recovering = true;
+  try {
+    const s = state;
+    const n = await recoverRecords(s, owned(), { getHolder: api.getHolder, getLeaders: api.getLeaders, now });
+    if (s !== state) return;
+    if (n !== null) persist();
+    if (n) {
+      event(
+        `${fmtInt(n)} of your older records ${n === 1 ? "was" : "were"} found on the server and count${n === 1 ? "s" : ""} again.`,
+      );
+      render();
+    }
+  } finally {
+    recovering = false;
+  }
+}
+
+// ---------- rent: a payday every day at noon ----------
 
 let paydayRunning = false;
 
 /**
  * With Rent: once the saved payday time (economy.paydayAt) has come, all records held are looked up
- * in batches (payday.ts) and the ones still ours pay the rent since their last payday. Records the
- * server did not answer are tried again 10 minutes later. A save without a payday time runs one at
+ * in batches (payday.ts) and, when every batch has answered, the ones still ours pay the rent for
+ * their window. The next payday is the next local noon. A failed request pays nothing and is tried
+ * again 10 minutes later. A save without a payday time runs one at
  * its next load.
  */
 async function paydayTick(): Promise<void> {
   const o = owned();
-  if (!ownsGame || paydayRunning || !o.has("rent") || now() < paydayDueAt(state.economy, now())) return;
+  // the archived records are part of the payday: it waits until they have loaded
+  if (!ownsGame || paydayRunning || !o.has("rent") || !archiveReady(state)) return;
+  if (now() < paydayDueAt(state.economy, now())) return;
   paydayRunning = true;
   try {
     const r = await runPayday({
@@ -2956,6 +3017,10 @@ async function paydayTick(): Promise<void> {
     });
     state.economy.paydayAt = nextPaydayAfter(now(), r.unanswered);
     persist();
+    if (r.archivedLost > 0)
+      event(
+        `${fmtInt(r.archivedLost)} of your records ${r.archivedLost === 1 ? "was" : "were"} beaten since the last payday.`,
+      );
     if (r.paying > 0)
       event(
         `Payday. ${fmtInt(r.paying)} ${r.paying === 1 ? "record paid" : "records paid"} ${fmtRP(r.paid)} RP in rent.`,
@@ -4391,7 +4456,7 @@ function renderRecords(o: Owned): void {
   text(
     "t-rc-note",
     rent
-      ? "Once a day, the game asks the server which of your records you still hold. Each one pays the rent it built up since its last payday." +
+      ? "Every day at noon, the game asks the server which of your records you still hold. Each one pays the rent it built up since the last payday, or since you won it if that was later." +
           (last
             ? ` The last rent paid was +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
             : "")
@@ -4631,9 +4696,29 @@ $("t-st-rule").addEventListener("change", () => {
   persist();
   render();
 });
+/** A save string longer than this goes to a file: the clipboard and a text box cope badly with more. */
+const EXPORT_TEXT_MAX = 4_000_000;
 $("t-export").addEventListener("click", async () => {
   const area = $<HTMLTextAreaElement>("t-save-text");
-  area.value = await exportString(state);
+  await archiveLoaded;
+  const rows = archiveOf(state)?.values() ?? [];
+  const str = await exportString(state, rows);
+  if (str.length > EXPORT_TEXT_MAX) {
+    // too big to paste: the save document as a file, which Import can read back
+    const blob = new Blob([toExportJson(state, archiveOf(state)?.values() ?? [])], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `tighter-save-${new Date(now()).toISOString().slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+    area.value = "";
+    text(
+      "t-save-note",
+      "The save is too big to copy, so it was saved as a file. Use Import from file to read it back.",
+    );
+    return;
+  }
+  area.value = str;
   area.select();
   try {
     await navigator.clipboard.writeText(area.value);
@@ -4642,16 +4727,23 @@ $("t-export").addEventListener("click", async () => {
     text("t-save-note", "The browser blocked copying. Copy the save string above by hand.");
   }
 });
-$("t-import").addEventListener("click", async () => {
-  const r = await importString($<HTMLTextAreaElement>("t-save-text").value, now());
+async function doImport(source: string): Promise<void> {
+  const r = await importString(source, now());
   if (!r.ok) {
     text("t-save-note", `The save could not be imported (${r.error}).`);
     return;
   }
   if (!confirm("Replace your current game with this save? You lose the current game unless you exported it.")) return;
+  await archiveLoaded;
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
+  // the imported game's archived records replace the current ones, in this save's database
+  state.archiveId ??= newArchiveId();
+  const a = archiveOf(state) ?? new Archive(idbStore(state.archiveId));
+  a.replaceAll(r.archive ?? []);
+  r.state.archiveId = state.archiveId;
   state = r.state;
+  attachArchive(state, a);
   syncEconomy(state);
   state.settings.auto = false;
   lastChange.clear();
@@ -4671,6 +4763,14 @@ $("t-import").addEventListener("click", async () => {
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();
+}
+$("t-import").addEventListener("click", () => void doImport($<HTMLTextAreaElement>("t-save-text").value));
+$("t-import-file-btn").addEventListener("click", () => $<HTMLInputElement>("t-import-file").click());
+$<HTMLInputElement>("t-import-file").addEventListener("change", async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) await doImport(await file.text());
 });
 
 // ---------- "How it works" ----------
@@ -4777,6 +4877,7 @@ function begin(): void {
   listen();
   void dealTick();
   void refreshHeld();
+  void archiveLoaded.then(() => findLostRecords());
   ticker = window.setInterval(() => {
     listen();
     void dealTick();
