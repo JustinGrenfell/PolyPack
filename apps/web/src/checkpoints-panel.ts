@@ -32,6 +32,8 @@ export class CheckpointsPanel {
   private shownKey = "";
   private shownVersion = -1;
   private ready = false;
+  /** Saves still being written, so that unnamed ones saved in quick succession get numbers of their own. */
+  private saving = 0;
 
   constructor(
     private board: Board,
@@ -72,15 +74,22 @@ export class CheckpointsPanel {
   private async save(): Promise<void> {
     const s = this.board.state;
     if (!s.pieces.length) return this.note("Place some pieces first: an empty board isn't worth a checkpoint.", true);
+    // The name is taken and the field cleared now, not after the write: a name typed for the next checkpoint while
+    // this one is being written must not be wiped.
     const input = $<HTMLInputElement>("checkpoint-name");
-    const name = input.value.trim() || `Checkpoint ${this.cps.forProblem(this.key).length + 1}`;
+    const typed = input.value;
+    input.value = "";
+    const name = typed.trim() || `Checkpoint ${this.cps.forProblem(this.key).length + this.saving + 1}`;
     const c = makeCheckpoint(this.board.toConfig(), name);
+    this.saving++;
     try {
       await this.cps.add(c);
     } catch {
+      if (!input.value) input.value = typed; // give the name back, unless another has been typed since
       return this.note("The checkpoint could not be saved: this browser's storage refused it (it may be full).", true);
+    } finally {
+      this.saving--;
     }
-    input.value = "";
     this.say(`Saved checkpoint “${c.name}”.`);
     this.render(true);
   }
